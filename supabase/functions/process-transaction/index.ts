@@ -41,6 +41,16 @@ interface OperatorNotificationRow {
   telegram_chat_id: string | null;
 }
 
+function isMissingOperatorPlatformsError(message?: string | null): boolean {
+  return Boolean(
+    message && (
+      message.includes("operator_platforms")
+      || message.includes("schema cache")
+      || message.includes("Could not find the table")
+    )
+  );
+}
+
 const SYSTEM_PROMPT = `You are a fintech assistant helping a Filipino mobile money operator (remittance/e-wallet agent) process transaction receipts.
 You will receive a screenshot from a Philippine payment app — GCash, MariBank, Maya, BPI, UnionBank, or others.
 Always respond with valid JSON only. Use null for fields you cannot determine with confidence. Never guess amounts.
@@ -300,6 +310,73 @@ serve(async (req: Request) => {
 
     const accountNumber =
       ai.account_number ?? extractAccountNumber(rawText) ?? null;
+
+    let activePlatformNames: string[] = [];
+
+    const { data: activePlatforms, error: activePlatformsError } = await supabase
+      .from("operator_platforms")
+      .select("name")
+      .eq("operator_id", operator.id)
+      .eq("is_active", true);
+
+    if (activePlatformsError && !isMissingOperatorPlatformsError(activePlatformsError.message)) {
+      console.error("Failed to load active platforms:", activePlatformsError.message);
+      await cleanupUploadedImage();
+      await notifyProcessingError("Failed to load active platforms");
+      return jsonResponse(req, { error: "Failed to load active platforms" }, 500);
+    }
+
+    if (activePlatformsError) {
+      const { data: platformWallets, error: platformWalletsError } = await supabase
+        .from("wallets")
+        .select("wallet_name")
+        .eq("operator_id", operator.id)
+        .eq("wallet_type", "platform")
+        .eq("is_active", true);
+
+      if (platformWalletsError) {
+        console.error("Failed to load platform wallets:", platformWalletsError.message);
+        await cleanupUploadedImage();
+        await notifyProcessingError("Failed to load active platforms");
+        return jsonResponse(req, { error: "Failed to load active platforms" }, 500);
+      }
+
+      activePlatformNames = (platformWallets ?? []).map((row) => row.wallet_name);
+    } else {
+      activePlatformNames = (activePlatforms ?? []).map((row) => row.name);
+    }
+
+    if (platform !== "Unknown" && !activePlatformNames.includes(platform)) {
+      await cleanupUploadedImage();
+      return jsonResponse(
+        req,
+        {
+          error: `${platform} is currently inactive. Re-add the platform before saving this receipt.`,
+          code: "missing_platform",
+          missing_platform: {
+            name: platform,
+            action: "restore_platform",
+          },
+        },
+        409
+      );
+    }
+
+    if (platform === "Unknown" && !activePlatformNames.includes("GCash")) {
+      await cleanupUploadedImage();
+      return jsonResponse(
+        req,
+        {
+          error: "Unknown receipts currently fall back to GCash. Re-add GCash before saving this receipt.",
+          code: "missing_platform",
+          missing_platform: {
+            name: "GCash",
+            action: "restore_platform",
+          },
+        },
+        409
+      );
+    }
 
     const { data: rules } = await supabase
       .from("transaction_rules")

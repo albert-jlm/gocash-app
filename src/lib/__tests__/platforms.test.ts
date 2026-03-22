@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFinancialSettingsHref,
+  coerceFinancialSettingsTab,
   comparePlatformNames,
+  DEFAULT_PLATFORM_RULE_TEMPLATES,
   getDefaultWalletColor,
   getWalletColor,
   isBuiltInPlatform,
@@ -55,5 +58,25 @@ describe("platform helpers", () => {
       { wallet_name: "Cash", wallet_type: "cash" },
     ]);
   });
-});
 
+  it("coerces unknown settings tabs to wallets", () => {
+    expect(coerceFinancialSettingsTab("platforms")).toBe("platforms");
+    expect(coerceFinancialSettingsTab("unknown")).toBe("wallets");
+    expect(coerceFinancialSettingsTab(null)).toBe("wallets");
+  });
+
+  it("builds settings links with optional restore platform", () => {
+    expect(buildFinancialSettingsHref("profit")).toBe("/settings?tab=profit");
+    expect(buildFinancialSettingsHref("platforms", "GCash")).toBe(
+      "/settings?tab=platforms&restorePlatform=GCash"
+    );
+  });
+
+  it("includes a default rule template for each transaction type", () => {
+    expect(DEFAULT_PLATFORM_RULE_TEMPLATES).toHaveLength(6);
+    expect(DEFAULT_PLATFORM_RULE_TEMPLATES.some((rule) => rule.transaction_type === "Cash In")).toBe(true);
+    expect(
+      DEFAULT_PLATFORM_RULE_TEMPLATES.some((rule) => rule.transaction_type === "Profit Remittance")
+    ).toBe(true);
+  });
+});

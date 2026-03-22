@@ -204,8 +204,40 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      receipt_deletion_queue: {
+        Row: {
+          id: string;
+          bucket: string;
+          path: string;
+          delete_after: string;
+          attempted_at: string | null;
+          deleted_at: string | null;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          bucket: string;
+          path: string;
+          delete_after: string;
+          attempted_at?: string | null;
+          deleted_at?: string | null;
+          last_error?: string | null;
+        };
+        Update: Partial<Database["gocash"]["Tables"]["receipt_deletion_queue"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      delete_platform_atomic: {
+        Args: {
+          p_operator_id: string;
+          p_platform_name: string;
+          p_user_id: string;
+        };
+        Returns: Json;
+      };
+    };
   };
 }
