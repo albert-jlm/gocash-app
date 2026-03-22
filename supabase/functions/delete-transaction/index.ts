@@ -5,6 +5,7 @@ import {
   computeWalletDeltas,
   type TransactionRule,
 } from "../_shared/transaction-processing.ts";
+import { TRANSACTION_IMAGE_BUCKET } from "../_shared/storage.ts";
 
 interface RequestBody {
   transaction_id: string;
@@ -99,6 +100,8 @@ serve(async (req: Request) => {
         p_platform_wallet: currentDeltas?.platform_wallet_name ?? null,
         p_platform_delta:  currentDeltas ? -currentDeltas.platform_delta : 0,
         p_cash_delta:      currentDeltas ? -currentDeltas.cash_delta : 0,
+        p_receipt_bucket:  tx.image_url ? TRANSACTION_IMAGE_BUCKET : null,
+        p_receipt_path:    tx.image_url ?? null,
       }
     );
 

@@ -1,76 +1,122 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Home, Plus, History, Settings } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { Loader2 } from "lucide-react";
+import {
+  buildFinancialSettingsHref,
+  coerceFinancialSettingsTab,
+  type FinancialSettingsTab,
+} from "@/lib/platforms";
+import { PlatformsPanel } from "./_components/platforms-panel";
+import { ProfitSettingsPanel } from "./_components/profit-settings-panel";
+import { WalletsPanel } from "./_components/wallets-panel";
+
+const TAB_LABELS: Record<FinancialSettingsTab, { title: string; desc: string }> = {
+  wallets: {
+    title: "Wallets",
+    desc: "Balances, colors, and your protected cash register",
+  },
+  platforms: {
+    title: "Platforms",
+    desc: "Add, restore, or safely delete transaction platforms",
+  },
+  profit: {
+    title: "Profit Settings",
+    desc: "Control how earnings are calculated per transaction type",
+  },
+};
 
 export default function SettingsPage() {
-  const { loading } = useAuthGuard();
+  const { session, operatorId, loading } = useAuthGuard();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  if (loading) {
+  const activeTab = coerceFinancialSettingsTab(searchParams.get("tab"));
+  const restorePlatformName = searchParams.get("restorePlatform");
+
+  const title = TAB_LABELS[activeTab];
+  const currentHref = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+
+  function setTab(tab: FinancialSettingsTab) {
+    router.replace(buildFinancialSettingsHref(tab));
+  }
+
+  function clearRestorePlatform() {
+    router.replace(buildFinancialSettingsHref("platforms"));
+  }
+
+  if (loading || !operatorId) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
-        <Link
-          href="/"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <h1 className="text-base font-semibold">Settings</h1>
-      </header>
-
-      <section className="px-5 flex-1">
-        <div className="bg-white/[0.05] rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
-          {[
-            { label: "Wallets",          href: "/settings/wallets",       desc: "View and adjust balances" },
-            { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated" },
-            { label: "Platforms",        href: "/settings/platforms",     desc: "Manage GCash, MariBank, and more" },
-            { label: "Notifications",    href: "/settings/notifications", desc: "Save Telegram alert preferences" },
-          ].map(({ label, href, desc }) => (
-            <Link key={href} href={href} className="flex items-center justify-between px-4 py-4">
-              <div>
-                <p className="text-sm font-medium">{label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-              </div>
-              <span className="text-muted-foreground/40 text-lg">›</span>
-            </Link>
-          ))}
+    <div className="mx-auto flex min-h-screen max-w-[390px] flex-col bg-background text-foreground">
+      <header className="px-5 pb-4 pt-14">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/[0.07]"
+          >
+            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold">Financial Settings</h1>
+            <p className="text-xs text-muted-foreground">{title.desc}</p>
+          </div>
         </div>
 
-        <p className="text-[11px] text-muted-foreground/50 text-center mt-6">
-          GoCash Tracker · v0.1
-        </p>
-      </section>
+        <div className="mt-5 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1">
+          <div className="grid grid-cols-3 gap-1">
+            {(["wallets", "platforms", "profit"] as FinancialSettingsTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setTab(tab)}
+                className={[
+                  "rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  activeTab === tab
+                    ? "bg-white text-zinc-900"
+                    : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+                ].join(" ")}
+              >
+                {TAB_LABELS[tab].title}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
 
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
-        <nav className="flex items-center justify-around">
-          <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Home className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Home</span>
+      <section className="flex-1 px-5 pb-24">
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold">Notifications</p>
+            <p className="text-xs text-muted-foreground">Telegram alert preferences stay separate.</p>
+          </div>
+          <Link
+            href={`/settings/notifications?from=${encodeURIComponent(currentHref)}`}
+            className="text-sm font-medium text-emerald-400"
+          >
+            Open →
           </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Plus className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">New</span>
-          </Link>
-          <Link href="/transactions" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <History className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">History</span>
-          </Link>
-          <Link href="/settings" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Settings className="w-5 h-5 text-foreground" />
-            <span className="text-[10px] text-foreground font-medium">Settings</span>
-          </Link>
-        </nav>
-      </div>
+        </div>
+
+        {activeTab === "wallets" && <WalletsPanel operatorId={operatorId} />}
+        {activeTab === "platforms" && (
+          <PlatformsPanel
+            operatorId={operatorId}
+            userId={session?.user.id ?? null}
+            restorePlatformName={restorePlatformName}
+            onRestoreHandled={clearRestorePlatform}
+          />
+        )}
+        {activeTab === "profit" && <ProfitSettingsPanel operatorId={operatorId} />}
+      </section>
     </div>
   );
 }

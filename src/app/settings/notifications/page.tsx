@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Loader2,
@@ -33,6 +34,7 @@ const DEFAULTS: NotifSettings = {
 
 export default function NotificationsSettingsPage() {
   const { operatorId, loading: authLoading } = useAuthGuard();
+  const searchParams = useSearchParams();
 
   const [settings, setSettings] = useState<NotifSettings>(DEFAULTS);
   const [dataLoading, setDataLoading] = useState(true);
@@ -106,7 +108,7 @@ export default function NotificationsSettingsPage() {
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
       <header className="px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
-          href="/settings"
+          href={searchParams.get("from") ?? "/settings"}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />

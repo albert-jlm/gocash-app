@@ -18,6 +18,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { buildFinancialSettingsHref } from "@/lib/platforms";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -27,6 +28,7 @@ export default function CapturePage() {
 
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restorePlatformName, setRestorePlatformName] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const compressImage = useCallback(async (file: File): Promise<{ base64: string; mimeType: string }> => {
@@ -53,6 +55,7 @@ export default function CapturePage() {
   const uploadBase64 = useCallback(
     async (base64: string, mimeType: string) => {
       setError(null);
+      setRestorePlatformName(null);
       setProcessing(true);
 
       try {
@@ -81,7 +84,12 @@ export default function CapturePage() {
         );
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Failed to read screenshot");
+        if (!response.ok) {
+          if (data?.code === "missing_platform" && data?.missing_platform?.name) {
+            setRestorePlatformName(data.missing_platform.name);
+          }
+          throw new Error(data.error || "Failed to read screenshot");
+        }
 
         router.push(`/transactions?id=${data.transaction_id}`);
       } catch (err) {
@@ -243,9 +251,19 @@ export default function CapturePage() {
         </div>
 
         {error && (
-          <div className="w-full flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 mb-4">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="mb-4 w-full rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+            {restorePlatformName && (
+              <Link
+                href={buildFinancialSettingsHref("platforms", restorePlatformName)}
+                className="mt-3 inline-flex rounded-xl bg-white px-3 py-2 text-sm font-semibold text-zinc-900"
+              >
+                Re-add {restorePlatformName}
+              </Link>
+            )}
           </div>
         )}
 
