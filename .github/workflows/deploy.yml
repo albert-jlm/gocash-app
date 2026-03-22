@@ -40,10 +40,21 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-      - name: Deploy to server
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy web app
+        run: |
           rsync -avz --delete out/ zether@${{ secrets.SERVER_HOST }}:/home/zether/gocash-app/out/
+
+      - name: Deploy edge functions
+        run: |
+          rsync -avz --delete supabase/functions/main/ zether@${{ secrets.SERVER_HOST }}:/home/zether/homelab/supabase/volumes/functions/main/
+
+      - name: Restart edge-runtime
+        run: |
+          ssh zether@${{ secrets.SERVER_HOST }} "cd ~/homelab/supabase && docker compose restart functions"
