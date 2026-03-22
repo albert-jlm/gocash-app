@@ -161,6 +161,14 @@ serve(async (req: Request) => {
       return jsonResponse(req, { error: `Invalid platform for this operator: ${platform}` }, 400);
     }
 
+    if (platform === "Unknown" && !validPlatformNames.includes("GCash")) {
+      return jsonResponse(
+        req,
+        { error: "Unknown transactions require an active GCash wallet. Re-add GCash first." },
+        400
+      );
+    }
+
     const txType = edits.transaction_type ?? tx.transaction_type;
     const amount = edits.amount ?? tx.amount;
 
