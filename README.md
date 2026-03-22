@@ -39,6 +39,7 @@ pnpm dev
 | [architecture.md](architecture.md) | System design and component overview |
 | [project-status.md](project-status.md) | Milestones and current progress |
 | [changelog.md](changelog.md) | Running log of changes |
+| [AUDITS.md](AUDITS.md) | Audit history, gate results, and follow-up actions |
 | [HUMAN_GUIDE.md](HUMAN_GUIDE.md) | Human-in-the-loop workflow guide |
 | [docs/workflow.md](docs/workflow.md) | Vibe coding workflow reference |
 

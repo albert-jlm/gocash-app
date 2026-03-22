@@ -170,3 +170,4 @@ npx cap sync
 
 - [Add rules here as the project evolves]
 - Use the `#` shortcut to add new rules on the fly during sessions
+- Every codebase audit must append a dated entry to `AUDITS.md` (scope, gate results, findings, follow-ups)
