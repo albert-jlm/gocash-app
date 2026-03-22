@@ -79,4 +79,21 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION gocash.confirm_transaction_atomic TO authenticated;
+GRANT EXECUTE ON FUNCTION gocash.confirm_transaction_atomic(
+  UUID,
+  UUID,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  NUMERIC,
+  TEXT,
+  NUMERIC,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  TEXT,
+  TEXT,
+  TIMESTAMPTZ,
+  BOOLEAN,
+  JSONB
+) TO authenticated;
