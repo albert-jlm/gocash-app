@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -28,7 +29,7 @@ const TAB_LABELS: Record<FinancialSettingsTab, { title: string; desc: string }> 
   },
 };
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { session, operatorId, loading } = useAuthGuard();
   const router = useRouter();
   const pathname = usePathname();
@@ -118,5 +119,19 @@ export default function SettingsPage() {
         {activeTab === "profit" && <ProfitSettingsPanel operatorId={operatorId} />}
       </section>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+        </div>
+      }
+    >
+      <SettingsPageContent />
+    </Suspense>
   );
 }
