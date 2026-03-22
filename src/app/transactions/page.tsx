@@ -242,8 +242,8 @@ function TransactionsList() {
       </div>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
-        <nav className="flex items-center justify-around">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
+        <nav className="flex items-center justify-around pointer-events-auto">
           <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
             <Home className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">Home</span>
