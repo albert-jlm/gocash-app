@@ -1,20 +1,11 @@
--- Migration: atomic transaction confirmation
--- Replaces three separate DB calls in confirm-transaction Edge Function with
--- a single transactional function. If any step fails the whole thing rolls back.
---
--- Called by: confirm-transaction Edge Function (adminClient.rpc)
--- Security: SECURITY DEFINER — runs as the migration owner, bypasses RLS for wallet/tx updates
 
 CREATE OR REPLACE FUNCTION gocash.confirm_transaction_atomic(
   p_transaction_id   UUID,
   p_operator_id      UUID,
   p_user_id          TEXT,
-  -- Platform wallet
   p_platform_wallet  TEXT,
   p_platform_delta   NUMERIC,
-  -- Cash wallet
   p_cash_delta       NUMERIC,
-  -- Transaction update payload (all fields)
   p_status           TEXT,
   p_net_profit       NUMERIC,
   p_platform         TEXT,
@@ -34,7 +25,6 @@ AS $$
 DECLARE
   v_confirmed_at TIMESTAMPTZ := NOW();
 BEGIN
-  -- 1. Update platform wallet balance
   UPDATE gocash.wallets
   SET
     balance              = balance + p_platform_delta,
@@ -47,7 +37,6 @@ BEGIN
     RAISE EXCEPTION 'Platform wallet not found: % (operator %)', p_platform_wallet, p_operator_id;
   END IF;
 
-  -- 2. Update cash wallet (only when there is a non-zero delta)
   IF p_cash_delta <> 0 THEN
     UPDATE gocash.wallets
     SET
@@ -62,7 +51,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- 3. Confirm the transaction
   UPDATE gocash.transactions
   SET
     status           = p_status,
@@ -92,6 +80,4 @@ BEGIN
 END;
 $$;
 
--- Grant execute to authenticated users (Edge Function uses service role which already has it,
--- but explicit grant ensures forward compatibility)
 GRANT EXECUTE ON FUNCTION gocash.confirm_transaction_atomic TO authenticated;

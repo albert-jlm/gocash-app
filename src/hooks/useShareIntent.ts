@@ -2,11 +2,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Capacitor } from "@capacitor/core";
 
-/**
- * Listens for images shared to the app via Android's share sheet.
- * When an image is received, stores the shared file info in sessionStorage
- * and navigates to /capture where it's automatically processed.
- */
 export function useShareIntent() {
   const router = useRouter();
 
@@ -35,7 +30,6 @@ export function useShareIntent() {
 
         cleanup = () => { listener.remove(); };
       } catch {
-        // Plugin not available — silently ignore on web
       }
     }
 

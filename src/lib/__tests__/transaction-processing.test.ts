@@ -8,10 +8,6 @@ import {
   type TransactionRule,
 } from "../../../supabase/functions/_shared/transaction-processing";
 
-// ---------------------------------------------------------------------------
-// Shared test fixtures
-// ---------------------------------------------------------------------------
-
 const RULES: TransactionRule[] = [
   { transaction_type: "Cash In",           platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5,    is_active: true },
   { transaction_type: "Cash Out",          platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5,    is_active: true },
@@ -20,10 +16,6 @@ const RULES: TransactionRule[] = [
   { transaction_type: "Bank Transfer",     platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5,    is_active: true },
   { transaction_type: "Profit Remittance", platform: "all", delta_platform_mult: 0,  delta_cash_amount_mult: -1, delta_cash_mult: 0, profit_rate: null, profit_minimum: null, is_active: true },
 ];
-
-// ---------------------------------------------------------------------------
-// detectPlatform
-// ---------------------------------------------------------------------------
 
 describe("detectPlatform", () => {
   it("detects GCash from text", () => {
@@ -56,10 +48,6 @@ describe("detectPlatform", () => {
     expect(detectPlatform("MAYA transfer")).toBe("Maya");
   });
 });
-
-// ---------------------------------------------------------------------------
-// detectType
-// ---------------------------------------------------------------------------
 
 describe("detectType", () => {
   it("detects Cash In", () => {
@@ -96,23 +84,16 @@ describe("detectType", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// calculateProfit
-// ---------------------------------------------------------------------------
-
 describe("calculateProfit", () => {
   it("calculates profit using rate (amount * rate%)", () => {
-    // 500 * 2% = 10
     expect(calculateProfit("Cash In", "GCash", 500, RULES)).toBe(10);
   });
 
   it("applies minimum when rate result is lower", () => {
-    // 100 * 2% = 2, but minimum is 5
     expect(calculateProfit("Cash In", "GCash", 100, RULES)).toBe(5);
   });
 
   it("uses rate when higher than minimum", () => {
-    // 1000 * 2% = 20, minimum is 5 → use 20
     expect(calculateProfit("Cash In", "GCash", 1000, RULES)).toBe(20);
   });
 
@@ -140,21 +121,14 @@ describe("calculateProfit", () => {
   });
 
   it("uses Telco Load rate (3%)", () => {
-    // 100 * 3% = 3, minimum is 3 → exact match
     expect(calculateProfit("Telco Load", "GCash", 100, RULES)).toBe(3);
-    // 200 * 3% = 6, minimum is 3 → use 6
     expect(calculateProfit("Telco Load", "GCash", 200, RULES)).toBe(6);
   });
 
   it("Bills Payment uses minimum only (0% rate)", () => {
-    // 0% rate = 0, minimum = 5
     expect(calculateProfit("Bills Payment", "GCash", 5000, RULES)).toBe(5);
   });
 });
-
-// ---------------------------------------------------------------------------
-// extractAccountNumber
-// ---------------------------------------------------------------------------
 
 describe("extractAccountNumber", () => {
   it("extracts a PH mobile number (09XX format)", () => {
@@ -193,15 +167,8 @@ describe("extractAccountNumber", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// computeWalletDeltas
-// ---------------------------------------------------------------------------
-
 describe("computeWalletDeltas", () => {
   it("Cash In: platform up, cash down minus profit", () => {
-    // Cash In ₱500, profit ₱10
-    // platform_delta = 500 * 1 = +500
-    // cash_delta = (500 * -1) + (10 * 1) = -490
     const result = computeWalletDeltas("Cash In", "GCash", 500, 10, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",
@@ -211,9 +178,6 @@ describe("computeWalletDeltas", () => {
   });
 
   it("Cash Out: platform down, cash up plus profit", () => {
-    // Cash Out ₱1000, profit ₱20
-    // platform_delta = 1000 * -1 = -1000
-    // cash_delta = (1000 * 1) + (20 * 1) = 1020
     const result = computeWalletDeltas("Cash Out", "GCash", 1000, 20, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",
@@ -223,9 +187,6 @@ describe("computeWalletDeltas", () => {
   });
 
   it("Telco Load: platform down, cash up plus profit", () => {
-    // Telco Load ₱100, profit ₱3
-    // platform_delta = 100 * -1 = -100
-    // cash_delta = (100 * 1) + (3 * 1) = 103
     const result = computeWalletDeltas("Telco Load", "GCash", 100, 3, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",
@@ -235,9 +196,6 @@ describe("computeWalletDeltas", () => {
   });
 
   it("Bills Payment: platform down, cash up (no profit in cash)", () => {
-    // Bills Payment ₱2000, profit ₱5
-    // platform_delta = 2000 * -1 = -2000
-    // cash_delta = (2000 * 1) + (5 * 0) = 2000
     const result = computeWalletDeltas("Bills Payment", "GCash", 2000, 5, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",
@@ -247,9 +205,6 @@ describe("computeWalletDeltas", () => {
   });
 
   it("Profit Remittance: cash leaves, platform unchanged", () => {
-    // Profit Remittance ₱500, profit ₱0
-    // platform_delta = 500 * 0 = 0
-    // cash_delta = (500 * -1) + (0 * 0) = -500
     const result = computeWalletDeltas("Profit Remittance", "GCash", 500, 0, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",

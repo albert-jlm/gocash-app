@@ -23,10 +23,6 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { BUILTIN_PLATFORM_NAMES, isMissingOperatorPlatformsError, sortPlatformNames, TRANSACTION_TYPES } from "@/lib/platforms";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface TransactionDraft {
   id: string;
   operator_id?: string;
@@ -49,12 +45,8 @@ const MOCK_PREVIEW: TransactionDraft = {
   account_number: "0917 123 4567",
   reference_number: "891148103",
   transaction_date: "2025-03-08T14:30:00",
-  status: "awaiting_confirm",
+  status: "confirmed",
 };
-
-// ---------------------------------------------------------------------------
-// Field row — read-only display vs editable input
-// ---------------------------------------------------------------------------
 
 function FieldRow({
   label,
@@ -72,10 +64,6 @@ function FieldRow({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export default function ConfirmForm({ transactionId }: { transactionId: string }) {
   const router = useRouter();
@@ -98,10 +86,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const [accountNumber, setAccountNumber] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [txDate, setTxDate] = useState("");
-
-  // ---------------------------------------------------------------------------
-  // Load
-  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     async function load() {
@@ -178,10 +162,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     setTxDate(data.transaction_date ? data.transaction_date.slice(0, 16) : "");
   }
 
-  // ---------------------------------------------------------------------------
-  // Save
-  // ---------------------------------------------------------------------------
-
   async function handleSave() {
     if (!tx || isPreview) return;
     setSaveError(null);
@@ -200,7 +180,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       if (txDate && txDate !== (tx.transaction_date ?? "").slice(0, 16))
         edits.transaction_date = new Date(txDate).toISOString();
 
-      if (Object.keys(edits).length === 0 && tx.status !== "awaiting_confirm") {
+      if (Object.keys(edits).length === 0) {
         router.push(`/transactions?id=${tx.id}`);
         return;
       }
@@ -227,10 +207,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       setSaving(false);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // States
-  // ---------------------------------------------------------------------------
 
   const selectablePlatforms =
     platform && platform !== "Unknown" && !platformOptions.includes(platform)
@@ -260,33 +236,21 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Main render
-  // ---------------------------------------------------------------------------
-
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      {/* Header */}
       <header className="px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
-          href={tx?.status === "awaiting_confirm" ? "/" : `/transactions?id=${transactionId}`}
+          href={`/transactions?id=${transactionId}`}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-base font-semibold">
-            {tx?.status === "awaiting_confirm" ? "Review Transaction" : "Edit Transaction"}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {tx?.status === "awaiting_confirm"
-              ? "Confirm or fix the details below"
-              : "Update the saved details below"}
-          </p>
+          <h1 className="text-base font-semibold">Edit Transaction</h1>
+          <p className="text-xs text-muted-foreground">Update the saved details below</p>
         </div>
       </header>
 
-      {/* AI read badge */}
       <section className="px-5 mb-4">
         <div className="flex items-center gap-2.5 bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3">
           <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
@@ -299,7 +263,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </section>
 
-      {/* Form */}
       <section className="px-5 flex-1">
         {saveError && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 mb-4">
@@ -309,7 +272,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         )}
 
         <div className="rounded-2xl p-4 space-y-4 mb-4 bg-white/[0.06] border border-white/[0.08]">
-          {/* Platform */}
           <FieldRow label="App used">
             <Select value={platform} onValueChange={(v) => setPlatform(v ?? "")}>
 
@@ -326,7 +288,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             </Select>
           </FieldRow>
 
-          {/* Transaction type */}
           <FieldRow label="Transaction type">
             <Select value={txType} onValueChange={(v) => setTxType(v ?? "")}>
 
@@ -343,7 +304,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             </Select>
           </FieldRow>
 
-          {/* Amount + Earnings */}
           <div className="grid grid-cols-2 gap-3">
             <FieldRow label="Amount">
               <div className="relative">
@@ -369,7 +329,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             </FieldRow>
           </div>
 
-          {/* Customer number */}
           <FieldRow label="Customer number">
             <Input
               value={accountNumber}
@@ -380,7 +339,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             />
           </FieldRow>
 
-          {/* Reference number */}
           <FieldRow label="Transaction number">
             <Input
               value={referenceNumber}
@@ -391,7 +349,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             />
           </FieldRow>
 
-          {/* Date & Time */}
           <FieldRow label="Date & Time">
             <Input
               type="datetime-local"
@@ -403,7 +360,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </section>
 
-      {/* Action Button */}
       <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <button
           onClick={handleSave}

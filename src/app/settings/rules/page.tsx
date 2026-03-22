@@ -20,10 +20,6 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { sortPlatformNames } from "@/lib/platforms";
 
-// ---------------------------------------------------------------------------
-// Config — plain-language descriptions for each transaction type
-// ---------------------------------------------------------------------------
-
 const TYPE_META: Record<string, { Icon: React.ElementType; color: string; desc: string }> = {
   "Cash In": {
     Icon: ArrowDownRight,
@@ -57,10 +53,6 @@ const TYPE_META: Record<string, { Icon: React.ElementType; color: string; desc: 
   },
 };
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface Rule {
   id: string;
   transaction_type: string;
@@ -70,17 +62,12 @@ interface Rule {
   is_active: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export default function RulesSettingsPage() {
   const { operatorId, loading: authLoading } = useAuthGuard();
 
   const [rules, setRules] = useState<Rule[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Editing
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRate, setEditRate] = useState("");
   const [editMin, setEditMin] = useState("");
@@ -193,7 +180,6 @@ export default function RulesSettingsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      {/* Header */}
       <header className="px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
@@ -207,7 +193,6 @@ export default function RulesSettingsPage() {
         </div>
       </header>
 
-      {/* Rules List */}
       <section className="px-5 flex-1 space-y-3 pb-10">
         {rules.map((rule) => {
           const meta = TYPE_META[rule.transaction_type] ?? {
@@ -230,7 +215,6 @@ export default function RulesSettingsPage() {
                   : "bg-white/[0.02] border-white/[0.03] opacity-50",
               ].join(" ")}
             >
-              {/* Rule header */}
               <div className="px-4 py-3.5 flex items-start gap-3">
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -255,7 +239,6 @@ export default function RulesSettingsPage() {
                         </span>
                       )}
 
-                      {/* Active toggle */}
                       <button
                         onClick={() => toggleActive(rule)}
                         className={[
@@ -277,7 +260,6 @@ export default function RulesSettingsPage() {
                     {meta.desc}
                   </p>
 
-                  {/* Profit display — skip for Profit Remittance (no profit) */}
                   {!isProfitRemittance && !isEditing && (
                     <div className="flex items-center gap-3 mt-2.5">
                       <div className="bg-white/[0.06] rounded-lg px-2.5 py-1.5">
@@ -303,7 +285,6 @@ export default function RulesSettingsPage() {
                 </div>
               </div>
 
-              {/* Edit form */}
               {isEditing && (
                 <div className="px-4 pb-4 pt-1 space-y-3 border-t border-white/[0.05] mx-4">
                   <div className="grid grid-cols-2 gap-3 pt-3">

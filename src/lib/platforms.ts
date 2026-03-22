@@ -80,9 +80,9 @@ export type WalletColorId = (typeof COLOR_PALETTE)[number]["id"];
 
 const DEFAULT_WALLET_COLORS: Record<string, WalletColorId> = {
   GCash: "blue",
-  MariBank: "purple",
-  Maya: "cyan",
-  Cash: "emerald",
+  MariBank: "orange",
+  Maya: "emerald",
+  Cash: "rose",
 };
 
 const BUILTIN_PLATFORM_ORDER = new Map(
@@ -114,12 +114,6 @@ export function sortPlatformNames(names: string[]): string[] {
   });
 }
 
-/**
- * Returns true when a Supabase query error indicates the `operator_platforms`
- * table does not exist (e.g. migration not yet applied). Used by confirm-form,
- * platform settings, and the confirm Edge Function to fall back to the
- * `wallets` table for platform discovery.
- */
 export function isMissingOperatorPlatformsError(message?: string | null): boolean {
   return Boolean(
     message && (

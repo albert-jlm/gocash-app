@@ -388,19 +388,6 @@ export default function PlatformsSettingsPage() {
     setDeletingId(platform.id);
     setError(null);
 
-    const { count: pendingCount } = await supabase
-      .from("transactions")
-      .select("id", { count: "exact", head: true })
-      .eq("operator_id", operatorId)
-      .eq("platform", platform.name)
-      .eq("status", "awaiting_confirm");
-
-    if ((pendingCount ?? 0) > 0) {
-      setDeletingId(null);
-      setError("Review all pending transactions for this platform before removing it");
-      return;
-    }
-
     if (supportsOperatorPlatforms) {
       const { error: platformError } = await supabase
         .from("operator_platforms")
@@ -603,8 +590,7 @@ export default function PlatformsSettingsPage() {
         )}
 
         <p className="text-[11px] text-muted-foreground/50 text-center pt-4 leading-relaxed">
-          Built-in platforms stay active. Custom platforms can only be removed when their balance is 0
-          and nothing is waiting for review.
+          Built-in platforms stay active. Custom platforms can only be removed when their balance is 0.
         </p>
       </section>
     </div>

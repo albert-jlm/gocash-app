@@ -11,12 +11,6 @@ interface AppSession {
   loading: boolean;
 }
 
-/**
- * Handles both auth and operator record checks.
- * - No session → redirects to /login
- * - Session but no operator record → redirects to /onboarding
- * - Both present → returns session + operatorId
- */
 export function useAuthGuard(): AppSession {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);

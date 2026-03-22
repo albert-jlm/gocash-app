@@ -1,6 +1,3 @@
--- Migration: Audit #5 remediation
--- Adds canonical operator platforms, wallet metadata, dedupe protection,
--- and private screenshot storage policies.
 
 CREATE TABLE IF NOT EXISTS gocash.operator_platforms (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
