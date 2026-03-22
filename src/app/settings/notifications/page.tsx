@@ -14,18 +14,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  hasEnabledTelegramNotification,
+  mergeNotificationSettings,
+  parseNotificationSettings,
+  type OperatorNotificationSettings,
+} from "@/lib/notification-settings";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface NotifSettings {
-  telegram_enabled: boolean;
+interface NotifSettings extends OperatorNotificationSettings {
   telegram_chat_id: string;
 }
 
 const DEFAULTS: NotifSettings = {
-  telegram_enabled: false,
+  ...DEFAULT_NOTIFICATION_SETTINGS,
   telegram_chat_id: "",
 };
 
@@ -53,9 +59,9 @@ export default function NotificationsSettingsPage() {
         .single();
 
       if (data) {
-        const s = (data.settings ?? {}) as Record<string, unknown>;
+        const parsed = parseNotificationSettings(data.settings);
         setSettings({
-          telegram_enabled: Boolean(s.telegram_enabled),
+          ...parsed,
           telegram_chat_id: (data.telegram_chat_id as string) ?? "",
         });
       }
@@ -76,11 +82,7 @@ export default function NotificationsSettingsPage() {
       .eq("id", operatorId)
       .single();
 
-    const existingSettings = (current?.settings ?? {}) as Record<string, unknown>;
-    const mergedSettings = {
-      ...existingSettings,
-      telegram_enabled: settings.telegram_enabled,
-    };
+    const mergedSettings = mergeNotificationSettings(current?.settings, settings);
 
     const { error: updateErr } = await supabase
       .from("operators")
@@ -135,62 +137,92 @@ export default function NotificationsSettingsPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Telegram</p>
+                <p className="text-sm font-semibold">Telegram preferences</p>
+                {hasEnabledTelegramNotification(settings) && (
+                  <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-widest">
+                    Configured
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                Choose which Telegram alerts should be sent to your saved chat ID.
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 pb-4 pt-1 space-y-3 border-t border-white/[0.05] mx-4">
+            {[
+              {
+                key: "processed" as const,
+                label: "Transaction processed",
+                description: "After AI finishes reading a screenshot and it needs review.",
+              },
+              {
+                key: "processing_error" as const,
+                label: "Processing error",
+                description: "When the app cannot read a screenshot successfully.",
+              },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-3 pt-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
                 <button
                   onClick={() =>
-                    setSettings((s) => ({ ...s, telegram_enabled: !s.telegram_enabled }))
+                    setSettings((current) => ({
+                      ...current,
+                      telegram: {
+                        ...current.telegram,
+                        [item.key]: !current.telegram[item.key],
+                      },
+                    }))
                   }
                   className={[
-                    "relative w-9 h-5 rounded-full transition-colors",
-                    settings.telegram_enabled ? "bg-emerald-500" : "bg-white/[0.15]",
+                    "relative w-9 h-5 rounded-full transition-colors flex-shrink-0",
+                    settings.telegram[item.key] ? "bg-emerald-500" : "bg-white/[0.15]",
                   ].join(" ")}
                 >
                   <span
                     className={[
                       "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
-                      settings.telegram_enabled ? "left-[18px]" : "left-0.5",
+                      settings.telegram[item.key] ? "left-[18px]" : "left-0.5",
                     ].join(" ")}
                   />
                 </button>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
-                Receive a message when a transaction is processed by AI
-              </p>
-            </div>
-          </div>
+            ))}
 
-          {/* Chat ID input — shown when enabled */}
-          {settings.telegram_enabled && (
-            <div className="px-4 pb-4 pt-1 space-y-3 border-t border-white/[0.05] mx-4">
-              <div className="space-y-1.5 pt-3">
-                <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Telegram Chat ID
-                </Label>
-                <Input
-                  value={settings.telegram_chat_id}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, telegram_chat_id: e.target.value }))
-                  }
-                  placeholder="e.g. 123456789"
-                  inputMode="numeric"
-                  className="bg-white/[0.07] border-white/[0.1] h-10 rounded-xl text-sm tabular-nums"
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
-                Send /start to @GoCashTrackerBot on Telegram, then paste the Chat ID it gives you.
-              </p>
+            <div className="space-y-1.5 pt-2">
+              <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Telegram Chat ID
+              </Label>
+              <Input
+                value={settings.telegram_chat_id}
+                onChange={(e) =>
+                  setSettings((current) => ({ ...current, telegram_chat_id: e.target.value }))
+                }
+                placeholder="e.g. 123456789"
+                inputMode="numeric"
+                className="bg-white/[0.07] border-white/[0.1] h-10 rounded-xl text-sm tabular-nums"
+              />
             </div>
-          )}
+            <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
+              Telegram delivery works when a bot token is configured on the server. Push notifications are still deferred.
+            </p>
+          </div>
         </div>
 
-        {/* Future — push notifications placeholder */}
+        {/* Deferred — push notifications */}
         <div className="flex items-center gap-3 bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3.5 opacity-50">
           <div className="w-9 h-9 rounded-xl bg-white/[0.08] flex items-center justify-center flex-shrink-0">
             <Bell className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">Push Notifications</p>
-            <p className="text-[11px] text-muted-foreground">Coming soon</p>
+            <p className="text-[11px] text-muted-foreground">Not included in this release</p>
           </div>
         </div>
 
@@ -217,8 +249,7 @@ export default function NotificationsSettingsPage() {
         </button>
 
         <p className="text-[11px] text-muted-foreground/50 text-center pt-2 leading-relaxed">
-          Notifications are optional. Your transactions are always saved
-          whether notifications are on or off.
+          Transactions always save normally whether these preferences are filled in or not.
         </p>
       </section>
     </div>

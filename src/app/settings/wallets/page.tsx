@@ -14,27 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
-
-// ---------------------------------------------------------------------------
-// Color palette — full static class strings so Tailwind JIT never purges them
-// ---------------------------------------------------------------------------
-
-const COLOR_PALETTE = [
-  { id: "blue",    label: "Blue",    gradient: "from-blue-500 via-blue-600 to-blue-700",       swatch: "bg-blue-500",    accent: "text-blue-400" },
-  { id: "purple",  label: "Purple",  gradient: "from-purple-500 via-purple-600 to-purple-700", swatch: "bg-purple-500",  accent: "text-purple-400" },
-  { id: "emerald", label: "Green",   gradient: "from-emerald-500 via-emerald-600 to-emerald-700", swatch: "bg-emerald-500", accent: "text-emerald-400" },
-  { id: "rose",    label: "Red",     gradient: "from-rose-500 via-rose-600 to-rose-700",       swatch: "bg-rose-500",    accent: "text-rose-400" },
-  { id: "orange",  label: "Orange",  gradient: "from-orange-500 via-orange-600 to-orange-700", swatch: "bg-orange-500",  accent: "text-orange-400" },
-  { id: "amber",   label: "Amber",   gradient: "from-amber-500 via-amber-600 to-amber-700",    swatch: "bg-amber-500",   accent: "text-amber-400" },
-  { id: "cyan",    label: "Cyan",    gradient: "from-cyan-500 via-cyan-600 to-cyan-700",       swatch: "bg-cyan-500",    accent: "text-cyan-400" },
-  { id: "zinc",    label: "Gray",    gradient: "from-zinc-600 via-zinc-700 to-zinc-800",       swatch: "bg-zinc-500",    accent: "text-zinc-400" },
-] as const;
-
-type ColorId = typeof COLOR_PALETTE[number]["id"];
-
-function getColor(id: string) {
-  return COLOR_PALETTE.find((c) => c.id === id) ?? COLOR_PALETTE[COLOR_PALETTE.length - 1];
-}
+import {
+  COLOR_PALETTE,
+  getWalletColor,
+  sortWallets,
+  type WalletColorId,
+} from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,9 +70,9 @@ export default function WalletsSettingsPage() {
         .from("wallets")
         .select("id, wallet_name, wallet_type, balance, color")
         .eq("operator_id", opId)
-        .order("wallet_type");
+        .eq("is_active", true);
       // Cast needed until Supabase types are regenerated with the color column
-      if (data) setWallets(data as unknown as Wallet[]);
+      if (data) setWallets(sortWallets(data as unknown as Wallet[]));
       setDataLoading(false);
     }
     fetchWallets();
@@ -138,8 +123,9 @@ export default function WalletsSettingsPage() {
     setTimeout(() => setSuccessId(null), 2000);
   }
 
-  async function saveColor(walletId: string, colorId: ColorId) {
+  async function saveColor(walletId: string, colorId: WalletColorId) {
     setSavingColor(walletId);
+    const previousColor = wallets.find((wallet) => wallet.id === walletId)?.color;
 
     // Optimistic update
     setWallets((prev) =>
@@ -149,8 +135,7 @@ export default function WalletsSettingsPage() {
 
     const { error: updateError } = await supabase
       .from("wallets")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ color: colorId } as any)
+      .update({ color: colorId })
       .eq("id", walletId);
 
     setSavingColor(null);
@@ -158,7 +143,11 @@ export default function WalletsSettingsPage() {
     if (updateError) {
       // Revert on failure
       setWallets((prev) =>
-        prev.map((w) => (w.id === walletId ? { ...w, color: w.color } : w))
+        prev.map((w) => (
+          w.id === walletId && previousColor
+            ? { ...w, color: previousColor }
+            : w
+        ))
       );
     }
   }
@@ -190,7 +179,7 @@ export default function WalletsSettingsPage() {
       {/* Wallet List */}
       <section className="px-5 flex-1 space-y-3 pb-10">
         {wallets.map((w) => {
-          const color = getColor(w.color);
+          const color = getWalletColor(w.color);
           const isEditing = editingId === w.id;
           const justSaved = successId === w.id;
           const isColorOpen = colorPickerOpenId === w.id;

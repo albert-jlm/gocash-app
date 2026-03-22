@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Loader2, AlertCircle, Pencil,
+  ArrowLeft, Loader2, AlertCircle,
   ArrowDownRight, ArrowUpLeft, Phone, Building2, Zap, TrendingDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -25,6 +25,7 @@ interface TxDetail {
   platform: string;
   account_number: string | null;
   reference_number: string | null;
+  image_url: string | null;
   amount: number;
   net_profit: number;
   transaction_date: string | null;
@@ -49,6 +50,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
   const [tx, setTx] = useState<TxDetail | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
@@ -57,11 +59,11 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
     supabase
       .from("transactions")
-      .select("id, transaction_type, platform, account_number, reference_number, amount, net_profit, transaction_date, created_at, status, confirmed_at, was_edited")
+      .select("id, transaction_type, platform, account_number, reference_number, image_url, amount, net_profit, transaction_date, created_at, status, confirmed_at, was_edited")
       .eq("id", transactionId)
       .eq("operator_id", opId)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error || !data) {
           setFetchError("Transaction not found");
         } else {
@@ -69,7 +71,18 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
             router.replace(`/confirm?id=${transactionId}`);
             return;
           }
-          setTx(data as TxDetail);
+          const detail = data as TxDetail;
+          setTx(detail);
+
+          if (detail.image_url) {
+            const { data: signed } = await supabase.storage
+              .from("transaction-images")
+              .createSignedUrl(detail.image_url, 60 * 5);
+
+            setImageUrl(signed?.signedUrl ?? null);
+          } else {
+            setImageUrl(null);
+          }
         }
         setDataLoading(false);
       });
@@ -136,6 +149,20 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
       <section className="px-5 flex-1">
         <div className="bg-white/[0.05] rounded-2xl p-4 space-y-4">
+          {imageUrl && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Original screenshot
+              </p>
+              {/* Signed URLs come from Supabase Storage at runtime, so plain img is the simplest fit here. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt="Original transaction screenshot"
+                className="w-full rounded-2xl border border-white/[0.06] bg-black/20 object-cover"
+              />
+            </div>
+          )}
           {tx.account_number && (
             <Field label="Customer number" value={tx.account_number} />
           )}
@@ -167,14 +194,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </section>
 
-      <div className="px-5 py-8 space-y-3">
-        <Link
-          href={`/confirm?id=${tx.id}`}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm transition-colors"
-        >
-          <Pencil className="w-4 h-4" />
-          Edit Transaction
-        </Link>
+      <div className="px-5 py-8">
         <Link
           href="/transactions"
           className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"

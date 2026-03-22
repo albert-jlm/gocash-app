@@ -1,7 +1,7 @@
 /**
  * confirm-transaction — Phase 2 Edge Function
  *
- * Confirms a draft transaction (status: awaiting_confirmation) after the
+ * Confirms a draft transaction (status: awaiting_confirm) after the
  * operator has reviewed and optionally edited the AI-extracted fields.
  *
  * Steps:
@@ -108,7 +108,7 @@ serve(async (req: Request) => {
       return jsonResponse(req,{ error: "Transaction not found or access denied" }, 404);
     }
 
-    if (tx.status === "confirmed") {
+    if (tx.status === "confirmed" || tx.status === "edited") {
       return jsonResponse(req,{ error: "Transaction is already confirmed" }, 409);
     }
 
@@ -141,18 +141,38 @@ serve(async (req: Request) => {
       }
     }
 
-    const VALID_PLATFORMS = ["GCash", "MariBank", "Maya", "Unknown"];
-    if (edits.platform !== undefined && !VALID_PLATFORMS.includes(edits.platform)) {
-      return jsonResponse(req, { error: `Invalid platform. Allowed: ${VALID_PLATFORMS.join(", ")}` }, 400);
-    }
-
     const VALID_TYPES = ["Cash In", "Cash Out", "Telco Load", "Bills Payment", "Bank Transfer", "Profit Remittance"];
     if (edits.transaction_type !== undefined && !VALID_TYPES.includes(edits.transaction_type)) {
       return jsonResponse(req, { error: `Invalid transaction_type. Allowed: ${VALID_TYPES.join(", ")}` }, 400);
     }
     const wasEdited = Object.keys(edits).length > 0;
 
+    // ----- 6. Fetch rules, active platforms, and (re-)compute profit -----
+    // Service role client — needed for wallet balance updates and platform validation.
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { db: { schema: "gocash" } }
+    );
+
+    const { data: activePlatforms, error: activePlatformsError } = await userClient
+      .from("operator_platforms")
+      .select("name")
+      .eq("operator_id", operator.id)
+      .eq("is_active", true);
+
+    if (activePlatformsError) {
+      return jsonResponse(req, { error: "Failed to load operator platforms" }, 500);
+    }
+
+    const validPlatforms = new Set((activePlatforms ?? []).map((row) => row.name));
+    validPlatforms.add("Unknown");
+
     const platform = edits.platform ?? tx.platform;
+    if (!validPlatforms.has(platform)) {
+      return jsonResponse(req, { error: `Invalid platform for this operator: ${platform}` }, 400);
+    }
+
     const txType = edits.transaction_type ?? tx.transaction_type;
     const amount = edits.amount ?? tx.amount;
 
@@ -173,14 +193,6 @@ serve(async (req: Request) => {
           },
         }
       : null;
-
-    // ----- 6. Fetch rules and (re-)compute profit -----
-    // Service role client — needed for wallet balance updates (bypasses RLS)
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { db: { schema: "gocash" } }
-    );
 
     const { data: rules } = await adminClient
       .from("transaction_rules")
@@ -217,6 +229,7 @@ serve(async (req: Request) => {
     const finalEditHistory = wasEdited
       ? [...(Array.isArray(tx.edit_history) ? tx.edit_history : []), editHistoryEntry]
       : tx.edit_history;
+    const nextStatus = wasEdited ? "edited" : "confirmed";
 
     const { error: atomicError } = await adminClient.rpc(
       "confirm_transaction_atomic",
@@ -227,7 +240,7 @@ serve(async (req: Request) => {
         p_platform_wallet:  deltas.platform_wallet_name,
         p_platform_delta:   deltas.platform_delta,
         p_cash_delta:       deltas.cash_delta,
-        p_status:           "confirmed",
+        p_status:           nextStatus,
         p_net_profit:       netProfit,
         p_platform:         platform,
         p_transaction_type: txType,
@@ -248,7 +261,7 @@ serve(async (req: Request) => {
     // ----- 9. Return confirmed transaction -----
     return jsonResponse(req, {
       transaction_id: tx.id,
-      status: "confirmed",
+      status: nextStatus,
       platform,
       transaction_type: txType,
       amount,

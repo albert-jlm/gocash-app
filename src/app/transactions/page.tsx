@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, Suspense } from "react";
+import { useDeferredValue, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import TransactionDetail from "./[id]/transaction-detail";
 import {
@@ -20,13 +20,15 @@ import {
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import { isWithinDateRange, matchesTransactionSearch } from "@/lib/transaction-filters";
+import { TRANSACTION_TYPES } from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-type FilterType = "All" | "Cash In" | "Cash Out" | "Telco Load" | "Bills Payment" | "Bank Transfer";
-const FILTERS: FilterType[] = ["All", "Cash In", "Cash Out", "Telco Load", "Bills Payment", "Bank Transfer"];
+const FILTERS = ["All", ...TRANSACTION_TYPES] as const;
+type FilterType = (typeof FILTERS)[number];
 
 const TYPE_CONFIG: Record<string, { color: string; bg: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", bg: "rgba(16,185,129,0.12)",  Icon: ArrowDownRight },
@@ -45,6 +47,7 @@ interface TxRow {
   id: string;
   transaction_type: string;
   account_number: string | null;
+  reference_number: string | null;
   amount: number;
   net_profit: number;
   created_at: string;
@@ -99,23 +102,47 @@ function TransactionsList() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [transactions, setTransactions] = useState<TxRow[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
+
+  const fetchData = useCallback(async () => {
+    if (!operatorId) return;
+    setDataLoading(true);
+
+    const { data } = await supabase
+      .from("transactions")
+      .select("id, transaction_type, account_number, reference_number, amount, net_profit, created_at, status")
+      .eq("operator_id", operatorId)
+      .order("created_at", { ascending: false })
+      .limit(300);
+
+    if (data) setTransactions(data);
+    setDataLoading(false);
+  }, [operatorId]);
 
   useEffect(() => {
     if (!operatorId) return;
-    const opId = operatorId;
-    async function fetchData() {
-      setDataLoading(true);
-      const { data } = await supabase
-        .from("transactions")
-        .select("id, transaction_type, account_number, amount, net_profit, created_at, status")
-        .eq("operator_id", opId)
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (data) setTransactions(data);
-      setDataLoading(false);
-    }
-    fetchData();
-  }, [operatorId]);
+    void fetchData();
+  }, [operatorId, fetchData]);
+
+  useEffect(() => {
+    if (!operatorId) return;
+
+    const channel = supabase
+      .channel(`transactions:${operatorId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "gocash", table: "transactions", filter: `operator_id=eq.${operatorId}` },
+        () => { void fetchData(); }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [operatorId, fetchData]);
 
   if (authLoading || dataLoading) {
     return (
@@ -130,7 +157,12 @@ function TransactionsList() {
       ? transactions
       : transactions.filter((t) => t.transaction_type === activeFilter);
 
-  const groups = groupByDate(filtered);
+  const searched = filtered.filter((tx) =>
+    matchesTransactionSearch(tx, deferredSearch)
+    && isWithinDateRange(tx.created_at, dateFrom || undefined, dateTo || undefined)
+  );
+
+  const groups = groupByDate(searched);
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
@@ -141,6 +173,30 @@ function TransactionsList() {
           {transactions.length} total · {transactions.filter(t => t.status === "awaiting_confirm").length} to review
         </p>
       </header>
+
+      <div className="px-5 mb-4 space-y-3">
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search amount, account, or ref number"
+          className="w-full h-11 rounded-xl bg-white/[0.06] border border-white/[0.08] px-3 text-sm outline-none focus:border-emerald-500/50"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-11 rounded-xl bg-white/[0.06] border border-white/[0.08] px-3 text-sm outline-none focus:border-emerald-500/50"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-11 rounded-xl bg-white/[0.06] border border-white/[0.08] px-3 text-sm outline-none focus:border-emerald-500/50"
+          />
+        </div>
+      </div>
 
       {/* Filter Chips — horizontal scroll, pill style */}
       <div
@@ -211,6 +267,11 @@ function TransactionsList() {
                         <p className="text-[11px] text-muted-foreground truncate">
                           {maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
                         </p>
+                        {tx.reference_number && (
+                          <p className="text-[10px] text-muted-foreground/60 truncate">
+                            Ref {tx.reference_number}
+                          </p>
+                        )}
                       </div>
 
                       {/* Amounts + badge */}
