@@ -1,6 +1,3 @@
-// Generated Supabase types for the gocash schema.
-// Run: supabase gen types typescript --schema gocash > src/types/database.ts
-// For now this is a manual stub — regenerate after Supabase CLI setup.
 
 export type Json =
   | string
@@ -22,7 +19,6 @@ export type TransactionType =
 export type TransactionStatus =
   | "uploaded"
   | "processing"
-  | "awaiting_confirm"
   | "confirmed"
   | "edited"
   | "failed";

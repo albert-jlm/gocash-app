@@ -1,5 +1,3 @@
--- Migration: Audit #5 function updates
--- Adds active-wallet guards to atomic confirmation.
 
 CREATE OR REPLACE FUNCTION gocash.confirm_transaction_atomic(
   p_transaction_id   UUID,

@@ -1,10 +1,4 @@
--- Migration: Postgres functions / RPCs
--- All functions use SECURITY DEFINER so they run with elevated privileges
--- regardless of the caller's RLS context.
 
--- ---------------------------------------------------------------------------
--- update_wallet_balance  (Phase 2 helper — still used for manual adjustments)
--- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION gocash.update_wallet_balance(
   p_operator_id    UUID,
   p_wallet_name    TEXT,
@@ -33,11 +27,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION gocash.update_wallet_balance TO authenticated;
 
--- ---------------------------------------------------------------------------
--- confirm_transaction_atomic  (Phase 2 — primary confirmation path)
--- Wraps platform wallet update + cash wallet update + transaction confirmation
--- in a single atomic transaction. If any step fails the whole thing rolls back.
--- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION gocash.confirm_transaction_atomic(
   p_transaction_id   UUID,
   p_operator_id      UUID,
@@ -64,7 +53,6 @@ AS $$
 DECLARE
   v_confirmed_at TIMESTAMPTZ := NOW();
 BEGIN
-  -- 1. Platform wallet
   UPDATE gocash.wallets
   SET
     balance             = balance + p_platform_delta,
@@ -77,7 +65,6 @@ BEGIN
     RAISE EXCEPTION 'Platform wallet not found: % (operator %)', p_platform_wallet, p_operator_id;
   END IF;
 
-  -- 2. Cash wallet (skip if delta is zero)
   IF p_cash_delta <> 0 THEN
     UPDATE gocash.wallets
     SET
@@ -92,7 +79,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- 3. Confirm transaction
   UPDATE gocash.transactions
   SET
     status           = p_status,

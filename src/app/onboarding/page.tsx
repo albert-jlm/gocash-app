@@ -9,28 +9,14 @@ import { supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { BUILTIN_PLATFORM_NAMES, getDefaultWalletColor } from "@/lib/platforms";
 
-// ---------------------------------------------------------------------------
-// Default transaction rules — operators can tweak these in Profit Settings later
-// ---------------------------------------------------------------------------
-
 const DEFAULT_RULES = [
-  // Cash In: customer gives GCash → operator gives cash. GCash up, Cash down (minus profit).
   { transaction_type: "Cash In",         platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
-  // Cash Out: customer gives cash → operator sends GCash. GCash down, Cash up (plus profit).
   { transaction_type: "Cash Out",        platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
-  // Telco Load: operator uses GCash to load telco credit. Customer pays cash.
   { transaction_type: "Telco Load",      platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 3,    profit_minimum: 3  },
-  // Bills Payment: operator uses GCash to pay a bill. Customer pays cash.
   { transaction_type: "Bills Payment",   platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5  },
-  // Bank Transfer: operator sends GCash to a bank. Customer pays cash.
   { transaction_type: "Bank Transfer",   platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5  },
-  // Profit Remittance: cash leaves register (manual remittance to owner).
   { transaction_type: "Profit Remittance", platform: "all", delta_platform_mult: 0, delta_cash_amount_mult: -1, delta_cash_mult: 0, profit_rate: null, profit_minimum: null },
 ];
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -38,11 +24,9 @@ export default function OnboardingPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  // Step 1 fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Step 2 fields
   const [gcashBalance, setGcashBalance] = useState("");
   const [maribankBalance, setMaribankBalance] = useState("");
   const [mayaBalance, setMayaBalance] = useState("");
@@ -56,7 +40,6 @@ export default function OnboardingPage() {
       if (!s) {
         router.replace("/login");
       } else {
-        // If they already have an operator record, skip onboarding
         supabase
           .from("operators")
           .select("id")
@@ -80,7 +63,6 @@ export default function OnboardingPage() {
     setSaving(true);
 
     try {
-      // 1. Get or create operator record
       let operatorId: string;
 
       const { data: existing } = await supabase
@@ -112,7 +94,6 @@ export default function OnboardingPage() {
         operatorId = op.id;
       }
 
-      // 2. Upsert wallets (safe to retry)
       const { data: existingPlatforms } = await supabase
         .from("operator_platforms")
         .select("name")
@@ -179,7 +160,6 @@ export default function OnboardingPage() {
 
       if (walletError) throw new Error(walletError.message);
 
-      // 3. Seed default transaction rules (skip if already exist)
       const { count } = await supabase
         .from("transaction_rules")
         .select("id", { count: "exact", head: true })
@@ -210,14 +190,12 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto px-5">
-      {/* Progress dots */}
       <div className="flex items-center justify-center gap-2 pt-14 pb-8">
         <span className={`w-2 h-2 rounded-full ${step === 1 ? "bg-emerald-400" : "bg-emerald-400/40"}`} />
         <span className={`w-2 h-2 rounded-full ${step === 2 ? "bg-emerald-400" : "bg-white/20"}`} />
       </div>
 
       {step === 1 ? (
-        /* ── Step 1: Your details ── */
         <div className="flex-1 flex flex-col">
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-2">Welcome!</h1>
@@ -269,7 +247,6 @@ export default function OnboardingPage() {
           </div>
         </div>
       ) : (
-        /* ── Step 2: Opening balances ── */
         <div className="flex-1 flex flex-col">
           <div className="mb-8">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-4">
@@ -284,9 +261,9 @@ export default function OnboardingPage() {
           <div className="space-y-4 flex-1">
             {[
               { label: "GCash wallet", value: gcashBalance, onChange: setGcashBalance, color: "text-blue-400" },
-              { label: "MariBank wallet", value: maribankBalance, onChange: setMaribankBalance, color: "text-purple-400" },
-              { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-cyan-400" },
-              { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-emerald-400" },
+              { label: "MariBank wallet", value: maribankBalance, onChange: setMaribankBalance, color: "text-orange-400" },
+              { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-emerald-400" },
+              { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-rose-400" },
             ].map(({ label, value, onChange, color }) => (
               <div key={label} className="space-y-1.5">
                 <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">

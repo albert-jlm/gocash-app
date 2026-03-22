@@ -4,17 +4,13 @@ import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, Settings, ArrowDownRight, ArrowUpLeft, Phone,
-  Building2, Home, Plus, History, ChevronRight, Zap, TrendingDown,
+  Building2, Home, Plus, History, Zap, TrendingDown,
   CreditCard,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
 import { supabase } from "@/lib/supabase/client";
 import { getWalletColor, sortWallets } from "@/lib/platforms";
-
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
@@ -24,10 +20,6 @@ const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = 
   "Bank Transfer":     { color: "#3B82F6", Icon: Building2 },
   "Profit Remittance": { color: "#6B7280", Icon: TrendingDown },
 };
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface Wallet {
   id: string;
@@ -46,10 +38,6 @@ interface TxRow {
   created_at: string;
   status: string;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function formatBalance(n: number): string {
   return "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -77,25 +65,18 @@ function getTimeOfDay(): string {
   return "evening";
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export default function Dashboard() {
   const { operatorId, loading: authLoading } = useAuthGuard();
   useShareIntent();
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [todayStats, setTodayStats] = useState({ count: 0, total: 0, earnings: 0 });
   const [recentTx, setRecentTx] = useState<TxRow[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Wallet scroll snap — progress dot tracking
   const walletScrollRef = useRef<HTMLDivElement>(null);
   const [activeWallet, setActiveWallet] = useState(0);
 
-  // Mouse drag-to-scroll for wallet cards (desktop UX from 21st.dev component)
   const dragState = useRef({ isDragging: false, startX: 0, scrollLeft: 0 });
   useEffect(() => {
     const el = walletScrollRef.current;
@@ -125,7 +106,6 @@ export default function Dashboard() {
   const handleWalletScroll = useCallback(() => {
     const el = walletScrollRef.current;
     if (!el) return;
-    // Card width (280) + gap (12) = 292
     setActiveWallet(Math.round(el.scrollLeft / 292));
   }, []);
 
@@ -136,17 +116,12 @@ export default function Dashboard() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const [walletsRes, pendingRes, todayTxRes, recentRes] = await Promise.all([
+    const [walletsRes, todayTxRes, recentRes] = await Promise.all([
       supabase
         .from("wallets")
         .select("id, wallet_name, wallet_type, balance, color")
         .eq("operator_id", operatorId)
         .eq("is_active", true),
-      supabase
-        .from("transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("operator_id", operatorId)
-        .eq("status", "awaiting_confirm"),
       supabase
         .from("transactions")
         .select("amount, net_profit")
@@ -162,7 +137,6 @@ export default function Dashboard() {
     ]);
 
     if (walletsRes.data) setWallets(sortWallets(walletsRes.data));
-    setPendingCount(pendingRes.count ?? 0);
 
     if (todayTxRes.data) {
       setTodayStats({
@@ -213,7 +187,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      {/* Header */}
       <header className="px-5 pt-14 pb-5 flex items-center justify-between">
         <div>
           <p className="text-[11px] font-medium tracking-widest uppercase text-muted-foreground">
@@ -229,7 +202,6 @@ export default function Dashboard() {
         </Link>
       </header>
 
-      {/* Wallet Cards — horizontal snap scroll (21st.dev design) */}
       <section className="mb-4">
         <div
           ref={walletScrollRef}
@@ -245,11 +217,9 @@ export default function Dashboard() {
                   className={`relative h-[160px] rounded-3xl bg-gradient-to-br ${style.gradient} p-6 flex flex-col justify-between overflow-hidden`}
                   style={{ boxShadow: `0 12px 40px -12px ${style.glow}` }}
                 >
-                  {/* Decorative blur blobs — from 21st.dev component */}
                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-8 translate-x-8 pointer-events-none" />
                   <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl translate-y-8 -translate-x-8 pointer-events-none" />
 
-                  {/* Top row: icon badge + name */}
                   <div className="relative z-10 flex items-center gap-2.5">
                     <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center flex-shrink-0">
                       <CreditCard className="w-4 h-4 text-white" />
@@ -257,7 +227,6 @@ export default function Dashboard() {
                     <p className="text-white/80 text-sm font-medium">{w.wallet_name}</p>
                   </div>
 
-                  {/* Balance */}
                   <div className="relative z-10">
                     <p className="text-[11px] text-white/50 font-medium mb-0.5 uppercase tracking-widest">Balance</p>
                     <p className="text-white text-[28px] font-bold tracking-tight tabular-nums leading-none">
@@ -270,7 +239,6 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Progress dots */}
         {wallets.length > 1 && (
           <div className="flex justify-center gap-1.5 mt-3">
             {wallets.map((_, i) => (
@@ -288,26 +256,6 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* Pending Banner */}
-      {pendingCount > 0 && (
-        <section className="px-5 mb-5">
-          <Link
-            href="/transactions"
-            className="flex items-center gap-3 bg-amber-500/[0.10] border border-amber-500/20 rounded-2xl px-4 py-3"
-          >
-            <span className="relative flex h-2 w-2 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-            </span>
-            <p className="text-sm text-amber-300 flex-1 font-medium">
-              {pendingCount} {pendingCount === 1 ? "transaction needs" : "transactions need"} your review
-            </p>
-            <ChevronRight className="w-4 h-4 text-amber-400/50 flex-shrink-0" />
-          </Link>
-        </section>
-      )}
-
-      {/* Today's Summary */}
       <section className="px-5 mb-5">
         <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
           Today
@@ -330,7 +278,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Recent Transactions */}
       <section className="px-5 mb-24">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -386,7 +333,6 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* Bottom Nav */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
         <nav className="flex items-center justify-around pointer-events-auto">
           <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
