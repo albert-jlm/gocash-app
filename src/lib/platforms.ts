@@ -114,6 +114,22 @@ export function sortPlatformNames(names: string[]): string[] {
   });
 }
 
+/**
+ * Returns true when a Supabase query error indicates the `operator_platforms`
+ * table does not exist (e.g. migration not yet applied). Used by confirm-form,
+ * platform settings, and the confirm Edge Function to fall back to the
+ * `wallets` table for platform discovery.
+ */
+export function isMissingOperatorPlatformsError(message?: string | null): boolean {
+  return Boolean(
+    message && (
+      message.includes("operator_platforms")
+      || message.includes("schema cache")
+      || message.includes("Could not find the table")
+    )
+  );
+}
+
 export function comparePlatformNames(a: string, b: string): number {
   return sortPlatformNames([a, b])[0] === a ? (a === b ? 0 : -1) : 1;
 }

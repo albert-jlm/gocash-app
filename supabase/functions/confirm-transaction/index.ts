@@ -45,6 +45,16 @@ interface RequestBody {
   };
 }
 
+function isMissingOperatorPlatformsError(message?: string | null): boolean {
+  return Boolean(
+    message && (
+      message.includes("operator_platforms")
+      || message.includes("schema cache")
+      || message.includes("Could not find the table")
+    )
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -108,12 +118,12 @@ serve(async (req: Request) => {
       return jsonResponse(req,{ error: "Transaction not found or access denied" }, 404);
     }
 
-    if (tx.status === "confirmed" || tx.status === "edited") {
-      return jsonResponse(req,{ error: "Transaction is already confirmed" }, 409);
-    }
-
     if (tx.status === "failed") {
       return jsonResponse(req,{ error: "Cannot confirm a failed transaction" }, 409);
+    }
+
+    if (!["awaiting_confirm", "confirmed", "edited"].includes(tx.status)) {
+      return jsonResponse(req,{ error: `Cannot edit transaction with status "${tx.status}"` }, 409);
     }
 
     // ----- 5. Validate edits -----
@@ -155,17 +165,36 @@ serve(async (req: Request) => {
       { db: { schema: "gocash" } }
     );
 
+    let validPlatformNames: string[] = [];
+
     const { data: activePlatforms, error: activePlatformsError } = await userClient
       .from("operator_platforms")
       .select("name")
       .eq("operator_id", operator.id)
       .eq("is_active", true);
 
-    if (activePlatformsError) {
+    if (activePlatformsError && !isMissingOperatorPlatformsError(activePlatformsError.message)) {
       return jsonResponse(req, { error: "Failed to load operator platforms" }, 500);
     }
 
-    const validPlatforms = new Set((activePlatforms ?? []).map((row) => row.name));
+    if (activePlatformsError) {
+      const { data: platformWallets, error: walletsError } = await userClient
+        .from("wallets")
+        .select("wallet_name")
+        .eq("operator_id", operator.id)
+        .eq("wallet_type", "platform")
+        .eq("is_active", true);
+
+      if (walletsError) {
+        return jsonResponse(req, { error: "Failed to load operator platforms" }, 500);
+      }
+
+      validPlatformNames = (platformWallets ?? []).map((row) => row.wallet_name);
+    } else {
+      validPlatformNames = (activePlatforms ?? []).map((row) => row.name);
+    }
+
+    const validPlatforms = new Set(validPlatformNames);
     validPlatforms.add("Unknown");
 
     const platform = edits.platform ?? tx.platform;
@@ -224,12 +253,35 @@ serve(async (req: Request) => {
       );
     }
 
+    const currentDeltas = tx.status === "awaiting_confirm"
+      ? null
+      : computeWalletDeltas(
+          tx.transaction_type,
+          tx.platform,
+          tx.amount,
+          tx.net_profit,
+          (rules ?? []) as TransactionRule[]
+        );
+
+    if (tx.status !== "awaiting_confirm" && !currentDeltas) {
+      return jsonResponse(
+        req,
+        {
+          error:
+            "Cannot edit this saved transaction because its current platform/type no longer matches an active rule",
+        },
+        422
+      );
+    }
+
     // ----- 8. Atomically: update both wallets + confirm the transaction -----
     // Single Postgres function — if any step fails the whole thing rolls back.
     const finalEditHistory = wasEdited
       ? [...(Array.isArray(tx.edit_history) ? tx.edit_history : []), editHistoryEntry]
       : tx.edit_history;
-    const nextStatus = wasEdited ? "edited" : "confirmed";
+    const nextStatus = tx.status === "awaiting_confirm"
+      ? (wasEdited ? "edited" : "confirmed")
+      : "edited";
 
     const { error: atomicError } = await adminClient.rpc(
       "confirm_transaction_atomic",
@@ -237,9 +289,11 @@ serve(async (req: Request) => {
         p_transaction_id:   tx.id,
         p_operator_id:      operator.id,
         p_user_id:          user.id,
-        p_platform_wallet:  deltas.platform_wallet_name,
-        p_platform_delta:   deltas.platform_delta,
-        p_cash_delta:       deltas.cash_delta,
+        p_previous_platform_wallet: currentDeltas?.platform_wallet_name ?? null,
+        p_previous_platform_delta: currentDeltas ? -currentDeltas.platform_delta : 0,
+        p_next_platform_wallet:  deltas.platform_wallet_name,
+        p_next_platform_delta:   deltas.platform_delta,
+        p_cash_delta:       deltas.cash_delta - (currentDeltas?.cash_delta ?? 0),
         p_status:           nextStatus,
         p_net_profit:       netProfit,
         p_platform:         platform,
