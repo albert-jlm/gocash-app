@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { BUILTIN_PLATFORM_NAMES, sortPlatformNames, TRANSACTION_TYPES } from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,6 +29,7 @@ import { supabase } from "@/lib/supabase/client";
 
 interface TransactionDraft {
   id: string;
+  operator_id?: string;
   platform: string;
   transaction_type: string;
   amount: number;
@@ -77,12 +80,17 @@ function FieldRow({
 export default function ConfirmForm({ transactionId }: { transactionId: string }) {
   const router = useRouter();
   const isPreview = transactionId === "preview";
+  const { operatorId, loading: authLoading } = useAuthGuard();
 
   const [tx, setTx] = useState<TransactionDraft | null>(null);
   const [loading, setLoading] = useState(true);
+  const [platformsLoading, setPlatformsLoading] = useState(!isPreview);
   const [saving, setSaving] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [platformOptions, setPlatformOptions] = useState<string[]>(
+    [...sortPlatformNames([...BUILTIN_PLATFORM_NAMES]), "Unknown"]
+  );
   const [platform, setPlatform] = useState("");
   const [txType, setTxType] = useState("");
   const [amount, setAmount] = useState("");
@@ -103,12 +111,14 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         setLoading(false);
         return;
       }
+      if (!operatorId) return;
       const { data, error } = await supabase
         .from("transactions")
         .select(
-          "id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status"
+          "id, operator_id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status"
         )
         .eq("id", transactionId)
+        .eq("operator_id", operatorId)
         .single();
 
       if (error || !data) {
@@ -121,8 +131,28 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       populate(draft);
       setLoading(false);
     }
-    load();
-  }, [transactionId, isPreview]);
+    void load();
+  }, [transactionId, isPreview, operatorId]);
+
+  useEffect(() => {
+    async function loadPlatforms() {
+      if (isPreview) return;
+      if (!operatorId) return;
+
+      setPlatformsLoading(true);
+      const { data } = await supabase
+        .from("operator_platforms")
+        .select("name")
+        .eq("operator_id", operatorId)
+        .eq("is_active", true);
+
+      const names = sortPlatformNames((data ?? []).map((row) => row.name));
+      setPlatformOptions([...names, "Unknown"]);
+      setPlatformsLoading(false);
+    }
+
+    void loadPlatforms();
+  }, [operatorId, isPreview]);
 
   function populate(data: TransactionDraft) {
     setPlatform(data.platform ?? "GCash");
@@ -183,7 +213,12 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   // States
   // ---------------------------------------------------------------------------
 
-  if (loading) {
+  const selectablePlatforms =
+    platform && platform !== "Unknown" && !platformOptions.includes(platform)
+      ? [...sortPlatformNames([...platformOptions.filter((value) => value !== "Unknown"), platform]), "Unknown"]
+      : platformOptions;
+
+  if (authLoading || loading || platformsLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto">
         <div className="flex flex-col items-center gap-3">
@@ -257,10 +292,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="GCash">GCash</SelectItem>
-                <SelectItem value="MariBank">MariBank</SelectItem>
-                <SelectItem value="Maya">Maya</SelectItem>
-                <SelectItem value="Unknown">Unknown</SelectItem>
+                {selectablePlatforms.map((platformName) => (
+                  <SelectItem key={platformName} value={platformName}>
+                    {platformName}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FieldRow>
@@ -273,11 +309,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Cash In">Cash In</SelectItem>
-                <SelectItem value="Cash Out">Cash Out</SelectItem>
-                <SelectItem value="Telco Load">Telco Load</SelectItem>
-                <SelectItem value="Bills Payment">Bills Payment</SelectItem>
-                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                {TRANSACTION_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FieldRow>

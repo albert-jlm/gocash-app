@@ -1,5 +1,61 @@
 # Audits Log
 
+## Audit #5 Remediation Status Update — 2026-03-22
+
+This repo has now landed the main Audit #5 fixes in code and verification:
+
+- Dynamic operator platform catalog via `gocash.operator_platforms`
+- Maya onboarding/backfill and wallet activation metadata
+- Custom platform soft-delete flow
+- Unique partial dedupe guard on `(operator_id, reference_number)`
+- Private screenshot storage with signed URL rendering in transaction detail
+- Wallet color persistence and realtime dashboard/history refresh
+- Structured Telegram preferences with delivery in `process-transaction`
+- Non-interactive ESLint CLI with CI gates for `lint`, `typecheck`, `test`, and `build`
+
+Verification at this point:
+
+- `pnpm lint` — PASS
+- `pnpm typecheck` — PASS
+- `pnpm test` — PASS (55 tests)
+- `pnpm build` — PASS
+
+Remaining product work after Audit #5 is now outside the original blocker set:
+
+- iOS Share Extension (P2)
+- Broader integration/E2E coverage
+
+### Disposition of 2026-03-22 Audit #5 Findings
+
+| Audit #5 Item | Status | Notes |
+|---|---|---|
+| 1. Custom platform management broken end-to-end | ✅ Implemented | Reworked to use `gocash.operator_platforms`, dynamic platform validation, and soft-delete/inactive platform handling instead of hard delete |
+| 2. Maya not usable out of the box | ✅ Implemented | Onboarding now creates Maya, and migrations backfill missing Maya platform/wallet records for existing operators |
+| 3. Duplicate receipt protection not enforced | ✅ Implemented | Added unique partial index on `(operator_id, reference_number)` for non-null references; duplicate processing returns the existing transaction |
+| 4. Wallet color customization not actually shipped | ✅ Implemented | Added `wallets.color`, updated types, persisted wallet colors, and dashboard now renders from stored color values |
+| 5. Notifications and live behavior incomplete | 🟡 Partially implemented | Supabase Realtime refresh is implemented, and Telegram processed/error delivery now runs from `process-transaction`; push delivery is still deferred |
+| 6. Transaction list filters incomplete | ✅ Implemented | Added search plus `date from` / `date to` filtering on transaction history |
+| 7. Transaction detail missing original screenshot | ✅ Implemented | Screenshots are stored in private Supabase Storage and displayed via short-lived signed URLs |
+| 8. Date extraction architecture differs from spec | ✅ Resolved by spec alignment | The app still uses a single GPT-4o extraction call; docs were updated to reflect the shipped architecture |
+| 9. ESLint not configured | ✅ Implemented | Added `eslint.config.mjs`, switched to ESLint CLI, and wired lint into CI |
+| 10. Tests cover only business logic | 🟡 Partially implemented | Coverage expanded from 37 to 55 tests across shared helpers and processing logic, but there are still no integration or E2E tests |
+
+### Disposition of Audit #5 Follow-Ups
+
+- [x] Fix custom platform flow: replaced static allowlists with `operator_platforms`
+- [x] Add DELETE RLS policies for `wallets` and `transaction_rules`
+  This is no longer needed because platform removal now uses soft-delete via `is_active = false`
+- [x] Auto-create Maya wallet during onboarding (and for existing operators via migration)
+- [x] Add `UNIQUE(operator_id, reference_number)` protection to `transactions`
+  Implemented as a unique partial index for non-null references
+- [x] Add wallet `color` to schema + types + dashboard
+- [x] Store screenshots in Supabase Storage and display in transaction detail
+- [x] Add Supabase Realtime subscription for wallet balances on dashboard
+- [x] Implement Telegram notification sending in an Edge Function
+- [x] Add date range / search filters to transaction history
+- [x] Finalize ESLint config
+- [ ] Add integration and E2E tests
+
 This file is the running audit history for this repository.
 
 Rule: every time we run a codebase audit, append a new entry here.
@@ -173,3 +229,91 @@ Copy this block for future audits:
 - [ ] Wallet color customization feature.
 - [ ] Run `npx cap sync` before next iOS/Android native build.
 - [ ] Finalize ESLint config so `pnpm run lint` is non-interactive.
+
+---
+
+## 2026-03-22 Audit #5 (Tech Audit — PRD Compliance & End-to-End Integrity)
+
+### Scope
+- Full audit of PRD (v4.0) milestones and functional requirements against actual codebase.
+- End-to-end flow verification for all features claimed as "Done" in `project-status.md`.
+- Database schema, RLS policies, Edge Functions, and UI cross-checked for consistency.
+- CI/CD pipeline (GitHub Actions) validated.
+
+### Validation Gates
+- `pnpm run typecheck`: PASS
+- `pnpm run lint`: FAIL (interactive ESLint setup — `next lint` deprecated, no `eslint.config.*`)
+- `pnpm run test`: PASS (37/37 tests in `transaction-processing.test.ts`)
+- `pnpm run build`: PASS (static export, 15 routes)
+- `pnpm audit --prod`: NOT RUN
+- CI/CD pipeline: PASS (GitHub Actions build + deploy via Tailscale/rsync — run #23399972616, 1m03s)
+
+### Key Findings (Severity-Ordered)
+
+#### Critical — End-to-End Breakages
+
+1. **Critical — Custom platform management is broken end-to-end.**
+   The UI lets users add arbitrary platform names in `src/app/settings/platforms/page.tsx:87`, but the confirm flow and database only allow `GCash`, `MariBank`, `Maya`, and `Unknown`. Hard CHECK constraints exist in:
+   - `20260322000001_initial_schema.sql:55` — `transactions.platform CHECK`
+   - `supabase/functions/confirm-transaction/index.ts:144` — `VALID_PLATFORMS` allowlist
+   - `src/app/confirm/[id]/confirm-form.tsx:253` — client-side dropdown
+   Any custom platform (e.g. "ShopeePay") will fail at DB insert or Edge Function validation. Additionally, deleting a custom platform will fail silently because there are **no DELETE RLS policies** for `wallets` or `transaction_rules` in `20260322000002_rls_policies.sql:29`.
+
+2. **Critical — Maya is not usable out of the box.**
+   Onboarding only creates GCash, MariBank, and Cash wallets in `src/app/onboarding/page.tsx:113`, but the atomic confirm RPC hard-fails if the platform wallet does not exist (`20260322000003_functions_rpcs.sql:67`). A first Maya transaction will therefore fail until the user manually creates the Maya wallet via Settings > Platforms. This is a first-run blocker for any Maya transaction.
+
+3. **Critical — Duplicate receipt protection is not enforced.**
+   `process-transaction` expects a unique-constraint violation on duplicate `reference_number` (`supabase/functions/process-transaction/index.ts:254`), but there is **no UNIQUE constraint or index** on `(operator_id, reference_number)` in `20260322000001_initial_schema.sql:46`. The same receipt can be uploaded twice, saved twice, and double-confirmed — silently doubling wallet balance changes. The architecture doc and PRD both claim this protection exists.
+
+#### High — Schema/Type Mismatches
+
+4. **High — Wallet color customization is not actually shipped.**
+   The settings screen reads and writes a `color` field in `src/app/settings/wallets/page.tsx:83`, but:
+   - The column does not exist in the DB schema (`20260322000001_initial_schema.sql:30`)
+   - The column is not in TypeScript types (`src/types/database.ts:116`)
+   - The dashboard ignores any saved colors entirely, using hardcoded wallet styles (`src/app/page.tsx:18` — `WALLET_STYLES` map keyed by name)
+   Even if the DB was patched manually, the dashboard would not use the saved values.
+
+#### Medium — Incomplete Features
+
+5. **Medium — Notifications and live behavior are incomplete.**
+   - Notification settings screen (`src/app/settings/notifications/page.tsx:186`) saves preferences and explicitly marks push notifications as "Coming soon", but **no backend sends any notifications** — no Edge Function, no Telegram Bot API call, no APNs/FCM integration.
+   - The dashboard (`src/app/page.tsx:137`) fetches data once on mount but does **not** subscribe to Supabase Realtime. Wallet balances won't update live if a transaction is confirmed in another tab/session. The PRD (FR-13) explicitly requires "live wallet balances via Supabase Realtime."
+
+6. **Medium — Transaction list filters are incomplete.**
+   FR-16 requires date range, search by amount/account/ref number. Only transaction type filter chips are implemented. No search functionality.
+
+7. **Medium — Transaction detail missing original screenshot.**
+   FR-17 requires showing the original screenshot image. The `image_url` column exists in the schema, but `process-transaction` does not upload the image to Supabase Storage — it processes the base64 inline and discards it. The detail page has no image display.
+
+8. **Medium — Date extraction architecture differs from spec.**
+   PRD specifies a two-model pipeline (GPT-4O for OCR, then gpt-4.1-mini for date/ref). Implementation uses a single GPT-4O call for everything. Functionally works but costs more per transaction than specified.
+
+#### Low — Operational
+
+9. **Low — ESLint not configured.**
+   `pnpm run lint` is still interactive (`next lint` deprecated). No `eslint.config.*` file exists. CI does not run lint.
+
+10. **Low — Tests cover only business logic.**
+    37 unit tests for `transaction-processing.ts`. No integration tests for Edge Functions, no component tests for React pages, no E2E tests.
+
+### PRD Milestone Status
+
+| Milestone | Claimed Status | Actual Status |
+|---|---|---|
+| **M1 — Cross-Platform App** | Feature-complete | **~80% complete** — core flow works but 3 critical breakages (custom platforms, Maya, dedup) and several medium gaps |
+| **M2 — Multi-operator Onboarding** | Not started | Not started |
+| **M3 — Analytics & Reporting** | Not started | Not started |
+
+### Follow-Ups
+- [ ] Fix custom platform flow: either make the platform CHECK constraint dynamic, or switch to a foreign key to an `operator_platforms` table
+- [ ] Add DELETE RLS policies for `wallets` and `transaction_rules`
+- [ ] Auto-create Maya wallet during onboarding (and for existing operators via migration)
+- [ ] Add `UNIQUE(operator_id, reference_number)` constraint to `transactions` table
+- [ ] Remove `color` field from wallet settings UI or add the column to schema + types + dashboard
+- [ ] Store screenshots in Supabase Storage and display in transaction detail
+- [ ] Add Supabase Realtime subscription for wallet balances on dashboard
+- [ ] Implement Telegram notification sending in an Edge Function
+- [ ] Add date range / search filters to transaction history
+- [ ] Finalize ESLint config
+- [ ] Add integration and E2E tests

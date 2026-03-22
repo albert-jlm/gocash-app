@@ -10,18 +10,11 @@ import {
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
 import { supabase } from "@/lib/supabase/client";
+import { getWalletColor, sortWallets } from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
-
-// Tailwind gradient classes + glow colour for each wallet
-const WALLET_STYLES: Record<string, { gradient: string; glow: string }> = {
-  GCash:    { gradient: "from-blue-500 via-blue-600 to-blue-700",     glow: "rgba(59,130,246,0.30)" },
-  MariBank: { gradient: "from-purple-500 via-purple-600 to-purple-700", glow: "rgba(139,92,246,0.30)" },
-  Cash:     { gradient: "from-emerald-500 via-emerald-600 to-emerald-700", glow: "rgba(16,185,129,0.30)" },
-};
-const DEFAULT_WALLET_STYLE = { gradient: "from-zinc-600 via-zinc-700 to-zinc-800", glow: "transparent" };
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
@@ -39,7 +32,9 @@ const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = 
 interface Wallet {
   id: string;
   wallet_name: string;
+  wallet_type: string;
   balance: number;
+  color: string;
 }
 
 interface TxRow {
@@ -134,58 +129,79 @@ export default function Dashboard() {
     setActiveWallet(Math.round(el.scrollLeft / 292));
   }, []);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!operatorId) return;
-    const opId = operatorId; // narrow to string for async closure
+    setDataLoading(true);
 
-    async function fetchData() {
-      setDataLoading(true);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+    const [walletsRes, pendingRes, todayTxRes, recentRes] = await Promise.all([
+      supabase
+        .from("wallets")
+        .select("id, wallet_name, wallet_type, balance, color")
+        .eq("operator_id", operatorId)
+        .eq("is_active", true),
+      supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("operator_id", operatorId)
+        .eq("status", "awaiting_confirm"),
+      supabase
+        .from("transactions")
+        .select("amount, net_profit")
+        .eq("operator_id", operatorId)
+        .in("status", ["confirmed", "edited"])
+        .gte("created_at", todayStart.toISOString()),
+      supabase
+        .from("transactions")
+        .select("id, transaction_type, account_number, amount, net_profit, created_at, status")
+        .eq("operator_id", operatorId)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
 
-      const [walletsRes, pendingRes, todayTxRes, recentRes] = await Promise.all([
-        supabase
-          .from("wallets")
-          .select("id, wallet_name, balance")
-          .eq("operator_id", opId)
-          .order("wallet_type"),
-        supabase
-          .from("transactions")
-          .select("id", { count: "exact", head: true })
-          .eq("operator_id", opId)
-          .eq("status", "awaiting_confirm"),
-        supabase
-          .from("transactions")
-          .select("amount, net_profit")
-          .eq("operator_id", opId)
-          .in("status", ["confirmed", "edited"])
-          .gte("created_at", todayStart.toISOString()),
-        supabase
-          .from("transactions")
-          .select("id, transaction_type, account_number, amount, net_profit, created_at, status")
-          .eq("operator_id", opId)
-          .order("created_at", { ascending: false })
-          .limit(5),
-      ]);
+    if (walletsRes.data) setWallets(sortWallets(walletsRes.data));
+    setPendingCount(pendingRes.count ?? 0);
 
-      if (walletsRes.data) setWallets(walletsRes.data);
-      setPendingCount(pendingRes.count ?? 0);
-
-      if (todayTxRes.data) {
-        setTodayStats({
-          count: todayTxRes.data.length,
-          total: todayTxRes.data.reduce((s, t) => s + t.amount, 0),
-          earnings: todayTxRes.data.reduce((s, t) => s + t.net_profit, 0),
-        });
-      }
-
-      if (recentRes.data) setRecentTx(recentRes.data);
-      setDataLoading(false);
+    if (todayTxRes.data) {
+      setTodayStats({
+        count: todayTxRes.data.length,
+        total: todayTxRes.data.reduce((s, t) => s + t.amount, 0),
+        earnings: todayTxRes.data.reduce((s, t) => s + t.net_profit, 0),
+      });
     }
 
-    fetchData();
+    if (recentRes.data) setRecentTx(recentRes.data);
+    setDataLoading(false);
   }, [operatorId]);
+
+  useEffect(() => {
+    if (!operatorId) return;
+    void fetchData();
+  }, [operatorId, fetchData]);
+
+  useEffect(() => {
+    if (!operatorId) return;
+
+    const channel = supabase
+      .channel(`dashboard:${operatorId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "gocash", table: "wallets", filter: `operator_id=eq.${operatorId}` },
+        () => { void fetchData(); }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "gocash", table: "transactions", filter: `operator_id=eq.${operatorId}` },
+        () => { void fetchData(); }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [operatorId, fetchData]);
 
   if (authLoading || dataLoading) {
     return (
@@ -222,7 +238,7 @@ export default function Dashboard() {
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {wallets.map((w) => {
-            const style = WALLET_STYLES[w.wallet_name] ?? DEFAULT_WALLET_STYLE;
+            const style = getWalletColor(w.color);
             return (
               <div key={w.id} className="flex-shrink-0 w-[280px]" style={{ scrollSnapAlign: "start" }}>
                 <div

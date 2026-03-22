@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { BUILTIN_PLATFORM_NAMES, getDefaultWalletColor } from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Default transaction rules — operators can tweak these in Profit Settings later
@@ -44,6 +45,7 @@ export default function OnboardingPage() {
   // Step 2 fields
   const [gcashBalance, setGcashBalance] = useState("");
   const [maribankBalance, setMaribankBalance] = useState("");
+  const [mayaBalance, setMayaBalance] = useState("");
   const [cashBalance, setCashBalance] = useState("");
 
   const [saving, setSaving] = useState(false);
@@ -111,11 +113,66 @@ export default function OnboardingPage() {
       }
 
       // 2. Upsert wallets (safe to retry)
+      const { data: existingPlatforms } = await supabase
+        .from("operator_platforms")
+        .select("name")
+        .eq("operator_id", operatorId);
+
+      const existingPlatformNames = new Set(
+        (existingPlatforms ?? []).map((platform) => platform.name.toLowerCase())
+      );
+
+      const missingPlatforms = BUILTIN_PLATFORM_NAMES
+        .filter((name) => !existingPlatformNames.has(name.toLowerCase()))
+        .map((name) => ({
+          operator_id: operatorId,
+          name,
+          is_builtin: true,
+          is_active: true,
+        }));
+
+      if (missingPlatforms.length > 0) {
+        const { error: platformError } = await supabase
+          .from("operator_platforms")
+          .insert(missingPlatforms);
+
+        if (platformError) throw new Error(platformError.message);
+      }
+
       const { error: walletError } = await supabase.from("wallets").upsert(
         [
-          { operator_id: operatorId, wallet_type: "platform", wallet_name: "GCash",    balance: parseFloat(gcashBalance) || 0 },
-          { operator_id: operatorId, wallet_type: "platform", wallet_name: "MariBank", balance: parseFloat(maribankBalance) || 0 },
-          { operator_id: operatorId, wallet_type: "cash",     wallet_name: "Cash",     balance: parseFloat(cashBalance) || 0 },
+          {
+            operator_id: operatorId,
+            wallet_type: "platform",
+            wallet_name: "GCash",
+            balance: parseFloat(gcashBalance) || 0,
+            color: getDefaultWalletColor("GCash"),
+            is_active: true,
+          },
+          {
+            operator_id: operatorId,
+            wallet_type: "platform",
+            wallet_name: "MariBank",
+            balance: parseFloat(maribankBalance) || 0,
+            color: getDefaultWalletColor("MariBank"),
+            is_active: true,
+          },
+          {
+            operator_id: operatorId,
+            wallet_type: "platform",
+            wallet_name: "Maya",
+            balance: parseFloat(mayaBalance) || 0,
+            color: getDefaultWalletColor("Maya"),
+            is_active: true,
+          },
+          {
+            operator_id: operatorId,
+            wallet_type: "cash",
+            wallet_name: "Cash",
+            balance: parseFloat(cashBalance) || 0,
+            color: getDefaultWalletColor("Cash"),
+            is_active: true,
+          },
         ],
         { onConflict: "operator_id,wallet_name" }
       );
@@ -228,6 +285,7 @@ export default function OnboardingPage() {
             {[
               { label: "GCash wallet", value: gcashBalance, onChange: setGcashBalance, color: "text-blue-400" },
               { label: "MariBank wallet", value: maribankBalance, onChange: setMaribankBalance, color: "text-purple-400" },
+              { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-cyan-400" },
               { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-emerald-400" },
             ].map(({ label, value, onChange, color }) => (
               <div key={label} className="space-y-1.5">
