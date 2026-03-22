@@ -51,7 +51,6 @@ export default function SettingsPage() {
         </p>
       </section>
 
-      {/* Bottom Nav */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <nav className="flex items-center justify-around">
           <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">

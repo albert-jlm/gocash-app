@@ -17,9 +17,9 @@ describe("platform helpers", () => {
 
   it("returns default wallet colors", () => {
     expect(getDefaultWalletColor("GCash")).toBe("blue");
-    expect(getDefaultWalletColor("MariBank")).toBe("purple");
-    expect(getDefaultWalletColor("Maya")).toBe("cyan");
-    expect(getDefaultWalletColor("Cash")).toBe("emerald");
+    expect(getDefaultWalletColor("MariBank")).toBe("orange");
+    expect(getDefaultWalletColor("Maya")).toBe("emerald");
+    expect(getDefaultWalletColor("Cash")).toBe("rose");
     expect(getDefaultWalletColor("ShopeePay")).toBe("zinc");
   });
 

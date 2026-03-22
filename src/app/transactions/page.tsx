@@ -23,10 +23,6 @@ import { supabase } from "@/lib/supabase/client";
 import { isWithinDateRange, matchesTransactionSearch } from "@/lib/transaction-filters";
 import { TRANSACTION_TYPES } from "@/lib/platforms";
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
 const FILTERS = ["All", ...TRANSACTION_TYPES] as const;
 type FilterType = (typeof FILTERS)[number];
 
@@ -39,10 +35,6 @@ const TYPE_CONFIG: Record<string, { color: string; bg: string; Icon: React.Eleme
   "Profit Remittance": { color: "#6B7280", bg: "rgba(107,114,128,0.12)", Icon: TrendingDown },
 };
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface TxRow {
   id: string;
   transaction_type: string;
@@ -53,10 +45,6 @@ interface TxRow {
   created_at: string;
   status: string;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function maskNumber(num: string | null): string {
   if (!num) return "—";
@@ -92,10 +80,6 @@ function groupByDate(rows: TxRow[]): Array<{ label: string; key: string; items: 
   }
   return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 function TransactionsList() {
   const { operatorId, loading: authLoading } = useAuthGuard();
@@ -166,11 +150,10 @@ function TransactionsList() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      {/* Header */}
       <header className="px-5 pt-14 pb-3">
         <h1 className="text-xl font-semibold">My Transactions</h1>
         <p className="text-[12px] text-muted-foreground mt-0.5">
-          {transactions.length} total · {transactions.filter(t => t.status === "awaiting_confirm").length} to review
+          {transactions.length} total
         </p>
       </header>
 
@@ -198,7 +181,6 @@ function TransactionsList() {
         </div>
       </div>
 
-      {/* Filter Chips — horizontal scroll, pill style */}
       <div
         className="flex gap-2 px-5 mb-4 overflow-x-auto"
         style={{ scrollbarWidth: "none", paddingBottom: 2 }}
@@ -219,7 +201,6 @@ function TransactionsList() {
         ))}
       </div>
 
-      {/* Transaction Groups */}
       <div className="px-5 pb-32 space-y-5 flex-1">
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -245,15 +226,13 @@ function TransactionsList() {
                     Icon: ArrowDownRight,
                   };
                   const Icon = cfg.Icon;
-                  const isPending = tx.status === "awaiting_confirm";
 
                   return (
                     <Link
                       key={tx.id}
-                      href={isPending ? `/confirm?id=${tx.id}` : `/transactions?id=${tx.id}`}
+                      href={`/transactions?id=${tx.id}`}
                       className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03]"
                     >
-                      {/* Icon */}
                       <div
                         className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                         style={{ backgroundColor: cfg.bg }}
@@ -261,7 +240,6 @@ function TransactionsList() {
                         <Icon className="w-4 h-4" style={{ color: cfg.color }} />
                       </div>
 
-                      {/* Details */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{tx.transaction_type}</p>
                         <p className="text-[11px] text-muted-foreground truncate">
@@ -274,7 +252,6 @@ function TransactionsList() {
                         )}
                       </div>
 
-                      {/* Amounts + badge */}
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <p className="text-sm font-semibold tabular-nums">
                           ₱{tx.amount.toLocaleString("en-PH")}
@@ -283,14 +260,7 @@ function TransactionsList() {
                           <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
                             +₱{tx.net_profit.toFixed(0)}
                           </p>
-                          {isPending ? (
-                            <span className="flex items-center gap-1 text-[9px] font-bold bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">
-                              <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-                              Review
-                            </span>
-                          ) : (
-                            <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
-                          )}
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
                         </div>
                       </div>
                     </Link>
@@ -302,7 +272,6 @@ function TransactionsList() {
         )}
       </div>
 
-      {/* Bottom Nav */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
         <nav className="flex items-center justify-around pointer-events-auto">
           <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">

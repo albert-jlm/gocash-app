@@ -74,7 +74,6 @@ export default function LoginPage() {
     if (verifyError) {
       setError(verifyError.message);
     }
-    // onAuthStateChange handles redirect on success
   }
 
   if (checkingSession) {
@@ -87,7 +86,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[390px] mx-auto px-5 relative overflow-hidden">
-      {/* Ambient glow behind logo */}
       <div
         className="absolute top-[15%] left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
         style={{
@@ -95,9 +93,7 @@ export default function LoginPage() {
         }}
       />
 
-      {/* Logo area */}
       <div className="flex-1 flex flex-col items-center justify-center pb-6 relative z-10">
-        {/* Logo */}
         <div className="relative mb-6">
           <div className="w-[72px] h-[72px] rounded-[22px] bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
             <span className="text-[28px] font-black text-white tracking-tight">G</span>
@@ -113,7 +109,6 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Form card */}
       <div className="relative z-10 pb-16">
         <div className="bg-white/[0.04] border border-white/[0.08] rounded-3xl p-5">
           {sent ? (

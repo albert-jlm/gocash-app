@@ -1,5 +1,3 @@
--- Migration: allow re-editing saved transactions by reversing prior wallet
--- effects and applying the updated deltas atomically.
 
 DROP FUNCTION IF EXISTS gocash.confirm_transaction_atomic(
   UUID,

@@ -83,11 +83,11 @@ Human guide: `HUMAN_GUIDE.md`
 ## Domain Knowledge
 
 Key business facts Claude must always know:
-- **Two-phase write model**: Transaction is saved immediately (Phase 1). Wallet balances only update after operator confirmation (Phase 2). This is intentional — never skip this gate.
-- **Confirmation Gate**: Currently Telegram "Edit" form. This app replaces that gate with an in-app confirm/edit screen.
+- **Immediate save model**: Transactions are processed and saved immediately as "confirmed" with wallet balance updates applied atomically. There is no approval/confirmation gate.
+- **Edit & Delete**: Saved transactions can be edited (wallet deltas are reversed then reapplied) or deleted (wallet deltas are reversed and the record is removed). Both operations go through atomic PL/pgSQL functions.
 - **Transaction Types**: Cash In, Cash Out, Telco Load (auto-detected in `process-transaction` Edge Function), Bills Payment, Bank Transfer, Profit Remittance (manual)
-- **Platforms**: GCash, MariBank, Unknown
-- **Wallets tracked**: GCash wallet, MariBank wallet, Cash wallet
+- **Platforms**: GCash, MariBank, Maya, Unknown (operators can add custom platforms)
+- **Wallets tracked**: GCash wallet, MariBank wallet, Maya wallet, Cash wallet
 - **Operator blacklist numbers**: `09757058698`, `13246870917` — never recorded as customer account numbers
 - **All amounts in PHP (Philippine Peso)**
 - **OpenAI is called server-side only** — inside Supabase Edge Functions. Never call OpenAI from the client.
@@ -113,7 +113,7 @@ One self-hosted Supabase instance (`supabase.zether.net`) serves all projects us
 - Secrets never appear in code, logs, or prompts
 - Auth/authz is explicit — never assumed
 - **RLS policies are required on every Supabase table** — no public access without an explicit policy
-- **Wallet balance updates only happen in Phase 2** (after confirmation) — never auto-commit balance changes
+- **Wallet balance updates happen atomically** when a transaction is processed, edited, or deleted — always through PL/pgSQL RPC functions
 - **Next.js must stay as static export** (`output: 'export'`) — no SSR, no API routes; all backend logic goes in Supabase Edge Functions
 - **Never call OpenAI from the client** — always via Edge Functions; API key lives in Supabase env vars only
 
