@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -32,7 +32,7 @@ const DEFAULTS: NotifSettings = {
   telegram_chat_id: "",
 };
 
-export default function NotificationsSettingsPage() {
+function NotificationsSettingsContent() {
   const { operatorId, loading: authLoading } = useAuthGuard();
   const searchParams = useSearchParams();
 
@@ -240,5 +240,19 @@ export default function NotificationsSettingsPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+export default function NotificationsSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen bg-background items-center justify-center">
+          <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        </div>
+      }
+    >
+      <NotificationsSettingsContent />
+    </Suspense>
   );
 }
