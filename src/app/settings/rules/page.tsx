@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import { sortPlatformNames } from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Config — plain-language descriptions for each transaction type
@@ -91,12 +92,27 @@ export default function RulesSettingsPage() {
     if (!operatorId) return;
     const opId = operatorId;
     async function fetch() {
-      const { data } = await supabase
-        .from("transaction_rules")
-        .select("id, transaction_type, platform, profit_rate, profit_minimum, is_active")
-        .eq("operator_id", opId)
-        .order("transaction_type");
-      if (data) setRules(data);
+      const [rulesRes, platformsRes] = await Promise.all([
+        supabase
+          .from("transaction_rules")
+          .select("id, transaction_type, platform, profit_rate, profit_minimum, is_active")
+          .eq("operator_id", opId)
+          .order("transaction_type"),
+        supabase
+          .from("operator_platforms")
+          .select("name")
+          .eq("operator_id", opId)
+          .eq("is_active", true),
+      ]);
+
+      const platformNames = sortPlatformNames((platformsRes.data ?? []).map((row) => row.name));
+      if (rulesRes.data) {
+        setRules(
+          rulesRes.data.filter(
+            (rule) => rule.platform === "all" || platformNames.includes(rule.platform)
+          )
+        );
+      }
       setDataLoading(false);
     }
     fetch();
@@ -225,7 +241,12 @@ export default function RulesSettingsPage() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <p className="text-sm font-semibold">{rule.transaction_type}</p>
+                    <div>
+                      <p className="text-sm font-semibold">{rule.transaction_type}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">
+                        {rule.platform === "all" ? "All platforms" : rule.platform}
+                      </p>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       {justSaved && (
@@ -350,7 +371,8 @@ export default function RulesSettingsPage() {
 
         <p className="text-[11px] text-muted-foreground/50 text-center pt-4 leading-relaxed">
           These rules control how profit is calculated when you save a transaction.
-          Disabled rules won&apos;t apply any profit.
+          Disabled rules won&apos;t apply any profit. Custom-platform rules appear only while the
+          platform is active.
         </p>
       </section>
     </div>

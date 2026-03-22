@@ -5,8 +5,8 @@ import {
   calculateProfit,
   extractAccountNumber,
   computeWalletDeltas,
-  TransactionRule,
-} from "../transaction-processing";
+  type TransactionRule,
+} from "../../../supabase/functions/_shared/transaction-processing";
 
 // ---------------------------------------------------------------------------
 // Shared test fixtures
@@ -46,9 +46,14 @@ describe("detectPlatform", () => {
     expect(detectPlatform("Some random text")).toBe("Unknown");
   });
 
+  it("detects Maya", () => {
+    expect(detectPlatform("PayMaya payment complete")).toBe("Maya");
+  });
+
   it("is case-insensitive", () => {
     expect(detectPlatform("GCASH SENT")).toBe("GCash");
     expect(detectPlatform("MARIBANK DEPOSIT")).toBe("MariBank");
+    expect(detectPlatform("MAYA transfer")).toBe("Maya");
   });
 });
 
@@ -131,10 +136,7 @@ describe("calculateProfit", () => {
       ...RULES,
       { transaction_type: "Cash In", platform: "GCash", delta_platform_mult: 1, delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 5, profit_minimum: 10, is_active: true },
     ];
-    // Should match the GCash-specific rule first (it comes after "all" but find() checks all)
-    // Actually find() returns the first match — "all" will match first
-    // This tests that "all" works as a catch-all
-    expect(calculateProfit("Cash In", "GCash", 500, specificRules)).toBe(10);
+    expect(calculateProfit("Cash In", "GCash", 500, specificRules)).toBe(25);
   });
 
   it("uses Telco Load rate (3%)", () => {
@@ -259,6 +261,11 @@ describe("computeWalletDeltas", () => {
   it("uses MariBank as platform_wallet_name", () => {
     const result = computeWalletDeltas("Cash In", "MariBank", 300, 6, RULES);
     expect(result?.platform_wallet_name).toBe("MariBank");
+  });
+
+  it("uses Maya as platform_wallet_name", () => {
+    const result = computeWalletDeltas("Cash In", "Maya", 300, 6, RULES);
+    expect(result?.platform_wallet_name).toBe("Maya");
   });
 
   it("defaults Unknown platform to GCash wallet", () => {
