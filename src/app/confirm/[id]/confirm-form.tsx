@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { BUILTIN_PLATFORM_NAMES, sortPlatformNames, TRANSACTION_TYPES } from "@/lib/platforms";
+import { BUILTIN_PLATFORM_NAMES, isMissingOperatorPlatformsError, sortPlatformNames, TRANSACTION_TYPES } from "@/lib/platforms";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,11 +140,25 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       if (!operatorId) return;
 
       setPlatformsLoading(true);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("operator_platforms")
         .select("name")
         .eq("operator_id", operatorId)
         .eq("is_active", true);
+
+      if (error && isMissingOperatorPlatformsError(error.message)) {
+        const { data: wallets } = await supabase
+          .from("wallets")
+          .select("wallet_name")
+          .eq("operator_id", operatorId)
+          .eq("wallet_type", "platform")
+          .eq("is_active", true);
+
+        const names = sortPlatformNames((wallets ?? []).map((row) => row.wallet_name));
+        setPlatformOptions([...names, "Unknown"]);
+        setPlatformsLoading(false);
+        return;
+      }
 
       const names = sortPlatformNames((data ?? []).map((row) => row.name));
       setPlatformOptions([...names, "Unknown"]);
@@ -186,6 +200,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       if (txDate && txDate !== (tx.transaction_date ?? "").slice(0, 16))
         edits.transaction_date = new Date(txDate).toISOString();
 
+      if (Object.keys(edits).length === 0 && tx.status !== "awaiting_confirm") {
+        router.push(`/transactions?id=${tx.id}`);
+        return;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/confirm-transaction`,
         {
@@ -202,7 +221,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to save");
-      router.push("/transactions");
+      router.push(`/transactions?id=${tx.id}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
@@ -250,14 +269,20 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       {/* Header */}
       <header className="px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
-          href="/"
+          href={tx?.status === "awaiting_confirm" ? "/" : `/transactions?id=${transactionId}`}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-base font-semibold">Review Transaction</h1>
-          <p className="text-xs text-muted-foreground">Confirm or fix the details below</p>
+          <h1 className="text-base font-semibold">
+            {tx?.status === "awaiting_confirm" ? "Review Transaction" : "Edit Transaction"}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            {tx?.status === "awaiting_confirm"
+              ? "Confirm or fix the details below"
+              : "Update the saved details below"}
+          </p>
         </div>
       </header>
 
