@@ -1,5 +1,9 @@
 export const BUILTIN_PLATFORM_NAMES = ["GCash", "MariBank", "Maya"] as const;
 
+export const FINANCIAL_SETTINGS_TABS = ["wallets", "platforms", "profit"] as const;
+
+export type FinancialSettingsTab = (typeof FINANCIAL_SETTINGS_TABS)[number];
+
 export const TRANSACTION_TYPES = [
   "Cash In",
   "Cash Out",
@@ -7,6 +11,57 @@ export const TRANSACTION_TYPES = [
   "Bills Payment",
   "Bank Transfer",
   "Profit Remittance",
+] as const;
+
+export const DEFAULT_PLATFORM_RULE_TEMPLATES = [
+  {
+    transaction_type: "Cash In",
+    delta_platform_mult: 1,
+    delta_cash_amount_mult: -1,
+    delta_cash_mult: 1,
+    profit_rate: 2,
+    profit_minimum: 5,
+  },
+  {
+    transaction_type: "Cash Out",
+    delta_platform_mult: -1,
+    delta_cash_amount_mult: 1,
+    delta_cash_mult: 1,
+    profit_rate: 2,
+    profit_minimum: 5,
+  },
+  {
+    transaction_type: "Telco Load",
+    delta_platform_mult: -1,
+    delta_cash_amount_mult: 1,
+    delta_cash_mult: 1,
+    profit_rate: 3,
+    profit_minimum: 3,
+  },
+  {
+    transaction_type: "Bills Payment",
+    delta_platform_mult: -1,
+    delta_cash_amount_mult: 1,
+    delta_cash_mult: 0,
+    profit_rate: 0,
+    profit_minimum: 5,
+  },
+  {
+    transaction_type: "Bank Transfer",
+    delta_platform_mult: -1,
+    delta_cash_amount_mult: 1,
+    delta_cash_mult: 0,
+    profit_rate: 0,
+    profit_minimum: 5,
+  },
+  {
+    transaction_type: "Profit Remittance",
+    delta_platform_mult: 0,
+    delta_cash_amount_mult: -1,
+    delta_cash_mult: 0,
+    profit_rate: null,
+    profit_minimum: null,
+  },
 ] as const;
 
 export const COLOR_PALETTE = [
@@ -112,6 +167,27 @@ export function sortPlatformNames(names: string[]): string[] {
 
     return a.localeCompare(b, "en", { sensitivity: "base" });
   });
+}
+
+export function coerceFinancialSettingsTab(value?: string | null): FinancialSettingsTab {
+  if (value && FINANCIAL_SETTINGS_TABS.includes(value as FinancialSettingsTab)) {
+    return value as FinancialSettingsTab;
+  }
+
+  return "wallets";
+}
+
+export function buildFinancialSettingsHref(
+  tab: FinancialSettingsTab,
+  restorePlatform?: string | null
+): string {
+  const params = new URLSearchParams({ tab });
+
+  if (restorePlatform) {
+    params.set("restorePlatform", restorePlatform);
+  }
+
+  return `/settings?${params.toString()}`;
 }
 
 export function isMissingOperatorPlatformsError(message?: string | null): boolean {
