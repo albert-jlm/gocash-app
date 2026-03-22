@@ -7,12 +7,19 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "GoCash Tracker",
-  description: "Track your GCash transactions",
+  description: "Manage your GCash and MariBank transactions",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "GoCash",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -22,7 +29,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cn("font-sans dark", geist.variable)}>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+        <meta name="theme-color" content="#0a0a0a" />
+      </head>
       <body className="bg-[var(--color-background)] text-[var(--color-foreground)] antialiased">
         {children}
       </body>
