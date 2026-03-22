@@ -18,6 +18,8 @@ import { supabase } from "@/lib/supabase/client";
 import {
   comparePlatformNames,
   getDefaultWalletColor,
+  isBuiltInPlatform,
+  isMissingOperatorPlatformsError,
 } from "@/lib/platforms";
 
 interface OperatorPlatform {
@@ -52,6 +54,7 @@ export default function PlatformsSettingsPage() {
   const [platforms, setPlatforms] = useState<OperatorPlatform[]>([]);
   const [cashWallet, setCashWallet] = useState<WalletRow | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
+  const [supportsOperatorPlatforms, setSupportsOperatorPlatforms] = useState(true);
 
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
@@ -62,6 +65,20 @@ export default function PlatformsSettingsPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  function buildLegacyPlatforms(wallets: WalletRow[]): OperatorPlatform[] {
+    return wallets
+      .filter((wallet) => wallet.wallet_type === "platform")
+      .map((wallet) => ({
+        id: wallet.id,
+        name: wallet.wallet_name,
+        is_builtin: isBuiltInPlatform(wallet.wallet_name),
+        is_active: wallet.is_active,
+        walletId: wallet.id,
+        balance: wallet.balance,
+      }))
+      .sort((a, b) => comparePlatformNames(a.name, b.name));
+  }
 
   useEffect(() => {
     if (!operatorId) return;
@@ -85,6 +102,16 @@ export default function PlatformsSettingsPage() {
       const walletByName = new Map(
         wallets.map((wallet) => [wallet.wallet_name.toLowerCase(), wallet])
       );
+
+      if (platformsRes.error && isMissingOperatorPlatformsError(platformsRes.error.message)) {
+        setSupportsOperatorPlatforms(false);
+        setPlatforms(buildLegacyPlatforms(wallets));
+        setCashWallet(wallets.find((wallet) => wallet.wallet_name === "Cash" && wallet.is_active) ?? null);
+        setDataLoading(false);
+        return;
+      }
+
+      setSupportsOperatorPlatforms(true);
 
       const merged = ((platformsRes.data ?? []) as Array<{
         id: string;
@@ -140,7 +167,45 @@ export default function PlatformsSettingsPage() {
     const platformName = existing?.name ?? trimmed;
 
     try {
-      if (existing) {
+      if (!supportsOperatorPlatforms) {
+        const { data: createdWallet, error: walletError } = await supabase
+          .from("wallets")
+          .insert({
+            operator_id: operatorId,
+            wallet_type: "platform",
+            wallet_name: platformName,
+            balance,
+            color: getDefaultWalletColor(platformName),
+            is_active: true,
+          })
+          .select("id")
+          .single();
+
+        if (walletError || !createdWallet) {
+          throw new Error(walletError?.message ?? "Failed to create wallet");
+        }
+
+        const { error: rulesError } = await supabase
+          .from("transaction_rules")
+          .insert(
+            DEFAULT_PLATFORM_RULES.map((rule) => ({
+              ...rule,
+              operator_id: operatorId,
+              platform: platformName,
+              is_active: true,
+            }))
+          );
+
+        if (rulesError) {
+          await supabase
+            .from("wallets")
+            .update({ is_active: false, balance: 0 })
+            .eq("id", createdWallet.id);
+          throw new Error(rulesError.message);
+        }
+
+        showSuccess(`${platformName} added`);
+      } else if (existing) {
         const { error: reactivatePlatformError } = await supabase
           .from("operator_platforms")
           .update({ is_active: true })
@@ -336,15 +401,17 @@ export default function PlatformsSettingsPage() {
       return;
     }
 
-    const { error: platformError } = await supabase
-      .from("operator_platforms")
-      .update({ is_active: false })
-      .eq("id", platform.id);
+    if (supportsOperatorPlatforms) {
+      const { error: platformError } = await supabase
+        .from("operator_platforms")
+        .update({ is_active: false })
+        .eq("id", platform.id);
 
-    if (platformError) {
-      setDeletingId(null);
-      setError(platformError.message);
-      return;
+      if (platformError) {
+        setDeletingId(null);
+        setError(platformError.message);
+        return;
+      }
     }
 
     if (platform.walletId) {

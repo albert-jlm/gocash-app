@@ -196,6 +196,12 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
       <div className="px-5 py-8">
         <Link
+          href={`/confirm?id=${transactionId}`}
+          className="w-full mb-3 flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm"
+        >
+          {tx.status === "awaiting_confirm" ? "Review & Confirm" : "Edit Transaction"}
+        </Link>
+        <Link
           href="/transactions"
           className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"
         >
