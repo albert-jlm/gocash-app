@@ -1,4 +1,6 @@
 
+DROP FUNCTION IF EXISTS gocash.update_wallet_balance(UUID, TEXT, NUMERIC, UUID);
+
 CREATE OR REPLACE FUNCTION gocash.update_wallet_balance(
   p_operator_id    UUID,
   p_wallet_name    TEXT,
@@ -25,7 +27,26 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION gocash.update_wallet_balance TO authenticated;
+GRANT EXECUTE ON FUNCTION gocash.update_wallet_balance(UUID, TEXT, NUMERIC, UUID) TO authenticated;
+
+DROP FUNCTION IF EXISTS gocash.confirm_transaction_atomic(
+  UUID,
+  UUID,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  NUMERIC,
+  TEXT,
+  NUMERIC,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  TEXT,
+  TEXT,
+  TIMESTAMPTZ,
+  BOOLEAN,
+  JSONB
+);
 
 CREATE OR REPLACE FUNCTION gocash.confirm_transaction_atomic(
   p_transaction_id   UUID,
@@ -105,4 +126,21 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION gocash.confirm_transaction_atomic TO authenticated;
+GRANT EXECUTE ON FUNCTION gocash.confirm_transaction_atomic(
+  UUID,
+  UUID,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  NUMERIC,
+  TEXT,
+  NUMERIC,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  TEXT,
+  TEXT,
+  TIMESTAMPTZ,
+  BOOLEAN,
+  JSONB
+) TO authenticated;
