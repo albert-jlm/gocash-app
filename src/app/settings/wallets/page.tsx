@@ -21,10 +21,6 @@ import {
   type WalletColorId,
 } from "@/lib/platforms";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface Wallet {
   id: string;
   wallet_name: string;
@@ -33,17 +29,9 @@ interface Wallet {
   color: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function formatBalance(n: number): string {
   return "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export default function WalletsSettingsPage() {
   const { operatorId, loading: authLoading } = useAuthGuard();
@@ -51,14 +39,12 @@ export default function WalletsSettingsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Editing state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
 
-  // Color picker state
   const [colorPickerOpenId, setColorPickerOpenId] = useState<string | null>(null);
   const [savingColor, setSavingColor] = useState<string | null>(null);
 
@@ -71,7 +57,6 @@ export default function WalletsSettingsPage() {
         .select("id, wallet_name, wallet_type, balance, color")
         .eq("operator_id", opId)
         .eq("is_active", true);
-      // Cast needed until Supabase types are regenerated with the color column
       if (data) setWallets(sortWallets(data as unknown as Wallet[]));
       setDataLoading(false);
     }
@@ -127,7 +112,6 @@ export default function WalletsSettingsPage() {
     setSavingColor(walletId);
     const previousColor = wallets.find((wallet) => wallet.id === walletId)?.color;
 
-    // Optimistic update
     setWallets((prev) =>
       prev.map((w) => (w.id === walletId ? { ...w, color: colorId } : w))
     );
@@ -141,7 +125,6 @@ export default function WalletsSettingsPage() {
     setSavingColor(null);
 
     if (updateError) {
-      // Revert on failure
       setWallets((prev) =>
         prev.map((w) => (
           w.id === walletId && previousColor
@@ -162,7 +145,6 @@ export default function WalletsSettingsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      {/* Header */}
       <header className="px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
@@ -176,7 +158,6 @@ export default function WalletsSettingsPage() {
         </div>
       </header>
 
-      {/* Wallet List */}
       <section className="px-5 flex-1 space-y-3 pb-10">
         {wallets.map((w) => {
           const color = getWalletColor(w.color);
@@ -186,9 +167,7 @@ export default function WalletsSettingsPage() {
 
           return (
             <div key={w.id} className="rounded-2xl overflow-hidden">
-              {/* Card header — gradient from chosen color */}
               <div className={`relative bg-gradient-to-br ${color.gradient} p-5 overflow-hidden`}>
-                {/* Decorative blur */}
                 <div className="absolute top-0 right-0 w-28 h-28 bg-white/10 rounded-full blur-2xl -translate-y-8 translate-x-8 pointer-events-none" />
 
                 <div className="relative z-10 flex items-center justify-between">
@@ -205,14 +184,12 @@ export default function WalletsSettingsPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Success indicator */}
                     {justSaved && (
                       <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2.5 py-1">
                         <Check className="w-3 h-3 text-white" />
                         <span className="text-[11px] text-white font-medium">Saved</span>
                       </div>
                     )}
-                    {/* Color picker toggle */}
                     <button
                       onClick={() => setColorPickerOpenId(isColorOpen ? null : w.id)}
                       className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center"
@@ -227,7 +204,6 @@ export default function WalletsSettingsPage() {
                 </div>
               </div>
 
-              {/* Color picker — slides open */}
               {isColorOpen && (
                 <div className="bg-white/[0.06] border-x border-white/[0.05] px-4 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">
@@ -252,7 +228,6 @@ export default function WalletsSettingsPage() {
                 </div>
               )}
 
-              {/* Adjustment section */}
               <div className="bg-white/[0.04] border border-white/[0.05] border-t-0 rounded-b-2xl">
                 {isEditing ? (
                   <div className="p-4 space-y-3">

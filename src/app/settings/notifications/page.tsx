@@ -22,10 +22,6 @@ import {
   type OperatorNotificationSettings,
 } from "@/lib/notification-settings";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface NotifSettings extends OperatorNotificationSettings {
   telegram_chat_id: string;
 }
@@ -34,10 +30,6 @@ const DEFAULTS: NotifSettings = {
   ...DEFAULT_NOTIFICATION_SETTINGS,
   telegram_chat_id: "",
 };
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export default function NotificationsSettingsPage() {
   const { operatorId, loading: authLoading } = useAuthGuard();
@@ -75,7 +67,6 @@ export default function NotificationsSettingsPage() {
     setSaving(true);
     setError(null);
 
-    // Fetch current settings first, then merge — prevents clobbering unrelated keys
     const { data: current } = await supabase
       .from("operators")
       .select("settings")
@@ -113,7 +104,6 @@ export default function NotificationsSettingsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      {/* Header */}
       <header className="px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
@@ -128,9 +118,7 @@ export default function NotificationsSettingsPage() {
       </header>
 
       <section className="px-5 flex-1 space-y-4 pb-10">
-        {/* Telegram card */}
         <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl overflow-hidden">
-          {/* Card header */}
           <div className="px-4 py-3.5 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
               <MessageCircle className="w-4 h-4 text-blue-400" />
@@ -215,7 +203,6 @@ export default function NotificationsSettingsPage() {
           </div>
         </div>
 
-        {/* Deferred — push notifications */}
         <div className="flex items-center gap-3 bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3.5 opacity-50">
           <div className="w-9 h-9 rounded-xl bg-white/[0.08] flex items-center justify-center flex-shrink-0">
             <Bell className="w-4 h-4 text-muted-foreground" />
@@ -226,7 +213,6 @@ export default function NotificationsSettingsPage() {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="flex items-center gap-2 text-xs text-red-400">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -234,7 +220,6 @@ export default function NotificationsSettingsPage() {
           </div>
         )}
 
-        {/* Save button */}
         <button
           onClick={save}
           disabled={saving}

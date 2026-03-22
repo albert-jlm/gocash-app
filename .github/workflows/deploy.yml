@@ -55,6 +55,14 @@ jobs:
         run: |
           rsync -avz --delete supabase/functions/main/ zether@${{ secrets.SERVER_HOST }}:/home/zether/homelab/supabase/volumes/functions/main/
 
-      - name: Restart edge-runtime
+      - name: Apply SQL migrations
         run: |
-          ssh zether@${{ secrets.SERVER_HOST }} "cd ~/homelab/supabase && docker compose restart functions"
+          for f in supabase/migrations/*.sql; do
+            echo "Applying $(basename $f)..."
+            ssh zether@${{ secrets.SERVER_HOST }} \
+              "docker compose -f ~/homelab/supabase/docker-compose.yml exec -T db psql -U supabase_admin -d postgres" < "$f"
+          done
+
+      - name: Restart edge-runtime & refresh schema cache
+        run: |
+          ssh zether@${{ secrets.SERVER_HOST }} "cd ~/homelab/supabase && docker compose restart functions rest"

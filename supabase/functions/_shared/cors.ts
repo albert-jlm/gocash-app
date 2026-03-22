@@ -1,15 +1,3 @@
-/**
- * CORS headers for Supabase Edge Functions.
- *
- * Allowed origins:
- *  - https://gocash.zether.net  — production PWA
- *  - capacitor://localhost       — iOS Capacitor shell
- *  - http://localhost:3000       — local Next.js dev server
- *
- * All endpoints require a valid Supabase JWT, so CORS is defense-in-depth
- * against browser-based CSRF — not the primary auth control.
- */
-
 const ALLOWED_ORIGINS = new Set([
   "https://gocash.zether.net",
   "capacitor://localhost",

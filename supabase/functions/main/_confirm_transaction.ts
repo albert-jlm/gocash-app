@@ -1,12 +1,3 @@
-/**
- * confirm-transaction handler — Phase 2
- *
- * Confirms a draft transaction (status: awaiting_confirm) after the
- * operator has reviewed and optionally edited the AI-extracted fields.
- * Also supports editing already-confirmed/edited transactions by
- * reversing previous wallet deltas before applying new ones.
- */
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import {
@@ -15,21 +6,16 @@ import {
   type TransactionRule,
 } from "./_shared/transaction-processing.ts";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface RequestBody {
   transaction_id: string;
-  /** Optional operator edits — only include fields that were changed */
-  edits?: {
+edits?: {
     platform?: string;
     transaction_type?: string;
     amount?: number;
     account_number?: string | null;
     reference_number?: string | null;
     transaction_date?: string | null;
-    net_profit?: number; // override profit if operator wants custom value
+    net_profit?: number;
   };
 }
 
@@ -43,10 +29,6 @@ function isMissingOperatorPlatformsError(message?: string | null): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Handler
-// ---------------------------------------------------------------------------
-
 export async function handleConfirmTransaction(req: Request): Promise<Response> {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -56,11 +38,9 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
   }
 
   try {
-    // ----- 1. Auth — verify user identity -----
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return jsonResponse(req, { error: "Missing authorization" }, 401);
 
-    // User-scoped client — used only for ownership checks
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -77,7 +57,6 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
 
     if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
 
-    // ----- 2. Resolve operator -----
     const { data: operator, error: opError } = await userClient
       .from("operators")
       .select("id")
@@ -88,33 +67,26 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
       return jsonResponse(req, { error: "Operator record not found" }, 404);
     }
 
-    // ----- 3. Parse request -----
     const body: RequestBody = await req.json();
     if (!body.transaction_id) {
       return jsonResponse(req, { error: "transaction_id is required" }, 400);
     }
 
-    // ----- 4. Fetch transaction and verify ownership -----
     const { data: tx, error: txFetchError } = await userClient
       .from("transactions")
       .select("*")
       .eq("id", body.transaction_id)
-      .eq("operator_id", operator.id) // ownership check via RLS + explicit filter
+      .eq("operator_id", operator.id)
       .single();
 
     if (txFetchError || !tx) {
       return jsonResponse(req, { error: "Transaction not found or access denied" }, 404);
     }
 
-    if (tx.status === "failed") {
-      return jsonResponse(req, { error: "Cannot confirm a failed transaction" }, 409);
-    }
-
-    if (!["awaiting_confirm", "confirmed", "edited"].includes(tx.status)) {
+    if (!["confirmed", "edited"].includes(tx.status)) {
       return jsonResponse(req, { error: `Cannot edit transaction with status "${tx.status}"` }, 409);
     }
 
-    // ----- 5. Validate edits -----
     const edits = body.edits ?? {};
 
     if (edits.amount !== undefined) {
@@ -145,8 +117,6 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     }
     const wasEdited = Object.keys(edits).length > 0;
 
-    // ----- 6. Fetch rules, active platforms, and (re-)compute profit -----
-    // Service role client — needed for wallet balance updates and platform validation.
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -193,7 +163,6 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     const txType = edits.transaction_type ?? tx.transaction_type;
     const amount = edits.amount ?? tx.amount;
 
-    // Build edit history entry if anything changed
     const editHistoryEntry = wasEdited
       ? {
           edited_at: new Date().toISOString(),
@@ -217,7 +186,6 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
       .eq("operator_id", operator.id)
       .eq("is_active", true);
 
-    // Operator can override profit; otherwise recalculate if amount/type changed
     const netProfit =
       edits.net_profit !== undefined
         ? edits.net_profit
@@ -225,7 +193,6 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
         ? calculateProfit(txType, platform, amount, (rules ?? []) as TransactionRule[])
         : tx.net_profit;
 
-    // ----- 7. Compute wallet deltas -----
     const deltas = computeWalletDeltas(
       txType,
       platform,
@@ -241,35 +208,29 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
       );
     }
 
-    const currentDeltas = tx.status === "awaiting_confirm"
-      ? null
-      : computeWalletDeltas(
-          tx.transaction_type,
-          tx.platform,
-          tx.amount,
-          tx.net_profit,
-          (rules ?? []) as TransactionRule[]
-        );
+    const currentDeltas = computeWalletDeltas(
+      tx.transaction_type,
+      tx.platform,
+      tx.amount,
+      tx.net_profit,
+      (rules ?? []) as TransactionRule[]
+    );
 
-    if (tx.status !== "awaiting_confirm" && !currentDeltas) {
+    if (!currentDeltas) {
       return jsonResponse(
         req,
         {
           error:
-            "Cannot edit this saved transaction because its current platform/type no longer matches an active rule",
+            "Cannot edit this transaction because its current platform/type no longer matches an active rule",
         },
         422
       );
     }
 
-    // ----- 8. Atomically: update both wallets + confirm the transaction -----
-    // Single Postgres function — if any step fails the whole thing rolls back.
     const finalEditHistory = wasEdited
       ? [...(Array.isArray(tx.edit_history) ? tx.edit_history : []), editHistoryEntry]
       : tx.edit_history;
-    const nextStatus = tx.status === "awaiting_confirm"
-      ? (wasEdited ? "edited" : "confirmed")
-      : "edited";
+    const nextStatus = "edited";
 
     const { error: atomicError } = await adminClient.rpc(
       "confirm_transaction_atomic",
@@ -277,11 +238,11 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
         p_transaction_id:   tx.id,
         p_operator_id:      operator.id,
         p_user_id:          user.id,
-        p_previous_platform_wallet: currentDeltas?.platform_wallet_name ?? null,
-        p_previous_platform_delta: currentDeltas ? -currentDeltas.platform_delta : 0,
+        p_previous_platform_wallet: currentDeltas.platform_wallet_name,
+        p_previous_platform_delta: -currentDeltas.platform_delta,
         p_next_platform_wallet:  deltas.platform_wallet_name,
         p_next_platform_delta:   deltas.platform_delta,
-        p_cash_delta:       deltas.cash_delta - (currentDeltas?.cash_delta ?? 0),
+        p_cash_delta:       deltas.cash_delta - currentDeltas.cash_delta,
         p_status:           nextStatus,
         p_net_profit:       netProfit,
         p_platform:         platform,
@@ -296,11 +257,10 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     );
 
     if (atomicError) {
-      console.error("Atomic confirm failed:", atomicError.message);
-      return jsonResponse(req, { error: "Failed to confirm transaction" }, 500);
+      console.error("Atomic edit failed:", atomicError.message);
+      return jsonResponse(req, { error: "Failed to update transaction" }, 500);
     }
 
-    // ----- 9. Return confirmed transaction -----
     return jsonResponse(req, {
       transaction_id: tx.id,
       status: nextStatus,

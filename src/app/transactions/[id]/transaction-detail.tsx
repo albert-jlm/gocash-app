@@ -1,10 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Loader2, AlertCircle,
+  ArrowLeft, Loader2, AlertCircle, Trash2,
   ArrowDownRight, ArrowUpLeft, Phone, Building2, Zap, TrendingDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -52,6 +53,8 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!operatorId) return;
@@ -67,10 +70,6 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         if (error || !data) {
           setFetchError("Transaction not found");
         } else {
-          if (data.status === "awaiting_confirm") {
-            router.replace(`/confirm?id=${transactionId}`);
-            return;
-          }
           const detail = data as TxDetail;
           setTx(detail);
 
@@ -87,6 +86,36 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         setDataLoading(false);
       });
   }, [operatorId, transactionId, router]);
+
+  async function handleDelete() {
+    if (!tx) return;
+    if (!confirm("Delete this transaction? This will reverse any wallet balance changes.")) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push("/login"); return; }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-transaction`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ transaction_id: tx.id }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to delete");
+      router.push("/transactions");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Something went wrong");
+      setDeleting(false);
+    }
+  }
 
   if (authLoading || dataLoading) {
     return (
@@ -154,11 +183,12 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Original screenshot
               </p>
-              {/* Signed URLs come from Supabase Storage at runtime, so plain img is the simplest fit here. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={imageUrl}
                 alt="Original transaction screenshot"
+                width={1200}
+                height={1600}
+                unoptimized
                 className="w-full rounded-2xl border border-white/[0.06] bg-black/20 object-cover"
               />
             </div>
@@ -194,13 +224,31 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </section>
 
-      <div className="px-5 py-8">
+      <div className="px-5 py-8 space-y-3">
+        {deleteError && (
+          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-400">{deleteError}</p>
+          </div>
+        )}
         <Link
           href={`/confirm?id=${transactionId}`}
-          className="w-full mb-3 flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm"
+          className="w-full flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm"
         >
-          {tx.status === "awaiting_confirm" ? "Review & Confirm" : "Edit Transaction"}
+          Edit Transaction
         </Link>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 font-medium py-3.5 rounded-2xl text-sm hover:bg-red-500/20 transition-colors disabled:opacity-50"
+        >
+          {deleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+          Delete Transaction
+        </button>
         <Link
           href="/transactions"
           className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"

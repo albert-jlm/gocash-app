@@ -1,23 +1,12 @@
-/**
- * process-transaction — Phase 1 Edge Function
- *
- * Accepts a base64-encoded screenshot, runs it through GPT-4o vision for
- * structured extraction, applies local business logic, writes an
- * `awaiting_confirmation` transaction record, and returns the draft to
- * the client for operator review.
- *
- * Called by: Capture screen (after the operator selects / shares a screenshot)
- * Auth required: Yes — Supabase JWT in Authorization header
- */
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4";
-import { corsHeaders, handleCors, jsonResponse } from "../_shared/cors.ts";
+import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import {
   detectPlatform,
   detectType,
   calculateProfit,
+  computeWalletDeltas,
   extractAccountNumber,
   type TransactionRule,
 } from "../_shared/transaction-processing.ts";
@@ -32,15 +21,9 @@ import {
   sendTelegramMessage,
 } from "../_shared/telegram.ts";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface RequestBody {
-  /** Base64-encoded JPEG/PNG screenshot (no data URI prefix needed) */
-  image_base64: string;
-  /** Optional: data URI mime type, defaults to image/jpeg */
-  mime_type?: string;
+image_base64: string;
+mime_type?: string;
 }
 
 interface AIExtraction {
@@ -57,10 +40,6 @@ interface OperatorNotificationRow {
   settings: unknown;
   telegram_chat_id: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// System prompt
-// ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT = `You are a fintech assistant helping a Filipino mobile money operator (remittance/e-wallet agent) process transaction receipts.
 You will receive a screenshot from a Philippine payment app — GCash, MariBank, Maya, BPI, UnionBank, or others.
@@ -103,17 +82,10 @@ Reference number hints:
 - MariBank reference: alphanumeric, shown near "Reference No." or "Ref No."
 - Look for labels: "Ref", "Reference", "Transaction No.", "Confirmation No."`;
 
-
-// ---------------------------------------------------------------------------
-// Handler
-// ---------------------------------------------------------------------------
-
 serve(async (req: Request) => {
-  // Handle CORS preflight
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  // Only allow POST
   if (req.method !== "POST") {
     return jsonResponse(req,{ error: "Method not allowed" }, 405);
   }
@@ -130,7 +102,6 @@ serve(async (req: Request) => {
         .from(TRANSACTION_IMAGE_BUCKET)
         .remove([uploadedImagePath]);
     } catch {
-      // Best-effort cleanup only.
     }
   }
 
@@ -193,7 +164,6 @@ serve(async (req: Request) => {
   }
 
   try {
-    // ----- 1. Auth -----
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return jsonResponse(req,{ error: "Missing authorization" }, 401);
 
@@ -213,7 +183,6 @@ serve(async (req: Request) => {
 
     if (userError || !user) return jsonResponse(req,{ error: "Unauthorized" }, 401);
 
-    // ----- 2. Resolve operator -----
     const { data: operator, error: opError } = await supabase
       .from("operators")
       .select("id, settings, telegram_chat_id")
@@ -237,7 +206,6 @@ serve(async (req: Request) => {
       }
     );
 
-    // ----- 3. Rate limit — max 50 submissions per operator per hour -----
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count: recentCount } = await supabase
       .from("transactions")
@@ -249,18 +217,15 @@ serve(async (req: Request) => {
       return jsonResponse(req, { error: "Rate limit exceeded — max 50 transactions per hour" }, 429);
     }
 
-    // ----- 4. Parse and validate request -----
     const body: RequestBody = await req.json();
     if (!body.image_base64) {
       return jsonResponse(req, { error: "image_base64 is required" }, 400);
     }
 
-    // Payload size limit: ~4.5MB decoded
     if (body.image_base64.length > 6_000_000) {
       return jsonResponse(req, { error: "Image too large — maximum 4.5 MB" }, 413);
     }
 
-    // MIME type allowlist
     const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
     const mimeType = body.mime_type ?? "image/jpeg";
     if (!ALLOWED_MIMES.includes(mimeType)) {
@@ -286,7 +251,6 @@ serve(async (req: Request) => {
       return jsonResponse(req, { error: "Failed to store screenshot" }, 500);
     }
 
-    // ----- 5. GPT-4o vision extraction -----
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
 
     const completion = await openai.chat.completions.create({
@@ -315,14 +279,12 @@ serve(async (req: Request) => {
     try {
       ai = JSON.parse(completion.choices[0].message.content!) as AIExtraction;
     } catch {
-      // Do NOT log model output — may contain sensitive OCR text (account numbers, amounts)
       console.error("Failed to parse AI response: [redacted for security]");
       await cleanupUploadedImage();
       await notifyProcessingError("AI extraction failed — could not parse response");
       return jsonResponse(req,{ error: "AI extraction failed — could not parse response" }, 422);
     }
 
-    // ----- 5. Business logic fallbacks -----
     const rawText = ai.raw_text ?? "";
     const platform =
       ai.platform && ai.platform !== "Unknown"
@@ -339,7 +301,6 @@ serve(async (req: Request) => {
     const accountNumber =
       ai.account_number ?? extractAccountNumber(rawText) ?? null;
 
-    // ----- 6. Fetch operator rules and compute profit -----
     const { data: rules } = await supabase
       .from("transaction_rules")
       .select("*")
@@ -380,7 +341,6 @@ serve(async (req: Request) => {
       }
     }
 
-    // ----- 7. Write transaction (Phase 1) -----
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
       .insert({
@@ -394,7 +354,7 @@ serve(async (req: Request) => {
         transaction_date: ai.transaction_date ?? null,
         image_url: uploadedImagePath,
         ai_raw_text: rawText || null,
-        status: "awaiting_confirm",
+        status: "confirmed",
         was_edited: false,
         edit_history: [],
       })
@@ -402,7 +362,6 @@ serve(async (req: Request) => {
       .single();
 
     if (txError) {
-      // Duplicate reference — return existing transaction so operator can review it
       if (txError.code === "23505" && ai.reference_number) {
         const { data: existing } = await supabase
           .from("transactions")
@@ -432,12 +391,50 @@ serve(async (req: Request) => {
       return jsonResponse(req,{ error: "Failed to save transaction", detail: txError.message }, 500);
     }
 
+    const deltas = computeWalletDeltas(txType, platform, amount, netProfit, (rules ?? []) as TransactionRule[]);
+
+    if (deltas) {
+      const { error: walletError } = await adminClient.rpc(
+        "confirm_transaction_atomic",
+        {
+          p_transaction_id:           transaction.id,
+          p_operator_id:              operator.id,
+          p_user_id:                  user.id,
+          p_previous_platform_wallet: null,
+          p_previous_platform_delta:  0,
+          p_next_platform_wallet:     deltas.platform_wallet_name,
+          p_next_platform_delta:      deltas.platform_delta,
+          p_cash_delta:               deltas.cash_delta,
+          p_status:                   "confirmed",
+          p_net_profit:               netProfit,
+          p_platform:                 platform,
+          p_transaction_type:         txType,
+          p_amount:                   amount,
+          p_account_number:           accountNumber,
+          p_reference_number:         ai.reference_number ?? null,
+          p_transaction_date:         ai.transaction_date ?? null,
+          p_was_edited:               false,
+          p_edit_history:             [],
+        }
+      );
+
+      if (walletError) {
+        await supabase
+          .from("transactions")
+          .update({ status: "failed", processing_errors: ["Wallet update failed: " + walletError.message] })
+          .eq("id", transaction.id);
+
+        console.error("Wallet update failed:", walletError.message);
+        await notifyProcessingError("Transaction saved but wallet update failed");
+        return jsonResponse(req, { error: "Transaction saved but wallet update failed" }, 500);
+      }
+    }
+
     await notifyProcessed(transaction);
 
-    // ----- 8. Return draft for operator review -----
     return jsonResponse(req,{
       transaction_id: transaction.id,
-      status: transaction.status,
+      status: "confirmed",
       platform: transaction.platform,
       transaction_type: transaction.transaction_type,
       amount: transaction.amount,
@@ -445,6 +442,10 @@ serve(async (req: Request) => {
       account_number: transaction.account_number,
       reference_number: transaction.reference_number,
       transaction_date: transaction.transaction_date,
+      wallet_deltas: deltas ? {
+        [deltas.platform_wallet_name]: deltas.platform_delta,
+        Cash: deltas.cash_delta,
+      } : null,
     });
   } catch (err) {
     console.error("Unhandled error in process-transaction:", err);

@@ -23,14 +23,12 @@ const isNative = Capacitor.isNativePlatform();
 
 export default function CapturePage() {
   const router = useRouter();
-  // Single ref — camera button sets capture attr dynamically (21st.dev pattern)
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Compress image via Canvas before sending — reduces OpenAI token cost
   const compressImage = useCallback(async (file: File): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -52,7 +50,6 @@ export default function CapturePage() {
     });
   }, []);
 
-  // Core upload function — takes raw base64 + mime type
   const uploadBase64 = useCallback(
     async (base64: string, mimeType: string) => {
       setError(null);
@@ -86,7 +83,7 @@ export default function CapturePage() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Failed to read screenshot");
 
-        router.push(`/confirm?id=${data.transaction_id}`);
+        router.push(`/transactions?id=${data.transaction_id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
         setProcessing(false);
@@ -95,7 +92,6 @@ export default function CapturePage() {
     [router]
   );
 
-  // Process a File object — compress then upload
   const processImage = useCallback(
     async (file: File) => {
       const { base64, mimeType } = await compressImage(file);
@@ -104,7 +100,6 @@ export default function CapturePage() {
     [uploadBase64, compressImage]
   );
 
-  // Native Capacitor Camera — returns base64 directly
   const nativeCapture = useCallback(
     async (source: CameraSource) => {
       try {
@@ -119,7 +114,6 @@ export default function CapturePage() {
           await uploadBase64(photo.base64String, `image/${photo.format}`);
         }
       } catch (err) {
-        // User cancelled — not an error
         if (err instanceof Error && err.message.includes("cancel")) return;
         setError(err instanceof Error ? err.message : "Camera error");
       }
@@ -127,7 +121,6 @@ export default function CapturePage() {
     [uploadBase64]
   );
 
-  // Check for shared image from Android share intent
   useEffect(() => {
     const stored = sessionStorage.getItem("shared_image");
     if (!stored) return;
@@ -137,7 +130,6 @@ export default function CapturePage() {
       try {
         const { uri, mimeType } = JSON.parse(stored!) as { uri: string; mimeType: string };
 
-        // Fetch the shared file URI and convert to base64
         const response = await fetch(uri);
         const blob = await response.blob();
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -165,7 +157,6 @@ export default function CapturePage() {
     [processImage]
   );
 
-  // Gallery — native or browser fallback
   const openGallery = useCallback(() => {
     if (isNative) {
       nativeCapture(CameraSource.Photos);
@@ -176,7 +167,6 @@ export default function CapturePage() {
     inputRef.current.click();
   }, [nativeCapture]);
 
-  // Camera — native or browser fallback
   const openCamera = useCallback(() => {
     if (isNative) {
       nativeCapture(CameraSource.Camera);
@@ -205,7 +195,6 @@ export default function CapturePage() {
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* Ambient radial glow */}
       <div
         className="fixed inset-0 pointer-events-none max-w-[390px] mx-auto left-1/2 -translate-x-1/2"
         style={{
@@ -213,7 +202,6 @@ export default function CapturePage() {
         }}
       />
 
-      {/* Header */}
       <header className="relative z-10 px-5 pt-14 pb-4 flex items-center gap-3">
         <Link
           href="/"
@@ -224,10 +212,8 @@ export default function CapturePage() {
         <h1 className="text-base font-semibold">New Transaction</h1>
       </header>
 
-      {/* Main Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 pb-36">
 
-        {/* Hero card — camera icon centred, drag-active glow */}
         <div
           className={[
             "w-full aspect-square rounded-3xl flex flex-col items-center justify-center mb-6 transition-all duration-200",
@@ -248,7 +234,6 @@ export default function CapturePage() {
               : "Any payment receipt — we'll extract the details"}
           </p>
 
-          {/* AI badge */}
           {!isDragging && (
             <div className="flex items-center gap-1.5 mt-5 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
               <Sparkles className="w-3 h-3 text-emerald-400" />
@@ -257,7 +242,6 @@ export default function CapturePage() {
           )}
         </div>
 
-        {/* Error */}
         {error && (
           <div className="w-full flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 mb-4">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
@@ -265,7 +249,6 @@ export default function CapturePage() {
           </div>
         )}
 
-        {/* Buttons — h-14 rounded-2xl from 21st.dev */}
         <div className="w-full space-y-3">
           <button
             onClick={openGallery}
@@ -283,7 +266,6 @@ export default function CapturePage() {
           </button>
         </div>
 
-        {/* Hidden single file input */}
         <input
           ref={inputRef}
           type="file"
@@ -293,7 +275,6 @@ export default function CapturePage() {
         />
       </div>
 
-      {/* Processing Overlay — full viewport, fully opaque */}
       {processing && (
         <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-50">
           <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.07] flex items-center justify-center mb-6">
@@ -304,7 +285,6 @@ export default function CapturePage() {
         </div>
       )}
 
-      {/* Bottom Nav */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent z-40">
         <nav className="flex items-center justify-around">
           <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
