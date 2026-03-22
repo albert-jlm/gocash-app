@@ -65,6 +65,7 @@ export default function PlatformsSettingsPage() {
 
   useEffect(() => {
     if (!operatorId) return;
+    const opId = operatorId;
 
     async function fetchData() {
       setDataLoading(true);
@@ -73,11 +74,11 @@ export default function PlatformsSettingsPage() {
         supabase
           .from("operator_platforms")
           .select("id, name, is_builtin, is_active")
-          .eq("operator_id", operatorId),
+          .eq("operator_id", opId),
         supabase
           .from("wallets")
           .select("id, wallet_name, wallet_type, balance, is_active")
-          .eq("operator_id", operatorId),
+          .eq("operator_id", opId),
       ]);
 
       const wallets = (walletsRes.data ?? []) as WalletRow[];

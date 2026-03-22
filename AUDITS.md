@@ -1,5 +1,61 @@
 # Audits Log
 
+## Audit #5 Remediation Status Update — 2026-03-22
+
+This repo has now landed the main Audit #5 fixes in code and verification:
+
+- Dynamic operator platform catalog via `gocash.operator_platforms`
+- Maya onboarding/backfill and wallet activation metadata
+- Custom platform soft-delete flow
+- Unique partial dedupe guard on `(operator_id, reference_number)`
+- Private screenshot storage with signed URL rendering in transaction detail
+- Wallet color persistence and realtime dashboard/history refresh
+- Structured Telegram preferences with delivery in `process-transaction`
+- Non-interactive ESLint CLI with CI gates for `lint`, `typecheck`, `test`, and `build`
+
+Verification at this point:
+
+- `pnpm lint` — PASS
+- `pnpm typecheck` — PASS
+- `pnpm test` — PASS (55 tests)
+- `pnpm build` — PASS
+
+Remaining product work after Audit #5 is now outside the original blocker set:
+
+- iOS Share Extension (P2)
+- Broader integration/E2E coverage
+
+### Disposition of 2026-03-22 Audit #5 Findings
+
+| Audit #5 Item | Status | Notes |
+|---|---|---|
+| 1. Custom platform management broken end-to-end | ✅ Implemented | Reworked to use `gocash.operator_platforms`, dynamic platform validation, and soft-delete/inactive platform handling instead of hard delete |
+| 2. Maya not usable out of the box | ✅ Implemented | Onboarding now creates Maya, and migrations backfill missing Maya platform/wallet records for existing operators |
+| 3. Duplicate receipt protection not enforced | ✅ Implemented | Added unique partial index on `(operator_id, reference_number)` for non-null references; duplicate processing returns the existing transaction |
+| 4. Wallet color customization not actually shipped | ✅ Implemented | Added `wallets.color`, updated types, persisted wallet colors, and dashboard now renders from stored color values |
+| 5. Notifications and live behavior incomplete | 🟡 Partially implemented | Supabase Realtime refresh is implemented, and Telegram processed/error delivery now runs from `process-transaction`; push delivery is still deferred |
+| 6. Transaction list filters incomplete | ✅ Implemented | Added search plus `date from` / `date to` filtering on transaction history |
+| 7. Transaction detail missing original screenshot | ✅ Implemented | Screenshots are stored in private Supabase Storage and displayed via short-lived signed URLs |
+| 8. Date extraction architecture differs from spec | ✅ Resolved by spec alignment | The app still uses a single GPT-4o extraction call; docs were updated to reflect the shipped architecture |
+| 9. ESLint not configured | ✅ Implemented | Added `eslint.config.mjs`, switched to ESLint CLI, and wired lint into CI |
+| 10. Tests cover only business logic | 🟡 Partially implemented | Coverage expanded from 37 to 55 tests across shared helpers and processing logic, but there are still no integration or E2E tests |
+
+### Disposition of Audit #5 Follow-Ups
+
+- [x] Fix custom platform flow: replaced static allowlists with `operator_platforms`
+- [x] Add DELETE RLS policies for `wallets` and `transaction_rules`
+  This is no longer needed because platform removal now uses soft-delete via `is_active = false`
+- [x] Auto-create Maya wallet during onboarding (and for existing operators via migration)
+- [x] Add `UNIQUE(operator_id, reference_number)` protection to `transactions`
+  Implemented as a unique partial index for non-null references
+- [x] Add wallet `color` to schema + types + dashboard
+- [x] Store screenshots in Supabase Storage and display in transaction detail
+- [x] Add Supabase Realtime subscription for wallet balances on dashboard
+- [x] Implement Telegram notification sending in an Edge Function
+- [x] Add date range / search filters to transaction history
+- [x] Finalize ESLint config
+- [ ] Add integration and E2E tests
+
 This file is the running audit history for this repository.
 
 Rule: every time we run a codebase audit, append a new entry here.

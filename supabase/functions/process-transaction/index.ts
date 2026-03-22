@@ -25,6 +25,12 @@ import {
   buildTransactionImagePath,
   TRANSACTION_IMAGE_BUCKET,
 } from "../_shared/storage.ts";
+import {
+  buildProcessedTelegramMessage,
+  buildProcessingErrorTelegramMessage,
+  parseTelegramNotificationTarget,
+  sendTelegramMessage,
+} from "../_shared/telegram.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +51,11 @@ interface AIExtraction {
   reference_number: string | null;
   account_number: string | null;
   transaction_date: string | null;
+}
+
+interface OperatorNotificationRow {
+  settings: unknown;
+  telegram_chat_id: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +120,7 @@ serve(async (req: Request) => {
 
   let uploadedImagePath: string | null = null;
   let adminClient: ReturnType<typeof createClient> | null = null;
+  let operatorNotifications: OperatorNotificationRow | null = null;
 
   async function cleanupUploadedImage() {
     if (!adminClient || !uploadedImagePath) return;
@@ -119,6 +131,64 @@ serve(async (req: Request) => {
         .remove([uploadedImagePath]);
     } catch {
       // Best-effort cleanup only.
+    }
+  }
+
+  async function notifyProcessed(transaction: {
+    id: string;
+    platform: string;
+    transaction_type: string;
+    amount: number;
+    net_profit: number;
+    account_number: string | null;
+    reference_number: string | null;
+  }) {
+    const target = operatorNotifications
+      ? parseTelegramNotificationTarget(operatorNotifications)
+      : null;
+
+    if (!target?.isEnabledFor("processed")) return;
+
+    try {
+      await sendTelegramMessage({
+        botToken: Deno.env.get("TELEGRAM_BOT_TOKEN"),
+        chatId: target.chatId,
+        text: buildProcessedTelegramMessage({
+          transactionId: transaction.id,
+          platform: transaction.platform,
+          transactionType: transaction.transaction_type,
+          amount: transaction.amount,
+          netProfit: transaction.net_profit,
+          accountNumber: transaction.account_number,
+          referenceNumber: transaction.reference_number,
+        }),
+      });
+    } catch (error) {
+      console.error(
+        "Telegram processed notification failed:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  async function notifyProcessingError(reason: string) {
+    const target = operatorNotifications
+      ? parseTelegramNotificationTarget(operatorNotifications)
+      : null;
+
+    if (!target?.isEnabledFor("processing_error")) return;
+
+    try {
+      await sendTelegramMessage({
+        botToken: Deno.env.get("TELEGRAM_BOT_TOKEN"),
+        chatId: target.chatId,
+        text: buildProcessingErrorTelegramMessage({ reason }),
+      });
+    } catch (error) {
+      console.error(
+        "Telegram processing error notification failed:",
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 
@@ -146,13 +216,18 @@ serve(async (req: Request) => {
     // ----- 2. Resolve operator -----
     const { data: operator, error: opError } = await supabase
       .from("operators")
-      .select("id")
+      .select("id, settings, telegram_chat_id")
       .eq("user_id", user.id)
       .single();
 
     if (opError || !operator) {
       return jsonResponse(req,{ error: "Operator record not found" }, 404);
     }
+
+    operatorNotifications = {
+      settings: operator.settings,
+      telegram_chat_id: operator.telegram_chat_id,
+    };
 
     adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -207,6 +282,7 @@ serve(async (req: Request) => {
 
     if (uploadError) {
       console.error("Transaction image upload failed:", uploadError.message);
+      await notifyProcessingError("Failed to store screenshot");
       return jsonResponse(req, { error: "Failed to store screenshot" }, 500);
     }
 
@@ -242,6 +318,7 @@ serve(async (req: Request) => {
       // Do NOT log model output — may contain sensitive OCR text (account numbers, amounts)
       console.error("Failed to parse AI response: [redacted for security]");
       await cleanupUploadedImage();
+      await notifyProcessingError("AI extraction failed — could not parse response");
       return jsonResponse(req,{ error: "AI extraction failed — could not parse response" }, 422);
     }
 
@@ -351,8 +428,11 @@ serve(async (req: Request) => {
       }
       console.error("Transaction insert error:", txError);
       await cleanupUploadedImage();
+      await notifyProcessingError("Failed to save transaction");
       return jsonResponse(req,{ error: "Failed to save transaction", detail: txError.message }, 500);
     }
+
+    await notifyProcessed(transaction);
 
     // ----- 8. Return draft for operator review -----
     return jsonResponse(req,{
@@ -369,6 +449,7 @@ serve(async (req: Request) => {
   } catch (err) {
     console.error("Unhandled error in process-transaction:", err);
     await cleanupUploadedImage();
+    await notifyProcessingError("Internal server error");
     return jsonResponse(req,{ error: "Internal server error" }, 500);
   }
 });

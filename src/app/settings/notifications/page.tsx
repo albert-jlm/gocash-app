@@ -145,7 +145,7 @@ export default function NotificationsSettingsPage() {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
-                Save the alert types you want ready for a future Telegram delivery rollout.
+                Choose which Telegram alerts should be sent to your saved chat ID.
               </p>
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function NotificationsSettingsPage() {
               />
             </div>
             <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
-              Delivery is not active in this release. These saved preferences just keep your setup ready.
+              Telegram delivery works when a bot token is configured on the server. Push notifications are still deferred.
             </p>
           </div>
         </div>

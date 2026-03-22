@@ -8,7 +8,7 @@
 ## Current Status
 
 **Active Milestone:** Milestone 1 — Cross-Platform Standalone App
-**Overall Progress:** 🟢 Feature-complete — all screens, native shell, share intent, tests done
+**Overall Progress:** 🟢 Core app flow implemented and repo-green — `lint`, `typecheck`, `test`, and `build` all pass after Audit #5 remediation
 
 ---
 
@@ -34,33 +34,33 @@
 |---|---|---|
 | Login screen (email + magic link) | ✅ Done | `src/app/login/page.tsx` — passwordless, `signInWithOtp` |
 | `useAuthGuard` hook | ✅ Done | `src/hooks/useAuthGuard.ts` — checks session + operator record; redirects to `/login` or `/onboarding` |
-| Onboarding flow (set opening wallet balances) | ✅ Done | `src/app/onboarding/page.tsx` — 2-step; creates operator + 3 wallets + 6 default transaction rules |
+| Onboarding flow (set opening wallet balances) | ✅ Done | `src/app/onboarding/page.tsx` — 2-step; creates operator platform catalog + GCash/MariBank/Maya/Cash wallets + default transaction rules |
 
 #### AI Pipeline (Edge Functions)
 | Task | Status | Notes |
 |---|---|---|
 | `_shared/transaction-processing.ts` — business logic | ✅ Done | detectPlatform, detectType, calculateProfit, extractAccountNumber, computeWalletDeltas |
 | `_shared/cors.ts` — CORS helpers | ✅ Done | |
-| `process-transaction` Edge Function | ✅ Done | Phase 1: GPT-4o OCR → classify → profit → DB write → returns draft |
-| `confirm-transaction` Edge Function | ✅ Done | Phase 2: wallet delta via `update_wallet_balance` RPC → confirms tx; both wallet failures now block |
+| `process-transaction` Edge Function | ✅ Done | Single GPT-4o extraction call; uploads private screenshot; dedup returns existing record; returns draft |
+| `confirm-transaction` Edge Function | ✅ Done | Validates platform against active `operator_platforms`; atomic wallet updates; returns `confirmed` or `edited` |
 
 #### Core Screens
 | Task | Status | Notes |
 |---|---|---|
 | Capture screen | ✅ Done | `src/app/capture/page.tsx` — gallery + camera; calls `process-transaction`; processing overlay |
 | Review & Save screen | ✅ Done | `src/app/confirm/[id]/` — server wrapper + client form; real Supabase data; edit mode |
-| Dashboard | ✅ Done | `src/app/page.tsx` — live wallet balances, pending badge, today's summary, recent tx |
-| Transaction history | ✅ Done | `src/app/transactions/page.tsx` — live data, date-grouped, type filter chips |
-| Transaction detail | ✅ Done | `src/app/transactions/[id]/page.tsx` — full read-only detail; redirects pending → confirm |
+| Dashboard | ✅ Done | `src/app/page.tsx` — realtime wallet/transaction refresh, stored wallet colors, pending badge, today's summary, recent tx |
+| Transaction history | ✅ Done | `src/app/transactions/page.tsx` — realtime refresh, type filters, search, date-from/date-to filters |
+| Transaction detail | ✅ Done | `src/app/transactions/[id]/page.tsx` — full read-only detail with signed screenshot preview; redirects pending → confirm |
 | Settings (placeholder) | ✅ Done | `src/app/settings/page.tsx` — nav to sub-screens (not yet built) |
 
 #### Wallet & Settings
 | Task | Status | Notes |
 |---|---|---|
-| Wallet management screen | ✅ Done | `src/app/settings/wallets/page.tsx` — gradient cards, inline balance editing |
+| Wallet management screen | ✅ Done | `src/app/settings/wallets/page.tsx` — gradient cards, inline balance editing, persisted color customization |
 | Profit settings (transaction rules editor) | ✅ Done | `src/app/settings/rules/page.tsx` — plain-language descriptions, rate/min editing, active toggle |
-| Platform management | ✅ Done | `src/app/settings/platforms/page.tsx` — list/add/remove platforms; seeds wallet + rules |
-| Notification settings | ✅ Done | `src/app/settings/notifications/page.tsx` — Telegram toggle + chat ID; push notifications placeholder |
+| Platform management | ✅ Done | `src/app/settings/platforms/page.tsx` — add/reactivate custom platforms; soft-delete inactive platform + wallet + rules |
+| Notification settings | ✅ Done | `src/app/settings/notifications/page.tsx` — Telegram delivery preferences (`processed`, `processing_error`, chat ID); push notifications deferred |
 
 #### Native Shell & Distribution
 | Task | Status | Notes |
@@ -76,10 +76,11 @@
 #### Known Technical Debt
 | Item | Severity | Notes |
 |---|---|---|
-| Maya wallet not auto-created on onboarding | Medium | Maya platform now supported in UI/types/edge functions; wallet record must exist before confirming Maya transactions |
 | Unknown tx type defaults to "Cash In" | Low | Safe fallback but could mis-post; operator sees it on confirm screen |
 | iOS Share Extension | Low | P2 — separate Xcode target, requires native extension |
-| `pnpm test` — 37 tests passing | — | Unit tests for `transaction-processing.ts` complete |
+| Notification delivery | Low | Telegram alerts are implemented when `TELEGRAM_BOT_TOKEN` is configured; push delivery is still deferred |
+| Integration coverage | Low | Unit coverage is solid, but there is still no E2E test suite |
+| `pnpm test` — 55 tests passing | — | Shared processing, storage, filter, platform, and notification helpers covered |
 
 ---
 
@@ -112,12 +113,12 @@
 ## Where We Left Off
 
 **Last session date:** 2026-03-22
-**Last completed task:** Full security + runtime audit (Audit #3 → Audit #4). All High/Medium findings resolved. App live at gocash.zether.net, tested on real device (PWA installed).
-**Next task:** Wallet color customization, Maya wallet onboarding, iOS Share Extension (P2)
+**Last completed task:** Audit follow-up: Telegram delivery in `process-transaction` for processed/error events, plus added notification helper tests.
+**Next task:** iOS Share Extension (P2), broader integration/E2E coverage, and push delivery.
 **Open issues / blockers:**
-- Maya platform now in UI/types/edge function — needs a Maya wallet record before operators can confirm Maya transactions
-- `pnpm run lint` still interactive (no `eslint.config.*` finalized) — low priority
 - Native assets (`cap sync`) needed before next iOS/Android build
+- No E2E test coverage yet for the main mobile flows
+- Push delivery is still deferred
 
 ---
 
