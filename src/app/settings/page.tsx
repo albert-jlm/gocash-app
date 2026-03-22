@@ -34,7 +34,7 @@ export default function SettingsPage() {
             { label: "Wallets",          href: "/settings/wallets",       desc: "View and adjust balances" },
             { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated" },
             { label: "Platforms",        href: "/settings/platforms",     desc: "Manage GCash, MariBank, and more" },
-            { label: "Notifications",    href: "/settings/notifications", desc: "Telegram alerts (coming soon)" },
+            { label: "Notifications",    href: "/settings/notifications", desc: "Save Telegram alert preferences" },
           ].map(({ label, href, desc }) => (
             <Link key={href} href={href} className="flex items-center justify-between px-4 py-4">
               <div>

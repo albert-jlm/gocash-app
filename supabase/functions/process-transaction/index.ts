@@ -21,6 +21,10 @@ import {
   extractAccountNumber,
   type TransactionRule,
 } from "../_shared/transaction-processing.ts";
+import {
+  buildTransactionImagePath,
+  TRANSACTION_IMAGE_BUCKET,
+} from "../_shared/storage.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,6 +107,21 @@ serve(async (req: Request) => {
     return jsonResponse(req,{ error: "Method not allowed" }, 405);
   }
 
+  let uploadedImagePath: string | null = null;
+  let adminClient: ReturnType<typeof createClient> | null = null;
+
+  async function cleanupUploadedImage() {
+    if (!adminClient || !uploadedImagePath) return;
+
+    try {
+      await adminClient.storage
+        .from(TRANSACTION_IMAGE_BUCKET)
+        .remove([uploadedImagePath]);
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
+
   try {
     // ----- 1. Auth -----
     const authHeader = req.headers.get("Authorization");
@@ -135,6 +154,14 @@ serve(async (req: Request) => {
       return jsonResponse(req,{ error: "Operator record not found" }, 404);
     }
 
+    adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      {
+        db: { schema: "gocash" },
+      }
+    );
+
     // ----- 3. Rate limit — max 50 submissions per operator per hour -----
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count: recentCount } = await supabase
@@ -163,6 +190,24 @@ serve(async (req: Request) => {
     const mimeType = body.mime_type ?? "image/jpeg";
     if (!ALLOWED_MIMES.includes(mimeType)) {
       return jsonResponse(req, { error: `Unsupported image type: ${mimeType}` }, 415);
+    }
+
+    const imageBytes = Uint8Array.from(
+      atob(body.image_base64),
+      (char) => char.charCodeAt(0)
+    );
+    uploadedImagePath = buildTransactionImagePath(operator.id, mimeType);
+
+    const { error: uploadError } = await adminClient.storage
+      .from(TRANSACTION_IMAGE_BUCKET)
+      .upload(uploadedImagePath, imageBytes, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Transaction image upload failed:", uploadError.message);
+      return jsonResponse(req, { error: "Failed to store screenshot" }, 500);
     }
 
     // ----- 5. GPT-4o vision extraction -----
@@ -196,6 +241,7 @@ serve(async (req: Request) => {
     } catch {
       // Do NOT log model output — may contain sensitive OCR text (account numbers, amounts)
       console.error("Failed to parse AI response: [redacted for security]");
+      await cleanupUploadedImage();
       return jsonResponse(req,{ error: "AI extraction failed — could not parse response" }, 422);
     }
 
@@ -230,6 +276,33 @@ serve(async (req: Request) => {
       (rules ?? []) as TransactionRule[]
     );
 
+    if (ai.reference_number) {
+      const { data: existing } = await supabase
+        .from("transactions")
+        .select(
+          "id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date"
+        )
+        .eq("operator_id", operator.id)
+        .eq("reference_number", ai.reference_number)
+        .maybeSingle();
+
+      if (existing) {
+        await cleanupUploadedImage();
+        return jsonResponse(req,{
+          transaction_id: existing.id,
+          status: existing.status,
+          platform: existing.platform,
+          transaction_type: existing.transaction_type,
+          amount: existing.amount,
+          net_profit: existing.net_profit,
+          account_number: existing.account_number,
+          reference_number: existing.reference_number,
+          transaction_date: existing.transaction_date,
+          duplicate: true,
+        });
+      }
+    }
+
     // ----- 7. Write transaction (Phase 1) -----
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
@@ -242,11 +315,11 @@ serve(async (req: Request) => {
         account_number: accountNumber,
         reference_number: ai.reference_number ?? null,
         transaction_date: ai.transaction_date ?? null,
+        image_url: uploadedImagePath,
+        ai_raw_text: rawText || null,
         status: "awaiting_confirm",
         was_edited: false,
         edit_history: [],
-        // Store raw OCR text for audit / re-processing
-        // NOTE: ai_raw_text column must exist — add via migration if needed
       })
       .select()
       .single();
@@ -256,11 +329,12 @@ serve(async (req: Request) => {
       if (txError.code === "23505" && ai.reference_number) {
         const { data: existing } = await supabase
           .from("transactions")
-          .select()
+          .select("id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date")
           .eq("operator_id", operator.id)
           .eq("reference_number", ai.reference_number)
           .single();
         if (existing) {
+          await cleanupUploadedImage();
           return jsonResponse(req,{
             transaction_id: existing.id,
             status: existing.status,
@@ -276,13 +350,14 @@ serve(async (req: Request) => {
         }
       }
       console.error("Transaction insert error:", txError);
+      await cleanupUploadedImage();
       return jsonResponse(req,{ error: "Failed to save transaction", detail: txError.message }, 500);
     }
 
     // ----- 8. Return draft for operator review -----
     return jsonResponse(req,{
       transaction_id: transaction.id,
-      status: "awaiting_confirmation",
+      status: transaction.status,
       platform: transaction.platform,
       transaction_type: transaction.transaction_type,
       amount: transaction.amount,
@@ -293,6 +368,7 @@ serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("Unhandled error in process-transaction:", err);
+    await cleanupUploadedImage();
     return jsonResponse(req,{ error: "Internal server error" }, 500);
   }
 });

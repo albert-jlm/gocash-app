@@ -120,6 +120,8 @@ export interface Database {
           wallet_type: WalletType;
           wallet_name: string;
           balance: number;
+          color: string;
+          is_active: boolean;
           last_transaction_id: string | null;
           created_at: string;
           updated_at: string;
@@ -129,9 +131,30 @@ export interface Database {
           wallet_type: WalletType;
           wallet_name: string;
           balance?: number;
+          color?: string;
+          is_active?: boolean;
           last_transaction_id?: string | null;
         };
         Update: Partial<Database["gocash"]["Tables"]["wallets"]["Insert"]>;
+        Relationships: [];
+      };
+      operator_platforms: {
+        Row: {
+          id: string;
+          operator_id: string;
+          name: string;
+          is_builtin: boolean;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          operator_id: string;
+          name: string;
+          is_builtin?: boolean;
+          is_active?: boolean;
+        };
+        Update: Partial<Database["gocash"]["Tables"]["operator_platforms"]["Insert"]>;
         Relationships: [];
       };
       transaction_rules: {
