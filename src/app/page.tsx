@@ -297,15 +297,15 @@ export default function Dashboard() {
           Today
         </h2>
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center">
+          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
             <p className="text-lg font-bold tabular-nums">{todayStats.count}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">Transactions</p>
           </div>
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center">
+          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
             <p className="text-lg font-bold tabular-nums">{formatAmount(todayStats.total)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">Total Amount</p>
           </div>
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center border border-emerald-500/10">
+          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px] border border-emerald-500/10">
             <p className="text-lg font-bold text-emerald-400 tabular-nums">
               ₱{todayStats.earnings.toFixed(0)}
             </p>
@@ -371,8 +371,8 @@ export default function Dashboard() {
       </section>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
-        <nav className="flex items-center justify-around">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
+        <nav className="flex items-center justify-around pointer-events-auto">
           <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
             <Home className="w-5 h-5 text-foreground" />
             <span className="text-[10px] text-foreground font-medium">Home</span>
