@@ -154,6 +154,8 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Original screenshot
               </p>
+              {/* Signed URLs come from Supabase Storage at runtime, so plain img is the simplest fit here. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imageUrl}
                 alt="Original transaction screenshot"

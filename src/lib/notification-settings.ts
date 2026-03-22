@@ -1,3 +1,5 @@
+import type { Json } from "@/types/database";
+
 export interface TelegramNotificationSettings {
   processed: boolean;
   processing_error: boolean;
@@ -22,6 +24,35 @@ function readBoolean(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function toJson(value: unknown): Json | undefined {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toJson(entry))
+      .filter((entry): entry is Json => entry !== undefined);
+  }
+
+  if (isRecord(value)) {
+    const result: { [key: string]: Json | undefined } = {};
+
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = toJson(entry);
+    }
+
+    return result;
+  }
+
+  return undefined;
+}
+
 export function parseNotificationSettings(value: unknown): OperatorNotificationSettings {
   const root = isRecord(value) ? value : {};
   const legacyEnabled = readBoolean(root.telegram_enabled, false);
@@ -39,8 +70,9 @@ export function parseNotificationSettings(value: unknown): OperatorNotificationS
 export function mergeNotificationSettings(
   existing: unknown,
   next: OperatorNotificationSettings
-): Record<string, unknown> {
-  const root = isRecord(existing) ? { ...existing } : {};
+): Json {
+  const existingJson = toJson(existing);
+  const root = isRecord(existingJson) ? { ...existingJson } : {};
   const notifications = isRecord(root.notifications) ? { ...root.notifications } : {};
 
   notifications.telegram = {
@@ -57,4 +89,3 @@ export function mergeNotificationSettings(
 export function hasEnabledTelegramNotification(settings: OperatorNotificationSettings): boolean {
   return settings.telegram.processed || settings.telegram.processing_error;
 }
-

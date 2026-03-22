@@ -365,11 +365,13 @@ const sessionConfig = {
 
 All AI processing runs inside Supabase Edge Functions — no external workflow engine. The app is fully self-contained.
 
+> Implementation note (2026-03-22): the current shipped code uses a single GPT-4o extraction call, private `transaction-images` storage paths in `transactions.image_url`, `awaiting_confirm` as the review status, `operator_platforms` for dynamic platform validation, and shared logic in `supabase/functions/_shared/transaction-processing.ts`.
+
 #### Edge Functions
 
 | Function | Trigger | Responsibility |
 |----------|---------|---------------|
-| `process-transaction` | Called by PWA after image upload | Full Phase 1: OCR → classify → profit calc → account extraction → date/ref extraction → DB upsert |
+| `process-transaction` | Called by PWA after image selection/share | Full Phase 1: private image upload → GPT-4o extraction → classify → profit calc → DB insert/dedupe |
 | `confirm-transaction` | Called by PWA when operator confirms | Full Phase 2: update transaction → compute wallet deltas → update wallets → write snapshots |
 
 #### `process-transaction` Flow
@@ -379,21 +381,19 @@ All AI processing runs inside Supabase Edge Functions — no external workflow e
 // Receives: { transaction_id, image_base64 }
 // Auth: operator JWT (RLS enforced)
 
-1. Decode base64 → call OpenAI GPT-4O (vision) → raw OCR text
-2. Classify platform (GCash | MariBank | Unknown) via keyword matching
-3. Classify transaction type (Cash In | Cash Out | Telco Load | Unknown) via keyword matching
-4. Calculate profit using business rules (Cash In / Cash Out / Telco Load formulas)
-5. Extract account number (regex, with operator blacklist)
-6. Call OpenAI gpt-4.1-mini → extract date + reference number
-7. Upsert to transactions table (dedup on reference_number + operator_id)
-8. Update transaction status: 'processing' → 'awaiting_confirm'
-9. Return { transaction_id, platform, type, amount, profit, account, reference }
+1. Decode base64 and store the original screenshot in private Supabase Storage
+2. Call OpenAI GPT-4o once for structured extraction
+3. Apply shared business-logic fallbacks for platform/type/account number
+4. Calculate profit using operator transaction rules
+5. If `reference_number` already exists for the operator, return the existing record
+6. Otherwise insert a draft transaction with `status = 'awaiting_confirm'`
+7. Return { transaction_id, platform, type, amount, profit, account, reference }
 ```
 
 #### Business Logic (ported from n8n Code nodes to TypeScript)
 
 ```typescript
-// lib/transaction-processing.ts — shared logic used by Edge Function
+// supabase/functions/_shared/transaction-processing.ts — shared logic used by Edge Functions
 
 // Platform detection
 function detectPlatform(ocrText: string): 'GCash' | 'MariBank' | 'Unknown' { ... }
@@ -427,11 +427,13 @@ const BLACKLIST = ['09757058698', '13246870917', '639757058698'];
 function extractAccountNumber(ocrText: string): string | null { ... }
 ```
 
-> The business logic lives in `lib/transaction-processing.ts` and is imported by the Edge Function. It can also be unit-tested independently with Vitest.
+> The business logic lives in `supabase/functions/_shared/transaction-processing.ts` and is imported by the Edge Functions. It is unit-tested with Vitest.
 
 ---
 
 ## 4. Database Schema
+
+> Implementation note (2026-03-22): the live schema now includes `gocash.operator_platforms`, `wallets.color`, `wallets.is_active`, a unique partial index on `(operator_id, reference_number)` for non-null references, and private storage paths in `transactions.image_url`. The SQL examples below are historical design scaffolding and should be read together with the migrations in `supabase/migrations/`.
 
 ### 4.1 Entity Relationship Diagram
 
@@ -804,7 +806,7 @@ interface ProcessTransactionRequest {
 
 interface ProcessTransactionResponse {
   transaction_id: string;
-  status: 'awaiting_confirmation';
+  status: 'awaiting_confirm' | 'confirmed' | 'edited';
   // Pre-filled data for the review screen:
   platform: 'GCash' | 'MariBank' | 'Unknown' | string;
   transaction_type: 'Cash In' | 'Cash Out' | 'Telco Load' | 'Unknown' | string;
@@ -826,11 +828,10 @@ interface ProcessTransactionResponse {
 // 7. calculateProfit(transaction_type, amount) → net_profit
 //    (amount extracted from ocrText first — hard stop if not found or ≤ 0)
 // 8. extractAccountNumber(ocrText) → account_number | null
-// 9. Call OpenAI gpt-4.1-mini → { date, reference_number }
-//    (hard stop if date cannot be parsed)
-// 10. Upsert transaction record with all extracted fields
-//     Dedup key: UNIQUE(operator_id, reference_number)
-//     Status → 'awaiting_confirmation'
+// 9. Return existing record immediately if a duplicate reference already exists
+// 10. Insert transaction record with all extracted fields
+//     Dedup guard: unique partial index on (operator_id, reference_number)
+//     Status → 'awaiting_confirm'
 // 11. Return ProcessTransactionResponse
 ```
 
@@ -912,7 +913,7 @@ const walletSub = supabase
 
 ## 6. Business Logic Reference
 
-All business logic lives in `lib/transaction-processing.ts` — pure TypeScript, no Node.js dependencies, importable by Edge Functions and unit-testable with Vitest.
+All business logic lives in `supabase/functions/_shared/transaction-processing.ts` — pure TypeScript, shared by the Edge Functions, and unit-testable with Vitest.
 
 ### 6.1 Platform Detection
 
@@ -1009,7 +1010,7 @@ function computeDeltas(rule: TransactionRule, amount: number, profit: number) {
 | Account number not found | Soft failure — `account_number: null`, processing continues |
 | Platform unknown | Soft failure — operator selects on review screen |
 | Type unknown | Soft failure — operator selects on review screen |
-| Duplicate reference_number | Upsert — updates existing record, no duplicate |
+| Duplicate reference_number | Return the existing transaction; do not apply wallet mutations twice |
 
 
 ## 7. App Store Distribution
