@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { AuthCallbackListener } from "@/components/auth-callback-listener";
 import { ShareIntentListener } from "@/components/share-intent-listener";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -36,6 +37,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#0a0a0a" />
       </head>
       <body className="min-h-dvh bg-[var(--color-background)] text-[var(--color-foreground)] antialiased">
+        <AuthCallbackListener />
         <ShareIntentListener />
         {children}
       </body>
