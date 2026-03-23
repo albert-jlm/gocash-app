@@ -63,9 +63,9 @@ Platform detection hints:
 - MariBank: purple/blue branding, "MariBank", "mari"
 - Maya: "Maya", "PayMaya", teal branding
 
-Transaction type rules (from the OPERATOR's perspective):
-- "Cash In": customer gave the operator CASH and received e-wallet credit (cash enters operator's drawer)
-- "Cash Out": customer gave e-wallet credit and received CASH from the operator (cash leaves operator's drawer)
+Transaction type rules (from the CUSTOMER's perspective):
+- "Cash In": customer gives the operator CASH and receives e-wallet credit; on the operator's receipt this is usually "Send Money", "You sent", or "Sent to"
+- "Cash Out": customer gives the operator e-wallet credit and receives CASH; on the operator's receipt this is usually "You received"
 - "Telco Load": mobile prepaid load purchase (Globe, Smart, DITO, TNT, Sun)
 - "Bills Payment": utility/bill payment transaction
 - "Bank Transfer": bank-to-bank or e-wallet-to-bank transfer

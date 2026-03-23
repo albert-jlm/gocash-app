@@ -21,9 +21,9 @@ export interface TransactionRule {
 }
 
 export interface WalletDelta {
-platform_wallet_name: string;
-platform_delta: number;
-cash_delta: number;
+  platform_wallet_name: string;
+  platform_delta: number;
+  cash_delta: number;
 }
 
 export function detectPlatform(text: string): Platform {
@@ -40,16 +40,16 @@ export function detectType(text: string): TransactionType {
   if (
     t.includes("cash in") ||
     t.includes("cashin") ||
-    t.includes("you received")
+    t.includes("send money") ||
+    t.includes("you sent") ||
+    t.includes("sent to")
   )
     return "Cash In";
 
   if (
     t.includes("cash out") ||
     t.includes("cashout") ||
-    t.includes("send money") ||
-    t.includes("you sent") ||
-    t.includes("sent to")
+    t.includes("you received")
   )
     return "Cash Out";
 
@@ -104,8 +104,30 @@ export function calculateProfit(
   if (!rule || (rule.profit_rate === null && rule.profit_minimum === null))
     return 0;
 
-  let profit = rule.profit_rate ? (amount * rule.profit_rate) / 100 : 0;
-  if (rule.profit_minimum) profit = Math.max(profit, rule.profit_minimum);
+  const ratePercent = rule.profit_rate ?? 0;
+  const minimum = rule.profit_minimum ?? 0;
+  const rate = ratePercent / 100;
+
+  let profit = rate > 0 ? amount * rate : 0;
+
+  // Cash Out screenshots may show the full amount already including the fee.
+  // When the amount cleanly divides back to a likely whole-peso base, compute
+  // the fee from that base instead of charging the fee twice.
+  if (txType === "Cash Out" && rate > 0) {
+    const rawBase = amount / (1 + rate);
+    const isGrossAmountWithIncludedFee =
+      rawBase > 250 && Math.abs(rawBase - Math.round(rawBase)) < 0.000001;
+
+    if (isGrossAmountWithIncludedFee) {
+      profit = rawBase * rate;
+    }
+  }
+
+  if (txType === "Cash In" || txType === "Cash Out") {
+    return Math.ceil(Math.max(profit, minimum));
+  }
+
+  if (minimum) profit = Math.max(profit, minimum);
 
   return Math.round(profit * 100) / 100;
 }
