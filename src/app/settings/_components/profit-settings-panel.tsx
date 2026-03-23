@@ -21,12 +21,12 @@ const TYPE_META: Record<string, { Icon: React.ElementType; color: string; desc: 
   "Cash In": {
     Icon: ArrowDownRight,
     color: "#10B981",
-    desc: "Customer sends wallet funds to you and you release cash.",
+    desc: "Customer gives you cash and you send wallet funds.",
   },
   "Cash Out": {
     Icon: ArrowUpLeft,
     color: "#EF4444",
-    desc: "Customer gives cash and you send wallet funds.",
+    desc: "Customer sends wallet funds to you and you release cash.",
   },
   "Telco Load": {
     Icon: Phone,
