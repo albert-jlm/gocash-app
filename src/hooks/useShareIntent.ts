@@ -19,9 +19,14 @@ export function useShareIntent() {
           (event) => {
             if (event.files?.length) {
               const file = event.files[0];
+              const normalizedUri =
+                file.uri.startsWith("file://") || file.uri.startsWith("/")
+                  ? Capacitor.convertFileSrc(file.uri)
+                  : file.uri;
+
               sessionStorage.setItem(
                 "shared_image",
-                JSON.stringify({ uri: file.uri, mimeType: file.mimeType })
+                JSON.stringify({ uri: normalizedUri, mimeType: file.mimeType })
               );
               router.push("/capture");
             }

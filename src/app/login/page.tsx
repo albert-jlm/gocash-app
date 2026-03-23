@@ -85,7 +85,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[390px] mx-auto px-5 relative overflow-hidden">
+    <div className="relative mx-auto flex min-h-dvh w-full max-w-xl flex-col overflow-hidden bg-[#0a0a0a] px-5 text-foreground sm:px-6">
       <div
         className="absolute top-[15%] left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
         style={{

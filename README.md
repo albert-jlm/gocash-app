@@ -47,6 +47,7 @@ Notes:
 | [changelog.md](changelog.md) | Running log of changes |
 | [AUDITS.md](AUDITS.md) | Audit history, gate results, and follow-up actions |
 | [HUMAN_GUIDE.md](HUMAN_GUIDE.md) | Human-in-the-loop workflow guide |
+| [docs/release/m1-submission-checklist.md](docs/release/m1-submission-checklist.md) | Final native signing and store-submission checklist for closing Milestone 1 |
 | [docs/workflow.md](docs/workflow.md) | Vibe coding workflow reference |
 
 ---

@@ -15,6 +15,9 @@ const config: CapacitorConfig = {
       // iOS: added to Info.plist automatically by Capacitor
       // Android: added to AndroidManifest.xml automatically
     },
+    CapacitorShareTarget: {
+      appGroupId: "group.com.gocash.tracker.share",
+    },
   },
   ios: {
     scheme: "GoCash Tracker",
