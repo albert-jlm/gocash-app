@@ -62,4 +62,11 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION gocash.delete_transaction_atomic TO authenticated;
+GRANT EXECUTE ON FUNCTION gocash.delete_transaction_atomic(
+  UUID,
+  UUID,
+  TEXT,
+  TEXT,
+  NUMERIC,
+  NUMERIC
+) TO authenticated;
