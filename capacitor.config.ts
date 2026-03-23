@@ -20,7 +20,7 @@ const config: CapacitorConfig = {
     },
   },
   ios: {
-    scheme: "GoCash Tracker",
+    scheme: "gocashtracker",
   },
   android: {
     // Allow cleartext for local dev server only

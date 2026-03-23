@@ -6,13 +6,14 @@ import { Loader2, Mail, KeyRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
-import { resolveAuthDestination } from "@/lib/auth";
+import { getAuthRedirectUrl, resolveAuthDestination, startGoogleSignIn } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -59,7 +60,7 @@ export default function LoginPage() {
       email,
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + "/",
+        emailRedirectTo: getAuthRedirectUrl(),
       },
     });
 
@@ -188,6 +189,41 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleSendLink} className="space-y-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  setError(null);
+                  setGoogleLoading(true);
+
+                  try {
+                    await startGoogleSignIn();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Could not start Google sign-in.");
+                    setGoogleLoading(false);
+                  }
+                }}
+                disabled={loading || googleLoading}
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.06] text-sm font-semibold text-white transition-colors hover:bg-white/[0.08] disabled:opacity-50"
+              >
+                {googleLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                    <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6s2.7-6 5.9-6c1.8 0 3 .8 3.7 1.5l2.5-2.4C16.6 3.5 14.5 2.6 12 2.6 6.9 2.6 2.8 6.8 2.8 12s4.1 9.4 9.2 9.4c5.3 0 8.8-3.7 8.8-9 0-.6-.1-1.1-.2-1.5H12Z" />
+                    <path fill="#34A853" d="M2.8 12c0 5.2 4.1 9.4 9.2 9.4 5.3 0 8.8-3.7 8.8-9 0-.6-.1-1.1-.2-1.5H12v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.2 0-5.9-2.7-5.9-6Z" />
+                    <path fill="#FBBC05" d="M4.9 7.4 8.1 9.8C9 7.6 10.4 6 12 6c1.8 0 3 .8 3.7 1.5l2.5-2.4C16.6 3.5 14.5 2.6 12 2.6 8.1 2.6 4.7 4.8 3.1 8.1l1.8-.7Z" />
+                    <path fill="#4285F4" d="M3.1 8.1A9.5 9.5 0 0 0 2.8 12c0 1.5.4 2.9 1 4.2l3.2-2.5A5.9 5.9 0 0 1 6.1 12c0-.8.2-1.5.5-2.2L3.1 8.1Z" />
+                  </svg>
+                )}
+                Continue with Google
+              </button>
+
+              <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.28em] text-muted-foreground/50">
+                <span className="h-px flex-1 bg-white/[0.08]" />
+                Or
+                <span className="h-px flex-1 bg-white/[0.08]" />
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   Email address

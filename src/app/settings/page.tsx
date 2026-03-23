@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2, LogOut } from "lucide-react";
+import { ArrowLeft, ChevronRight, Loader2, UserRound } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   buildFinancialSettingsHref,
@@ -13,7 +13,6 @@ import {
 import { PlatformsPanel } from "./_components/platforms-panel";
 import { ProfitSettingsPanel } from "./_components/profit-settings-panel";
 import { WalletsPanel } from "./_components/wallets-panel";
-import { supabase } from "@/lib/supabase/client";
 
 const TAB_LABELS: Record<FinancialSettingsTab, { title: string; desc: string }> = {
   wallets: {
@@ -35,8 +34,6 @@ function SettingsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [signingOut, setSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const activeTab = coerceFinancialSettingsTab(searchParams.get("tab"));
   const restorePlatformName = searchParams.get("restorePlatform");
@@ -50,21 +47,6 @@ function SettingsPageContent() {
 
   function clearRestorePlatform() {
     router.replace(buildFinancialSettingsHref("platforms"));
-  }
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    setSignOutError(null);
-
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      setSignOutError(error.message);
-      setSigningOut(false);
-      return;
-    }
-
-    router.replace("/login");
   }
 
   if (loading || !operatorId) {
@@ -112,26 +94,21 @@ function SettingsPageContent() {
       </header>
 
       <section className="flex-1 px-4 pb-24 sm:px-6 lg:px-8">
-        <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">Account</p>
+        <Link
+          href="/profile"
+          className="mb-4 flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/12">
+            <UserRound className="h-5 w-5 text-emerald-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Profile</p>
             <p className="truncate text-xs text-muted-foreground">
               {session?.user.email ?? "Signed in"}
             </p>
           </div>
-          <button
-            onClick={() => void handleSignOut()}
-            disabled={signingOut}
-            className="inline-flex items-center gap-2 rounded-xl bg-white/[0.07] px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.1] disabled:opacity-50"
-          >
-            {signingOut ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <LogOut className="h-4 w-4" />
-            )}
-            Log out
-          </button>
-        </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+        </Link>
 
         <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3">
           <div>
@@ -145,10 +122,6 @@ function SettingsPageContent() {
             Open →
           </Link>
         </div>
-
-        {signOutError && (
-          <p className="mb-4 text-xs text-red-400">{signOutError}</p>
-        )}
 
         {activeTab === "wallets" && <WalletsPanel operatorId={operatorId} />}
         {activeTab === "platforms" && (
