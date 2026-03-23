@@ -74,36 +74,23 @@ export default function OnboardingPage() {
     setSaving(true);
 
     try {
-      let operatorId: string;
+      // Uses a SECURITY DEFINER RPC that handles three cases:
+      //   1. Existing operator with matching user_id → returns id
+      //   2. Orphaned operator (deleted auth user) with same email → re-links
+      //   3. No operator at all → creates new one
+      const { data: rpcResult, error: rpcError } = await supabase
+        .rpc("upsert_operator", {
+          p_user_id: session.user.id,
+          p_email: session.user.email ?? "",
+          p_name: name.trim(),
+          p_phone: phone.trim() || null,
+        });
 
-      const { data: existing } = await supabase
-        .from("operators")
-        .select("id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
-      if (existing) {
-        operatorId = existing.id;
-      } else {
-        const { data: op, error: opError } = await supabase
-          .from("operators")
-          .insert({
-            user_id: session.user.id,
-            email: session.user.email ?? "",
-            name: name.trim(),
-            phone: phone.trim() || null,
-            subscription_tier: "free",
-            is_active: true,
-            settings: {},
-          })
-          .select("id")
-          .single();
-
-        if (opError || !op) {
-          throw new Error(opError?.message ?? "Could not create your account");
-        }
-        operatorId = op.id;
+      if (rpcError || !rpcResult) {
+        throw new Error(rpcError?.message ?? "Could not create your account");
       }
+
+      const operatorId: string = rpcResult;
 
       const { data: existingPlatforms } = await supabase
         .from("operator_platforms")
