@@ -106,8 +106,13 @@ serve(async (req: Request) => {
     );
 
     if (deleteError) {
-      console.error("Atomic delete failed:", deleteError.message);
-      return jsonResponse(req, { error: "Failed to delete transaction" }, 500);
+      const deleteErrorMessage =
+        [deleteError.message, deleteError.details, deleteError.hint]
+          .filter((value): value is string => Boolean(value && value.trim()))
+          .join(" | ") || "Failed to delete transaction";
+
+      console.error("Atomic delete failed:", deleteErrorMessage);
+      return jsonResponse(req, { error: deleteErrorMessage }, 500);
     }
 
     return jsonResponse(req, {
