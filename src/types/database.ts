@@ -238,6 +238,15 @@ export interface Database {
         };
         Returns: Json;
       };
+      upsert_operator: {
+        Args: {
+          p_user_id: string;
+          p_email: string;
+          p_name: string;
+          p_phone?: string | null;
+        };
+        Returns: string;
+      };
     };
   };
 }
