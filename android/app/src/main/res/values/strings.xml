@@ -3,5 +3,5 @@
     <string name="app_name">GoCash Tracker</string>
     <string name="title_activity_main">GoCash Tracker</string>
     <string name="package_name">com.gocash.tracker</string>
-    <string name="custom_url_scheme">com.gocash.tracker</string>
+    <string name="custom_url_scheme">gocashtracker</string>
 </resources>

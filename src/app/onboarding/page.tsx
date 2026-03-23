@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { BUILTIN_PLATFORM_NAMES, getDefaultWalletColor } from "@/lib/platforms";
+import { resolveAuthDestination } from "@/lib/auth";
 
 const DEFAULT_RULES = [
   { transaction_type: "Cash In",         platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
@@ -36,25 +37,35 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      if (!s) {
+    let cancelled = false;
+
+    async function init() {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      const { destination } = await resolveAuthDestination(currentSession);
+      if (cancelled) return;
+
+      if (destination === "/login") {
         router.replace("/login");
-      } else {
-        supabase
-          .from("operators")
-          .select("id")
-          .eq("user_id", s.user.id)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (data) {
-              router.replace("/");
-            } else {
-              setSession(s);
-              setCheckingSession(false);
-            }
-          });
+        return;
       }
-    });
+
+      if (destination === "/") {
+        router.replace("/");
+        return;
+      }
+
+      setSession(currentSession);
+      setCheckingSession(false);
+    }
+
+    void init();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   async function handleFinish() {

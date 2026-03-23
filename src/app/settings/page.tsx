@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, Loader2, UserRound } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   buildFinancialSettingsHref,
@@ -94,6 +94,22 @@ function SettingsPageContent() {
       </header>
 
       <section className="flex-1 px-4 pb-24 sm:px-6 lg:px-8">
+        <Link
+          href="/profile"
+          className="mb-4 flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3 transition-colors hover:bg-white/[0.05]"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/12">
+            <UserRound className="h-5 w-5 text-emerald-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Profile</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {session?.user.email ?? "Signed in"}
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+        </Link>
+
         <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3">
           <div>
             <p className="text-sm font-semibold">Notifications</p>

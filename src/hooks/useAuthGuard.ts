@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { resolveAuthDestination } from "@/lib/auth";
 
 interface AppSession {
   session: Session | null;
@@ -18,44 +19,51 @@ export function useAuthGuard(): AppSession {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function init() {
-      const {
-        data: { session: s },
-      } = await supabase.auth.getSession();
+    let cancelled = false;
 
-      if (!s) {
+    async function syncAuth(nextSession: Session | null) {
+      setLoading(true);
+
+      try {
+        const { destination, operatorId: nextOperatorId } = await resolveAuthDestination(nextSession);
+        if (cancelled) return;
+
+        setSession(nextSession);
+        setOperatorId(nextOperatorId);
+        setLoading(false);
+
+        if (destination !== "/") {
+          router.replace(destination);
+        }
+      } catch {
+        if (cancelled) return;
+        setSession(null);
+        setOperatorId(null);
+        setLoading(false);
         router.replace("/login");
-        return;
       }
-
-      setSession(s);
-
-      const { data: op } = await supabase
-        .from("operators")
-        .select("id")
-        .eq("user_id", s.user.id)
-        .maybeSingle();
-
-      if (!op) {
-        router.replace("/onboarding");
-        return;
-      }
-
-      setOperatorId(op.id);
-      setLoading(false);
     }
 
-    init();
+    async function init() {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      void syncAuth(currentSession);
+    }
+
+    void init();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, s) => {
-      if (event === "SIGNED_OUT" || !s) {
-        router.replace("/login");
-      }
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      void syncAuth(nextSession);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   return { session, operatorId, loading };
