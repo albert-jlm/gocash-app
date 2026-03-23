@@ -16,16 +16,16 @@ export const TRANSACTION_TYPES = [
 export const DEFAULT_PLATFORM_RULE_TEMPLATES = [
   {
     transaction_type: "Cash In",
-    delta_platform_mult: 1,
-    delta_cash_amount_mult: -1,
+    delta_platform_mult: -1,
+    delta_cash_amount_mult: 1,
     delta_cash_mult: 1,
     profit_rate: 2,
     profit_minimum: 5,
   },
   {
     transaction_type: "Cash Out",
-    delta_platform_mult: -1,
-    delta_cash_amount_mult: 1,
+    delta_platform_mult: 1,
+    delta_cash_amount_mult: -1,
     delta_cash_mult: 1,
     profit_rate: 2,
     profit_minimum: 5,
