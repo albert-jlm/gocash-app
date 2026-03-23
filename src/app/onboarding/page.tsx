@@ -7,17 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import { BUILTIN_PLATFORM_NAMES, getDefaultWalletColor } from "@/lib/platforms";
+import {
+  BUILTIN_PLATFORM_NAMES,
+  DEFAULT_PLATFORM_RULE_TEMPLATES,
+  getDefaultWalletColor,
+} from "@/lib/platforms";
 import { resolveAuthDestination } from "@/lib/auth";
 
-const DEFAULT_RULES = [
-  { transaction_type: "Cash In",         platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
-  { transaction_type: "Cash Out",        platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
-  { transaction_type: "Telco Load",      platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 3,    profit_minimum: 3  },
-  { transaction_type: "Bills Payment",   platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5  },
-  { transaction_type: "Bank Transfer",   platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5  },
-  { transaction_type: "Profit Remittance", platform: "all", delta_platform_mult: 0, delta_cash_amount_mult: -1, delta_cash_mult: 0, profit_rate: null, profit_minimum: null },
-];
+const DEFAULT_RULES = DEFAULT_PLATFORM_RULE_TEMPLATES.map((rule) => ({
+  ...rule,
+  platform: "all",
+}));
 
 export default function OnboardingPage() {
   const router = useRouter();

@@ -9,8 +9,8 @@ import {
 } from "../../../supabase/functions/_shared/transaction-processing";
 
 const RULES: TransactionRule[] = [
-  { transaction_type: "Cash In",           platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5,    is_active: true },
-  { transaction_type: "Cash Out",          platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5,    is_active: true },
+  { transaction_type: "Cash In",           platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5,    is_active: true },
+  { transaction_type: "Cash Out",          platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5,    is_active: true },
   { transaction_type: "Telco Load",        platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 3,    profit_minimum: 3,    is_active: true },
   { transaction_type: "Bills Payment",     platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5,    is_active: true },
   { transaction_type: "Bank Transfer",     platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5,    is_active: true },
@@ -52,13 +52,13 @@ describe("detectPlatform", () => {
 describe("detectType", () => {
   it("detects Cash In", () => {
     expect(detectType("Cash In PHP 500.00")).toBe("Cash In");
-    expect(detectType("You received PHP 500.00")).toBe("Cash In");
+    expect(detectType("You sent PHP 500.00")).toBe("Cash In");
+    expect(detectType("Send Money to Juan")).toBe("Cash In");
   });
 
   it("detects Cash Out", () => {
     expect(detectType("Cash Out to 09171234567")).toBe("Cash Out");
-    expect(detectType("You sent PHP 1,000.00")).toBe("Cash Out");
-    expect(detectType("Send Money to Juan")).toBe("Cash Out");
+    expect(detectType("You received PHP 1,000.00")).toBe("Cash Out");
   });
 
   it("detects Telco Load", () => {
@@ -85,16 +85,28 @@ describe("detectType", () => {
 });
 
 describe("calculateProfit", () => {
-  it("calculates profit using rate (amount * rate%)", () => {
+  it("calculates Cash In profit using rate (amount * rate%)", () => {
     expect(calculateProfit("Cash In", "GCash", 500, RULES)).toBe(10);
   });
 
-  it("applies minimum when rate result is lower", () => {
+  it("applies the minimum when the Cash In rate result is lower", () => {
     expect(calculateProfit("Cash In", "GCash", 100, RULES)).toBe(5);
   });
 
-  it("uses rate when higher than minimum", () => {
+  it("rounds Cash In fees up to the next peso", () => {
+    expect(calculateProfit("Cash In", "GCash", 980, RULES)).toBe(20);
+  });
+
+  it("uses the rate when Cash In is higher than minimum", () => {
     expect(calculateProfit("Cash In", "GCash", 1000, RULES)).toBe(20);
+  });
+
+  it("detects when Cash Out already includes the fee", () => {
+    expect(calculateProfit("Cash Out", "GCash", 1020, RULES)).toBe(20);
+  });
+
+  it("falls back to the visible amount when Cash Out fee is not included", () => {
+    expect(calculateProfit("Cash Out", "GCash", 1000, RULES)).toBe(20);
   });
 
   it("returns 0 for Profit Remittance (null rate and null minimum)", () => {
@@ -115,7 +127,7 @@ describe("calculateProfit", () => {
   it("matches platform-specific rules over 'all'", () => {
     const specificRules: TransactionRule[] = [
       ...RULES,
-      { transaction_type: "Cash In", platform: "GCash", delta_platform_mult: 1, delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 5, profit_minimum: 10, is_active: true },
+      { transaction_type: "Cash In", platform: "GCash", delta_platform_mult: -1, delta_cash_amount_mult: 1, delta_cash_mult: 1, profit_rate: 5, profit_minimum: 10, is_active: true },
     ];
     expect(calculateProfit("Cash In", "GCash", 500, specificRules)).toBe(25);
   });
@@ -168,21 +180,21 @@ describe("extractAccountNumber", () => {
 });
 
 describe("computeWalletDeltas", () => {
-  it("Cash In: platform up, cash down minus profit", () => {
+  it("Cash In: platform down, cash up with profit added", () => {
     const result = computeWalletDeltas("Cash In", "GCash", 500, 10, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",
-      platform_delta: 500,
-      cash_delta: -490,
+      platform_delta: -500,
+      cash_delta: 510,
     });
   });
 
-  it("Cash Out: platform down, cash up plus profit", () => {
-    const result = computeWalletDeltas("Cash Out", "GCash", 1000, 20, RULES);
+  it("Cash Out: platform up, cash down after subtracting the fee", () => {
+    const result = computeWalletDeltas("Cash Out", "GCash", 1020, 20, RULES);
     expect(result).toEqual({
       platform_wallet_name: "GCash",
-      platform_delta: -1000,
-      cash_delta: 1020,
+      platform_delta: 1020,
+      cash_delta: -1000,
     });
   });
 
