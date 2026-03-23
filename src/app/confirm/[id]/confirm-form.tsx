@@ -215,7 +215,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   if (authLoading || loading || platformsLoading) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto">
+      <div className="mx-auto flex min-h-dvh w-full max-w-4xl items-center justify-center bg-background px-5">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
           <p className="text-sm text-muted-foreground">Loading transaction…</p>
@@ -226,7 +226,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   if (fetchError) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto px-5">
+      <div className="mx-auto flex min-h-dvh w-full max-w-4xl items-center justify-center bg-background px-5">
         <div className="text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
           <p className="text-sm text-red-400">{fetchError}</p>
@@ -237,8 +237,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+    <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col bg-background text-foreground">
+      <header className="flex items-center gap-3 px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
         <Link
           href={`/transactions?id=${transactionId}`}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -251,7 +251,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </header>
 
-      <section className="px-5 mb-4">
+      <section className="mb-4 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2.5 bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3">
           <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
@@ -263,7 +263,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </section>
 
-      <section className="px-5 flex-1">
+      <section className="flex-1 px-4 sm:px-6 lg:px-8">
         {saveError && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 mb-4">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
@@ -304,7 +304,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             </Select>
           </FieldRow>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FieldRow label="Amount">
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>

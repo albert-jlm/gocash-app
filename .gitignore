@@ -29,10 +29,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# Capacitor
-ios/
-android/
-
 # Logs
 *.log
 npm-debug.log*

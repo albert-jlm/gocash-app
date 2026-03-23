@@ -1,7 +1,7 @@
 # Architecture
 
 > This document is maintained by Claude. Update it after adding major features or reaching new milestones.
-> Last updated: 2026-03-22
+> Last updated: 2026-03-23
 
 ---
 
@@ -49,6 +49,7 @@ GoCash App is a fully self-contained cross-platform mobile application (Next.js 
 | Supabase Storage | Stores original transaction screenshots | Supabase |
 | Supabase Realtime | Live wallet + transaction status sync to PWA | Supabase |
 | Capacitor Shell | Wraps Next.js static export for iOS/Android native distribution | Capacitor |
+| Native Share Entry | Android share target + iOS Share Extension hand off screenshots into the app capture flow | `src/hooks/useShareIntent.ts`, `ios/App/ShareExtension/` |
 
 ---
 
@@ -56,7 +57,7 @@ GoCash App is a fully self-contained cross-platform mobile application (Next.js 
 
 ### Phase 1 — Transaction Processing
 
-1. Operator captures/selects screenshot in the PWA
+1. Operator captures/selects a screenshot in-app, or shares a screenshot from another app into GoCash via Android share target / iOS Share Extension
 2. App sends the base64 image to `process-transaction`
 3. Edge Function stores the image in private Supabase Storage
 4. Edge Function runs a single GPT-4o extraction call → classify platform/type → calculate profit → extract account → insert draft transaction (status: `awaiting_confirm`)

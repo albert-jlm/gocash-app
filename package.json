@@ -10,7 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cap:sync": "next build && npx cap sync",
+    "cap:sync": "next build && npx cap sync && node scripts/post-cap-sync.mjs",
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android"
   },
