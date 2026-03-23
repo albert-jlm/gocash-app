@@ -22,6 +22,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="auth"
+                    android:scheme="@string/custom_url_scheme" />
+            </intent-filter>
+
             <!-- Receive shared images (screenshots from GCash/MariBank) -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
