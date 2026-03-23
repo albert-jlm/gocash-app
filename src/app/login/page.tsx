@@ -6,6 +6,7 @@ import { Loader2, Mail, KeyRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
+import { resolveAuthDestination } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,23 +18,36 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.replace("/");
-      } else {
+    let cancelled = false;
+
+    async function syncAuth(session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) {
+      const { destination } = await resolveAuthDestination(session);
+      if (cancelled) return;
+
+      if (destination === "/login") {
         setCheckingSession(false);
+        return;
       }
+
+      router.replace(destination);
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      void syncAuth(session);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) {
-        router.replace("/");
+        void syncAuth(session);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   async function handleSendLink(e: React.FormEvent) {
@@ -44,7 +58,7 @@ export default function LoginPage() {
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: false,
+        shouldCreateUser: true,
         emailRedirectTo: window.location.origin + "/",
       },
     });
@@ -212,7 +226,7 @@ export default function LoginPage() {
               </button>
 
               <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
-                No password needed — we&apos;ll email you a one-tap link
+                No password needed. New operators finish setup in onboarding after the magic link.
               </p>
             </form>
           )}
