@@ -58,8 +58,8 @@ function SettingsPageContent() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[390px] flex-col bg-background text-foreground">
-      <header className="px-5 pb-4 pt-14">
+    <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col bg-background text-foreground">
+      <header className="px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -93,7 +93,7 @@ function SettingsPageContent() {
         </div>
       </header>
 
-      <section className="flex-1 px-5 pb-24">
+      <section className="flex-1 px-4 pb-24 sm:px-6 lg:px-8">
         <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.04] px-4 py-3">
           <div>
             <p className="text-sm font-semibold">Notifications</p>

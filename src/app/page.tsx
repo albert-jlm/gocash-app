@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, Settings, ArrowDownRight, ArrowUpLeft, Phone,
-  Building2, Home, Plus, History, Zap, TrendingDown,
+  Building2, Zap, TrendingDown,
   CreditCard,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { useShareIntent } from "@/hooks/useShareIntent";
 import { supabase } from "@/lib/supabase/client";
 import { getWalletColor, sortWallets } from "@/lib/platforms";
+import { AppBottomNav } from "@/components/app-bottom-nav";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
@@ -67,7 +67,6 @@ function getTimeOfDay(): string {
 
 export default function Dashboard() {
   const { operatorId, loading: authLoading } = useAuthGuard();
-  useShareIntent();
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [todayStats, setTodayStats] = useState({ count: 0, total: 0, earnings: 0 });
@@ -106,7 +105,24 @@ export default function Dashboard() {
   const handleWalletScroll = useCallback(() => {
     const el = walletScrollRef.current;
     if (!el) return;
-    setActiveWallet(Math.round(el.scrollLeft / 292));
+
+    const cards = Array.from(el.children) as HTMLElement[];
+    if (cards.length === 0) return;
+
+    const viewportCenter = el.scrollLeft + el.clientWidth / 2;
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    cards.forEach((card, index) => {
+      const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+      const distance = Math.abs(cardCenter - viewportCenter);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+
+    setActiveWallet(closestIndex);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -186,8 +202,8 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-5 flex items-center justify-between">
+    <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col bg-background text-foreground">
+      <header className="flex items-center justify-between px-4 pb-5 pt-12 sm:px-6 sm:pt-14 lg:px-8">
         <div>
           <p className="text-[11px] font-medium tracking-widest uppercase text-muted-foreground">
             Good {getTimeOfDay()}
@@ -206,13 +222,13 @@ export default function Dashboard() {
         <div
           ref={walletScrollRef}
           onScroll={handleWalletScroll}
-          className="flex gap-3 px-5 overflow-x-auto pb-2 cursor-grab"
+          className="flex gap-4 overflow-x-auto px-4 pb-2 cursor-grab sm:px-6 lg:px-8"
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {wallets.map((w) => {
             const style = getWalletColor(w.color);
             return (
-              <div key={w.id} className="flex-shrink-0 w-[280px]" style={{ scrollSnapAlign: "start" }}>
+              <div key={w.id} className="w-[min(84vw,20rem)] flex-shrink-0 sm:w-[20rem] lg:w-[22rem]" style={{ scrollSnapAlign: "start" }}>
                 <div
                   className={`relative h-[160px] rounded-3xl bg-gradient-to-br ${style.gradient} p-6 flex flex-col justify-between overflow-hidden`}
                   style={{ boxShadow: `0 12px 40px -12px ${style.glow}` }}
@@ -256,7 +272,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      <section className="px-5 mb-5">
+      <section className="mb-5 px-4 sm:px-6 lg:px-8">
         <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
           Today
         </h2>
@@ -278,7 +294,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="px-5 mb-24">
+      <section className="mb-24 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Recent
@@ -333,26 +349,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
-        <nav className="flex items-center justify-around pointer-events-auto">
-          <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Home className="w-5 h-5 text-foreground" />
-            <span className="text-[10px] text-foreground font-medium">Home</span>
-          </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Plus className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">New</span>
-          </Link>
-          <Link href="/transactions" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <History className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">History</span>
-          </Link>
-          <Link href="/settings" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Settings className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Settings</span>
-          </Link>
-        </nav>
-      </div>
+      <AppBottomNav />
     </div>
   );
 }

@@ -512,7 +512,7 @@ export function PlatformsPanel({
 
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-5 pb-6 pt-10 sm:items-center">
-          <div className="w-full max-w-[390px] rounded-3xl border border-white/[0.08] bg-background p-5 shadow-2xl">
+          <div className="w-full max-w-md rounded-3xl border border-white/[0.08] bg-background p-5 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 rounded-2xl bg-red-500/10 p-3">
                 <Trash2 className="h-5 w-5 text-red-400" />

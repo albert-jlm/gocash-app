@@ -105,8 +105,8 @@ function NotificationsSettingsContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+    <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col bg-background text-foreground">
+      <header className="flex items-center gap-3 px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
         <Link
           href={searchParams.get("from") ?? "/settings"}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -119,7 +119,7 @@ function NotificationsSettingsContent() {
         </div>
       </header>
 
-      <section className="px-5 flex-1 space-y-4 pb-10">
+      <section className="flex-1 space-y-4 px-4 pb-10 sm:px-6 lg:px-8">
         <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl overflow-hidden">
           <div className="px-4 py-3.5 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">

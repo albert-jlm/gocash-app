@@ -127,7 +127,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
   if (fetchError || !tx) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto px-5">
+      <div className="mx-auto flex min-h-dvh w-full max-w-4xl items-center justify-center bg-background px-5">
         <div className="text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
           <p className="text-sm text-red-400">{fetchError ?? "Transaction not found"}</p>
@@ -141,8 +141,8 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
   const Icon = cfg.Icon;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+    <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col bg-background text-foreground">
+      <header className="flex items-center gap-3 px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
         <Link
           href="/transactions"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -157,7 +157,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </header>
 
-      <section className="px-5 mb-5">
+      <section className="mb-5 px-4 sm:px-6 lg:px-8">
         <div className="bg-white/[0.05] rounded-2xl p-5 flex items-center gap-4">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -176,7 +176,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </section>
 
-      <section className="px-5 flex-1">
+      <section className="flex-1 px-4 sm:px-6 lg:px-8">
         <div className="bg-white/[0.05] rounded-2xl p-4 space-y-4">
           {imageUrl && (
             <div className="space-y-2">
@@ -224,7 +224,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </section>
 
-      <div className="px-5 py-8 space-y-3">
+      <div className="space-y-3 px-4 py-8 sm:px-6 lg:px-8">
         {deleteError && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />

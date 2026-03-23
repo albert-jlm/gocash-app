@@ -189,7 +189,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto px-5">
+    <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-background px-5 text-foreground sm:px-6">
       <div className="flex items-center justify-center gap-2 pt-14 pb-8">
         <span className={`w-2 h-2 rounded-full ${step === 1 ? "bg-emerald-400" : "bg-emerald-400/40"}`} />
         <span className={`w-2 h-2 rounded-full ${step === 2 ? "bg-emerald-400" : "bg-white/20"}`} />

@@ -10,10 +10,7 @@ import {
   ArrowUpLeft,
   Phone,
   Building2,
-  Home,
-  Plus,
   History,
-  Settings,
   Zap,
   TrendingDown,
   ChevronRight,
@@ -22,6 +19,7 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { isWithinDateRange, matchesTransactionSearch } from "@/lib/transaction-filters";
 import { TRANSACTION_TYPES } from "@/lib/platforms";
+import { AppBottomNav } from "@/components/app-bottom-nav";
 
 const FILTERS = ["All", ...TRANSACTION_TYPES] as const;
 type FilterType = (typeof FILTERS)[number];
@@ -149,15 +147,15 @@ function TransactionsList() {
   const groups = groupByDate(searched);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-3">
+    <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col bg-background text-foreground">
+      <header className="px-4 pb-3 pt-12 sm:px-6 sm:pt-14 lg:px-8">
         <h1 className="text-xl font-semibold">My Transactions</h1>
         <p className="text-[12px] text-muted-foreground mt-0.5">
           {transactions.length} total
         </p>
       </header>
 
-      <div className="px-5 mb-4 space-y-3">
+      <div className="mb-4 space-y-3 px-4 sm:px-6 lg:px-8">
         <input
           type="search"
           value={searchQuery}
@@ -182,7 +180,7 @@ function TransactionsList() {
       </div>
 
       <div
-        className="flex gap-2 px-5 mb-4 overflow-x-auto"
+        className="mb-4 flex gap-2 overflow-x-auto px-4 sm:px-6 lg:px-8"
         style={{ scrollbarWidth: "none", paddingBottom: 2 }}
       >
         {FILTERS.map((f) => (
@@ -201,7 +199,7 @@ function TransactionsList() {
         ))}
       </div>
 
-      <div className="px-5 pb-32 space-y-5 flex-1">
+      <div className="flex-1 space-y-5 px-4 pb-32 sm:px-6 lg:px-8">
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-2xl bg-white/[0.05] flex items-center justify-center mb-4">
@@ -272,26 +270,7 @@ function TransactionsList() {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
-        <nav className="flex items-center justify-around pointer-events-auto">
-          <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Home className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Home</span>
-          </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Plus className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">New</span>
-          </Link>
-          <Link href="/transactions" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <History className="w-5 h-5 text-foreground" />
-            <span className="text-[10px] text-foreground font-medium">History</span>
-          </Link>
-          <Link href="/settings" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Settings className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Settings</span>
-          </Link>
-        </nav>
-      </div>
+      <AppBottomNav />
     </div>
   );
 }

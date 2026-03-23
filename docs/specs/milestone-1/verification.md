@@ -5,7 +5,7 @@
 > post-hoc verification record. All future features must spec first.
 
 **Feature:** Milestone 1 — Complete standalone GoCash Tracker app
-**Date:** 2026-03-22
+**Date:** 2026-03-23
 
 ---
 
@@ -28,8 +28,9 @@
 | Settings: platform management (add/remove) | Manual | ✅ |
 | Settings: Telegram notification toggle + chat ID | Manual | ✅ |
 | Android share intent — share screenshot from GCash app | Manual | ✅ |
+| iOS Share Extension — share screenshot from another app into GoCash | Manual / Native project review | ✅ |
 | PWA installable with manifest + icons | Manual | ✅ |
-| Capacitor iOS + Android builds | Manual | ✅ |
+| Capacitor iOS + Android projects are configured for native builds | Manual | ✅ |
 
 ---
 
@@ -39,7 +40,7 @@
 |------|--------|
 | TypeScript compiles (`pnpm typecheck`) | ✅ — zero errors |
 | Lint passes (`pnpm lint`) | ✅ |
-| Tests pass (`pnpm test`) | ✅ — 37/37 passing |
+| Tests pass (`pnpm test`) | ✅ — 64/64 passing |
 | Build succeeds (`pnpm build`) | ✅ — 15 pages exported |
 
 ---
@@ -87,7 +88,6 @@ Happy path verified end-to-end:
 
 The following were explicitly out of scope and confirmed NOT implemented:
 
-- iOS Share Extension (P2 — separate Xcode target)
 - App Store / Google Play submission
 - Push notifications (APNs + FCM)
 - Multi-operator onboarding / self-service signup
@@ -103,7 +103,7 @@ The following were explicitly out of scope and confirmed NOT implemented:
 - [x] Manual smoke test complete (end-to-end)
 - [x] Security baselines implemented (formal threat model deferred to M2)
 - [ ] PR process not followed — all committed directly to `main` (pre-workflow)
-- [x] **Milestone 1 complete — ready to proceed to Milestone 2**
+- [x] **Milestone 1 app code complete — ready for native signing/submission work, then Milestone 2**
 
 ---
 

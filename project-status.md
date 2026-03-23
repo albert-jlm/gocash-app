@@ -8,7 +8,7 @@
 ## Current Status
 
 **Active Milestone:** Milestone 1 — Cross-Platform Standalone App
-**Overall Progress:** 🟢 Core app flow implemented and repo-green — `lint`, `typecheck`, `test`, and `build` all pass after Audit #5 remediation
+**Overall Progress:** 🟢 Core app flow plus native share flows implemented and repo-green — `lint`, `typecheck`, `test`, and `build` all pass after the iOS Share Extension pass
 
 ---
 
@@ -52,14 +52,14 @@
 | Dashboard | ✅ Done | `src/app/page.tsx` — realtime wallet/transaction refresh, stored wallet colors, pending badge, today's summary, recent tx |
 | Transaction history | ✅ Done | `src/app/transactions/page.tsx` — realtime refresh, type filters, search, date-from/date-to filters |
 | Transaction detail | ✅ Done | `src/app/transactions/[id]/page.tsx` — full read-only detail with signed screenshot preview; redirects pending → confirm |
-| Settings (placeholder) | ✅ Done | `src/app/settings/page.tsx` — nav to sub-screens (not yet built) |
+| Settings workspace | ✅ Done | `src/app/settings/page.tsx` — centralized tabs for Wallets, Platforms, and Profit Settings |
 
 #### Wallet & Settings
 | Task | Status | Notes |
 |---|---|---|
-| Wallet management screen | ✅ Done | `src/app/settings/wallets/page.tsx` — gradient cards, inline balance editing, persisted color customization |
-| Profit settings (transaction rules editor) | ✅ Done | `src/app/settings/rules/page.tsx` — plain-language descriptions, rate/min editing, active toggle |
-| Platform management | ✅ Done | `src/app/settings/platforms/page.tsx` — add/reactivate custom platforms; soft-delete inactive platform + wallet + rules |
+| Wallet management screen | ✅ Done | `src/app/settings/wallets/page.tsx` redirect + centralized Wallets tab — inline balance editing, persisted color customization, Cash wallet protected |
+| Profit settings (transaction rules editor) | ✅ Done | `src/app/settings/rules/page.tsx` redirect + centralized Profit tab — grouped by wallet with rate/min editing and active toggle |
+| Platform management | ✅ Done | `src/app/settings/platforms/page.tsx` redirect + centralized Platforms tab — add/reactivate/delete platforms with dependency guards and atomic cleanup |
 | Notification settings | ✅ Done | `src/app/settings/notifications/page.tsx` — Telegram delivery preferences (`processed`, `processing_error`, chat ID); push notifications deferred |
 
 #### Native Shell & Distribution
@@ -68,19 +68,18 @@
 | Capacitor setup (iOS + Android) | ✅ Done | `capacitor.config.ts`, `com.gocash.tracker`, iOS + Android platforms added |
 | `@capacitor/camera` integration | ✅ Done | Native camera/gallery on device, browser fallback on web |
 | PWA manifest + icons | ✅ Done | `manifest.json`, favicon.svg, 192/512 PNG icons, viewport meta |
-| Android share intent | ✅ Done | `@capgo/capacitor-share-target` + intent filter in AndroidManifest + `useShareIntent` hook |
-| iOS Share Extension | ⬜ Todo | P2 — separate Xcode target |
-| App Store submission (iOS) | ⬜ Todo | |
-| Google Play submission (Android) | ⬜ Todo | |
+| Android share intent | ✅ Done | `@capgo/capacitor-share-target` + intent filter in AndroidManifest + global share listener routes shared screenshots into `/capture` |
+| iOS Share Extension | ✅ Done | Share Extension target + App Group + URL handoff + retained `shareReceived` event for cold launches |
+| App Store submission (iOS) | ⬜ Todo | External step — Apple signing, provisioning, TestFlight/App Store Connect |
+| Google Play submission (Android) | ⬜ Todo | External step — Play signing, Play Console listing, release rollout |
 
 #### Known Technical Debt
 | Item | Severity | Notes |
 |---|---|---|
 | Unknown tx type defaults to "Cash In" | Low | Safe fallback but could mis-post; operator sees it on confirm screen |
-| iOS Share Extension | Low | P2 — separate Xcode target, requires native extension |
 | Notification delivery | Low | Telegram alerts are implemented when `TELEGRAM_BOT_TOKEN` is configured; push delivery is still deferred |
 | Integration coverage | Low | Unit coverage is solid, but there is still no E2E test suite |
-| `pnpm test` — 55 tests passing | — | Shared processing, storage, filter, platform, and notification helpers covered |
+| `pnpm test` — 64 tests passing | — | Shared processing, storage, filter, platform, and notification helpers covered |
 
 ---
 
@@ -112,11 +111,12 @@
 
 ## Where We Left Off
 
-**Last session date:** 2026-03-22
-**Last completed task:** Audit follow-up: Telegram delivery in `process-transaction` for processed/error events, plus added notification helper tests.
-**Next task:** iOS Share Extension (P2), broader integration/E2E coverage, and push delivery.
+**Last session date:** 2026-03-23
+**Last completed task:** iOS Share Extension implementation, global share-intent listener, and native repo tracking cleanup.
+**Next task:** Store submission prep, broader integration/E2E coverage, and push delivery.
 **Open issues / blockers:**
-- Native assets (`cap sync`) needed before next iOS/Android build
+- Native signing, App Group capability, and store metadata must still be configured in Apple/Google consoles
+- Native compile verification from CI is still limited because Xcode package resolution needs network access
 - No E2E test coverage yet for the main mobile flows
 - Push delivery is still deferred
 
