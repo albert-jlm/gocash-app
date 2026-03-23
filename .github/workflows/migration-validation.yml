@@ -1,0 +1,58 @@
+name: Migration Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: migration-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate SQL Migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gocash_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gocash_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Bootstrap Supabase-compatible schemas
+        run: |
+          psql "host=127.0.0.1 port=5432 user=postgres dbname=gocash_ci sslmode=disable" \
+            -v ON_ERROR_STOP=1 \
+            -f .github/sql/bootstrap_supabase.sql
+
+      - name: Apply migrations
+        run: |
+          shopt -s nullglob
+          for f in supabase/migrations/*.sql; do
+            echo "Applying $(basename "$f")..."
+            psql "host=127.0.0.1 port=5432 user=postgres dbname=gocash_ci sslmode=disable" \
+              -v ON_ERROR_STOP=1 \
+              -f "$f"
+          done
+
+      - name: Smoke check migrated schema
+        run: |
+          psql "host=127.0.0.1 port=5432 user=postgres dbname=gocash_ci sslmode=disable" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT to_regclass('gocash.transactions'), to_regclass('gocash.transaction_rules'), to_regclass('gocash.operator_platforms');"

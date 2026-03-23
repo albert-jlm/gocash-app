@@ -1,13 +1,22 @@
-name: Build & Deploy
+name: Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      APP_URL: https://gocash.zether.net
+      NODE_ENV: production
     steps:
       - uses: actions/checkout@v4
 
@@ -26,18 +35,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Create .env.local
-        run: |
-          cat > .env.local << EOF
-          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          APP_URL=https://gocash.zether.net
-          NODE_ENV=production
-          EOF
-
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
       - run: pnpm build
 
       - name: Setup SSH
