@@ -36,6 +36,16 @@ interface TxDetail {
   was_edited: boolean;
 }
 
+function formatStatusLabel(tx: TxDetail): string {
+  if (tx.status === "edited") return "Saved (edited)";
+  if (tx.status === "confirmed") return "Saved";
+
+  return tx.status
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
@@ -210,7 +220,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
           )}
           <Field
             label="Status"
-            value={tx.was_edited ? "Saved (edited)" : "Saved"}
+            value={formatStatusLabel(tx)}
           />
           {tx.confirmed_at && (
             <Field
