@@ -40,6 +40,7 @@ SET search_path = gocash, public
 AS $$
 DECLARE
   v_now TIMESTAMPTZ := NOW();
+  v_audit_entity_id_type TEXT;
 BEGIN
   IF p_platform_wallet IS NOT NULL AND p_platform_delta <> 0 THEN
     UPDATE gocash.wallets
@@ -102,18 +103,46 @@ BEGIN
     RAISE EXCEPTION 'Transaction not found or operator mismatch: %', p_transaction_id;
   END IF;
 
-  INSERT INTO gocash.audit_logs (operator_id, entity_type, entity_id, action, metadata)
-  VALUES (
-    p_operator_id,
-    'transaction',
-    p_transaction_id::text,
-    'delete',
-    jsonb_build_object(
-      'deleted_by', p_user_id,
-      'deleted_at', v_now,
-      'receipt_queued', p_receipt_path IS NOT NULL AND btrim(COALESCE(p_receipt_path, '')) <> ''
-    )
-  );
+  SELECT a.atttypid::regtype::text
+  INTO v_audit_entity_id_type
+  FROM pg_attribute AS a
+  JOIN pg_class AS c
+    ON c.oid = a.attrelid
+  JOIN pg_namespace AS n
+    ON n.oid = c.relnamespace
+  WHERE n.nspname = 'gocash'
+    AND c.relname = 'audit_logs'
+    AND a.attname = 'entity_id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped;
+
+  IF v_audit_entity_id_type = 'uuid' THEN
+    INSERT INTO gocash.audit_logs (operator_id, entity_type, entity_id, action, metadata)
+    VALUES (
+      p_operator_id,
+      'transaction',
+      p_transaction_id,
+      'delete',
+      jsonb_build_object(
+        'deleted_by', p_user_id,
+        'deleted_at', v_now,
+        'receipt_queued', p_receipt_path IS NOT NULL AND btrim(COALESCE(p_receipt_path, '')) <> ''
+      )
+    );
+  ELSE
+    INSERT INTO gocash.audit_logs (operator_id, entity_type, entity_id, action, metadata)
+    VALUES (
+      p_operator_id,
+      'transaction',
+      p_transaction_id::text,
+      'delete',
+      jsonb_build_object(
+        'deleted_by', p_user_id,
+        'deleted_at', v_now,
+        'receipt_queued', p_receipt_path IS NOT NULL AND btrim(COALESCE(p_receipt_path, '')) <> ''
+      )
+    );
+  END IF;
 
   RETURN jsonb_build_object('success', true);
 END;
