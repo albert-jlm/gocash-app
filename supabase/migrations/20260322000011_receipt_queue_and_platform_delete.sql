@@ -87,6 +87,13 @@ BEGIN
       updated_at = v_now;
   END IF;
 
+  -- Clear last_transaction_id references so the FK doesn't block deletion
+  UPDATE gocash.wallets
+  SET last_transaction_id = NULL,
+      updated_at = v_now
+  WHERE operator_id = p_operator_id
+    AND last_transaction_id = p_transaction_id;
+
   DELETE FROM gocash.transactions
   WHERE id = p_transaction_id
     AND operator_id = p_operator_id;
