@@ -20,6 +20,8 @@ import { supabase } from "@/lib/supabase/client";
 import { isWithinDateRange, matchesTransactionSearch } from "@/lib/transaction-filters";
 import { TRANSACTION_TYPES } from "@/lib/platforms";
 import { AppBottomNav } from "@/components/app-bottom-nav";
+import { SkeletonTransactionList } from "@/components/skeleton";
+import { consumeStoredToast } from "@/lib/toast-store";
 
 const FILTERS = ["All", ...TRANSACTION_TYPES] as const;
 type FilterType = (typeof FILTERS)[number];
@@ -89,6 +91,8 @@ function TransactionsList() {
   const [dateTo, setDateTo] = useState("");
   const deferredSearch = useDeferredValue(searchQuery);
 
+  useEffect(() => { consumeStoredToast(); }, []);
+
   const fetchData = useCallback(async () => {
     if (!operatorId) return;
     setDataLoading(true);
@@ -128,9 +132,10 @@ function TransactionsList() {
 
   if (authLoading || dataLoading) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-      </div>
+      <>
+        <SkeletonTransactionList />
+        <AppBottomNav />
+      </>
     );
   }
 
@@ -148,7 +153,7 @@ function TransactionsList() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col bg-background text-foreground">
-      <header className="px-4 pb-3 pt-12 sm:px-6 sm:pt-14 lg:px-8">
+      <header className="px-4 pb-3 pt-safe sm:px-6 lg:px-8">
         <h1 className="text-xl font-semibold">My Transactions</h1>
         <p className="text-[12px] text-muted-foreground mt-0.5">
           {transactions.length} total
@@ -188,7 +193,7 @@ function TransactionsList() {
             key={f}
             onClick={() => setActiveFilter(f)}
             className={[
-              "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all",
+              "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all tap-scale",
               activeFilter === f
                 ? "bg-emerald-500 text-white shadow-sm shadow-emerald-900/40"
                 : "bg-white/[0.07] text-muted-foreground hover:bg-white/[0.11]",
@@ -211,8 +216,8 @@ function TransactionsList() {
             </Link>
           </div>
         ) : (
-          groups.map((group) => (
-            <div key={group.key}>
+          groups.map((group, gi) => (
+            <div key={group.key} className="animate-fade-up" style={{ animationDelay: `${Math.min(gi, 3) * 80}ms` }}>
               <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">
                 {group.label}
               </h2>
@@ -228,8 +233,8 @@ function TransactionsList() {
                   return (
                     <Link
                       key={tx.id}
-                      href={`/transactions?id=${tx.id}`}
-                      className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03]"
+                      href={`/transactions/?id=${tx.id}`}
+                      className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] hover:bg-white/[0.02] tap-scale"
                     >
                       <div
                         className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
