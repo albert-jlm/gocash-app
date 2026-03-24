@@ -10,6 +10,8 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
+  Upload,
+  CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { Capacitor } from "@capacitor/core";
@@ -18,6 +20,59 @@ import { buildFinancialSettingsHref } from "@/lib/platforms";
 import { AppBottomNav } from "@/components/app-bottom-nav";
 
 const isNative = Capacitor.isNativePlatform();
+
+const PROCESSING_STEPS = [
+  { icon: Upload, label: "Uploading screenshot…", sub: "Preparing image for analysis" },
+  { icon: Sparkles, label: "AI is reading your receipt…", sub: "Extracting transaction details" },
+  { icon: CheckCircle2, label: "Almost done…", sub: "Finalizing results" },
+];
+
+function ProcessingOverlay() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setStep(1), 1500);
+    const t2 = setTimeout(() => setStep(2), 4000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
+  const { icon: StepIcon, label, sub } = PROCESSING_STEPS[step];
+  const progress = step === 0 ? 33 : step === 1 ? 66 : 90;
+
+  return (
+    <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-50 animate-fade-in">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse 50% 40% at 50% 50%, rgba(16,185,129,0.06) 0%, transparent 70%)",
+          animation: "pulse-glow 3s ease-in-out infinite",
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col items-center">
+        <div
+          key={step}
+          className="w-[72px] h-[72px] rounded-2xl bg-white/[0.07] flex items-center justify-center mb-6 animate-scale-in"
+        >
+          {step < 2 ? (
+            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+          ) : (
+            <StepIcon className="w-8 h-8 text-emerald-400" />
+          )}
+        </div>
+        <p className="text-base font-semibold mb-1.5">{label}</p>
+        <p className="text-sm text-muted-foreground mb-8">{sub}</p>
+
+        <div className="w-48 h-1 rounded-full bg-white/[0.08] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-emerald-500/60 transition-all duration-1000 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CapturePage() {
   const router = useRouter();
@@ -88,7 +143,7 @@ export default function CapturePage() {
           throw new Error(data.error || "Failed to read screenshot");
         }
 
-        router.push(`/transactions?id=${data.transaction_id}`);
+        window.location.assign(`/transactions/?id=${data.transaction_id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
         setProcessing(false);
@@ -207,7 +262,7 @@ export default function CapturePage() {
         }}
       />
 
-      <header className="relative z-10 flex items-center gap-3 px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
+      <header className="relative z-10 flex items-center gap-3 px-4 pb-4 pt-safe sm:px-6 lg:px-8">
         <Link
           href="/"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -268,14 +323,14 @@ export default function CapturePage() {
             <div className="w-full space-y-3">
               <button
                 onClick={openGallery}
-                className="h-14 w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold rounded-2xl text-[15px] transition-colors"
+                className="h-14 w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 active:scale-[0.98] text-white font-semibold rounded-2xl text-[15px] transition-all tap-scale"
               >
                 <ImageIcon className="w-5 h-5" />
                 Pick from Gallery
               </button>
               <button
                 onClick={openCamera}
-                className="h-14 w-full flex items-center justify-center gap-2.5 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 border border-white/[0.08] text-white font-medium rounded-2xl text-[15px] transition-colors"
+                className="h-14 w-full flex items-center justify-center gap-2.5 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 active:scale-[0.98] border border-white/[0.08] text-white font-medium rounded-2xl text-[15px] transition-all tap-scale"
               >
                 <Camera className="w-5 h-5" />
                 Take a Photo
@@ -293,15 +348,7 @@ export default function CapturePage() {
         />
       </div>
 
-      {processing && (
-        <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-50">
-          <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.07] flex items-center justify-center mb-6">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-          </div>
-          <p className="text-base font-semibold mb-1.5">Reading your screenshot…</p>
-          <p className="text-sm text-muted-foreground">This usually takes a few seconds</p>
-        </div>
-      )}
+      {processing && <ProcessingOverlay />}
 
       <AppBottomNav />
     </div>

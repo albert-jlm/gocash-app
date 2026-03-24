@@ -22,6 +22,8 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { BUILTIN_PLATFORM_NAMES, isMissingOperatorPlatformsError, sortPlatformNames, TRANSACTION_TYPES } from "@/lib/platforms";
+import { SkeletonConfirmForm } from "@/components/skeleton";
+import { storeToast } from "@/lib/toast-store";
 
 interface TransactionDraft {
   id: string;
@@ -181,7 +183,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         edits.transaction_date = new Date(txDate).toISOString();
 
       if (Object.keys(edits).length === 0) {
-        router.push(`/transactions?id=${tx.id}`);
+        storeToast("Transaction saved!");
+        window.location.assign(`/transactions/?id=${tx.id}`);
         return;
       }
 
@@ -201,7 +204,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to save");
-      router.push(`/transactions?id=${tx.id}`);
+      storeToast("Transaction saved!");
+      window.location.assign(`/transactions/?id=${tx.id}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
@@ -214,14 +218,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       : platformOptions;
 
   if (authLoading || loading || platformsLoading) {
-    return (
-      <div className="mx-auto flex min-h-dvh w-full max-w-4xl items-center justify-center bg-background px-5">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading transaction…</p>
-        </div>
-      </div>
-    );
+    return <SkeletonConfirmForm />;
   }
 
   if (fetchError) {
@@ -238,9 +235,9 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col bg-background text-foreground">
-      <header className="flex items-center gap-3 px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
+      <header className="flex items-center gap-3 px-4 pb-4 pt-safe sm:px-6 lg:px-8">
         <Link
-          href={`/transactions?id=${transactionId}`}
+          href={`/transactions/?id=${transactionId}`}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
@@ -251,7 +248,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </header>
 
-      <section className="mb-4 px-4 sm:px-6 lg:px-8">
+      <section className="mb-4 px-4 sm:px-6 lg:px-8 animate-fade-in">
         <div className="flex items-center gap-2.5 bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3">
           <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
@@ -263,7 +260,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </section>
 
-      <section className="flex-1 px-4 sm:px-6 lg:px-8">
+      <section className="flex-1 px-4 sm:px-6 lg:px-8 animate-fade-up" style={{ animationDelay: "100ms" }}>
         {saveError && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 mb-4">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
@@ -360,11 +357,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         </div>
       </section>
 
-      <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
+      <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent animate-fade-up" style={{ animationDelay: "200ms" }}>
         <button
           onClick={handleSave}
           disabled={saving || isPreview}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-all tap-scale"
         >
           {saving ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Saving…</>
