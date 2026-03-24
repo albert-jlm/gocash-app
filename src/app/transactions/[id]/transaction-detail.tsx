@@ -10,6 +10,11 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SkeletonTransactionDetail } from "@/components/skeleton";
+import { storeToast, consumeStoredToast } from "@/lib/toast-store";
+
+const TRANSACTIONS_HISTORY_HREF = "/transactions/";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
@@ -65,6 +70,13 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
   const [dataLoading, setDataLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  useEffect(() => { consumeStoredToast(); }, []);
+
+  function goToTransactionsHistory() {
+    window.location.assign(TRANSACTIONS_HISTORY_HREF);
+  }
 
   useEffect(() => {
     if (!operatorId) return;
@@ -97,10 +109,13 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
       });
   }, [operatorId, transactionId, router]);
 
-  async function handleDelete() {
+  function handleDeleteClick() {
     if (!tx) return;
-    if (!confirm("Delete this transaction? This will reverse any wallet balance changes.")) return;
+    setShowDeleteDialog(true);
+  }
 
+  async function confirmDelete() {
+    if (!tx) return;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -120,19 +135,17 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to delete");
-      router.push("/transactions");
+      storeToast("Transaction deleted");
+      goToTransactionsHistory();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Something went wrong");
       setDeleting(false);
+      setShowDeleteDialog(false);
     }
   }
 
   if (authLoading || dataLoading) {
-    return (
-      <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-      </div>
-    );
+    return <SkeletonTransactionDetail />;
   }
 
   if (fetchError || !tx) {
@@ -141,7 +154,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         <div className="text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
           <p className="text-sm text-red-400">{fetchError ?? "Transaction not found"}</p>
-          <Link href="/transactions" className="text-sm text-blue-400 block">Back to history</Link>
+          <a href={TRANSACTIONS_HISTORY_HREF} className="text-sm text-blue-400 block">Back to history</a>
         </div>
       </div>
     );
@@ -152,13 +165,13 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col bg-background text-foreground">
-      <header className="flex items-center gap-3 px-4 pb-4 pt-12 sm:px-6 sm:pt-14 lg:px-8">
-        <Link
-          href="/transactions"
+      <header className="flex items-center gap-3 px-4 pb-4 pt-safe sm:px-6 lg:px-8">
+        <a
+          href={TRANSACTIONS_HISTORY_HREF}
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
+        </a>
         <div>
           <h1 className="text-base font-semibold">Transaction Details</h1>
           <p className="text-xs text-muted-foreground">
@@ -167,7 +180,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </header>
 
-      <section className="mb-5 px-4 sm:px-6 lg:px-8">
+      <section className="mb-5 px-4 sm:px-6 lg:px-8 animate-scale-in">
         <div className="bg-white/[0.05] rounded-2xl p-5 flex items-center gap-4">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -186,7 +199,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </section>
 
-      <section className="flex-1 px-4 sm:px-6 lg:px-8">
+      <section className="flex-1 px-4 sm:px-6 lg:px-8 animate-fade-up" style={{ animationDelay: "100ms" }}>
         <div className="bg-white/[0.05] rounded-2xl p-4 space-y-4">
           {imageUrl && (
             <div className="space-y-2">
@@ -234,7 +247,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </section>
 
-      <div className="space-y-3 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="space-y-3 px-4 py-8 sm:px-6 lg:px-8 animate-fade-up" style={{ animationDelay: "200ms" }}>
         {deleteError && (
           <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
@@ -243,14 +256,14 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         )}
         <Link
           href={`/confirm?id=${transactionId}`}
-          className="w-full flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm"
+          className="w-full flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm tap-scale hover:bg-emerald-400 active:bg-emerald-600 transition-colors"
         >
           Edit Transaction
         </Link>
         <button
-          onClick={handleDelete}
+          onClick={handleDeleteClick}
           disabled={deleting}
-          className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 font-medium py-3.5 rounded-2xl text-sm hover:bg-red-500/20 transition-colors disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 font-medium py-3.5 rounded-2xl text-sm hover:bg-red-500/20 transition-all disabled:opacity-50 tap-scale"
         >
           {deleting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -259,13 +272,24 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
           )}
           Delete Transaction
         </button>
-        <Link
-          href="/transactions"
-          className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"
+        <a
+          href={TRANSACTIONS_HISTORY_HREF}
+          className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm tap-scale hover:bg-white/[0.11] transition-colors"
         >
           Back to History
-        </Link>
+        </a>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        title="Delete this transaction?"
+        description="This will reverse any wallet balance changes and permanently remove the record."
+        confirmLabel="Delete Transaction"
+        confirmVariant="destructive"
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   );
 }
