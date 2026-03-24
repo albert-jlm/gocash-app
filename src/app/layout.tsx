@@ -4,6 +4,7 @@ import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { AuthCallbackListener } from "@/components/auth-callback-listener";
 import { ShareIntentListener } from "@/components/share-intent-listener";
+import { ToastContainer } from "@/components/toast";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className="min-h-dvh bg-[var(--color-background)] text-[var(--color-foreground)] antialiased">
         <AuthCallbackListener />
         <ShareIntentListener />
+        <ToastContainer />
         {children}
       </body>
     </html>
