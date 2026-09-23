@@ -36,10 +36,18 @@ const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = 
 // Types
 // ---------------------------------------------------------------------------
 
-interface Wallet {
-  id: string;
-  wallet_name: string;
-  balance: number;
+// A row of gocash.account_balances. Balances are derived from the ledger, never
+// stored — `gocash.wallets` and its in-place `balance` column are gone.
+interface AccountBalance {
+  account_id: string;
+  name: string;
+  kind: string;
+  /**
+   * The sign-corrected balance, which is what a human should read. Only
+   * `platform` and `cash` accounts reach these cards, but using
+   * `natural_balance` everywhere keeps one rule for the whole app.
+   */
+  natural_balance: number;
 }
 
 interface TxRow {
@@ -90,7 +98,7 @@ export default function Dashboard() {
   const { operatorId, loading: authLoading } = useAuthGuard();
   useShareIntent();
 
-  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [wallets, setWallets] = useState<AccountBalance[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [todayStats, setTodayStats] = useState({ count: 0, total: 0, earnings: 0 });
   const [recentTx, setRecentTx] = useState<TxRow[]>([]);
@@ -146,10 +154,16 @@ export default function Dashboard() {
 
       const [walletsRes, pendingRes, todayTxRes, recentRes] = await Promise.all([
         supabase
-          .from("wallets")
-          .select("id, wallet_name, balance")
+          .from("account_balances")
+          .select("account_id, name, kind, natural_balance")
           .eq("operator_id", opId)
-          .order("wallet_type"),
+          // Wallet cards are the accounts the operator actually holds money in.
+          // `revenue` (fees earned) and `equity` (the owner's stake) are
+          // bookkeeping accounts that exist so entries balance; showing them as
+          // wallets would read as money the operator can spend.
+          .in("kind", ["platform", "cash"])
+          .order("kind")
+          .order("name"),
         supabase
           .from("transactions")
           .select("id", { count: "exact", head: true })
@@ -222,9 +236,9 @@ export default function Dashboard() {
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {wallets.map((w) => {
-            const style = WALLET_STYLES[w.wallet_name] ?? DEFAULT_WALLET_STYLE;
+            const style = WALLET_STYLES[w.name] ?? DEFAULT_WALLET_STYLE;
             return (
-              <div key={w.id} className="flex-shrink-0 w-[280px]" style={{ scrollSnapAlign: "start" }}>
+              <div key={w.account_id} className="flex-shrink-0 w-[280px]" style={{ scrollSnapAlign: "start" }}>
                 <div
                   className={`relative h-[160px] rounded-3xl bg-gradient-to-br ${style.gradient} p-6 flex flex-col justify-between overflow-hidden`}
                   style={{ boxShadow: `0 12px 40px -12px ${style.glow}` }}
@@ -238,14 +252,14 @@ export default function Dashboard() {
                     <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center flex-shrink-0">
                       <CreditCard className="w-4 h-4 text-white" />
                     </div>
-                    <p className="text-white/80 text-sm font-medium">{w.wallet_name}</p>
+                    <p className="text-white/80 text-sm font-medium">{w.name}</p>
                   </div>
 
                   {/* Balance */}
                   <div className="relative z-10">
                     <p className="text-[11px] text-white/50 font-medium mb-0.5 uppercase tracking-widest">Balance</p>
                     <p className="text-white text-[28px] font-bold tracking-tight tabular-nums leading-none">
-                      {formatBalance(w.balance)}
+                      {formatBalance(w.natural_balance)}
                     </p>
                   </div>
                 </div>

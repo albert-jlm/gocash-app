@@ -6,26 +6,30 @@ import { Loader2, ChevronRight, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
+import { provisionOperator, pesosToMinor } from "@/lib/ledger";
 import type { Session } from "@supabase/supabase-js";
 
 // ---------------------------------------------------------------------------
-// Default transaction rules — operators can tweak these in Profit Settings later
+// Signing up is now ONE server-side call.
+//
+// This screen used to do it in three client statements: insert an operator,
+// upsert three `wallets` rows carrying their balances, then seed six
+// `transaction_rules` rows. All three are gone.
+//
+//   - `wallets` and `transaction_rules` are being dropped.
+//   - An opening balance is a posted ledger entry, not a column, and the
+//     ledger grants the browser SELECT only.
+//   - Direction is no longer data (see `@core/postings.ts`), and default
+//     pricing is seeded as `fee_rules` by the same provisioning call.
+//
+// `gocash.provision_operator()` does the whole thing in one transaction,
+// including the `revenue` and `equity` accounts that are not optional: a fee
+// has nowhere to go without revenue, and an opening balance or a drawer-count
+// correction has no second leg without equity.
 // ---------------------------------------------------------------------------
 
-const DEFAULT_RULES = [
-  // Cash In: customer gives GCash → operator gives cash. GCash up, Cash down (minus profit).
-  { transaction_type: "Cash In",         platform: "all", delta_platform_mult: 1,  delta_cash_amount_mult: -1, delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
-  // Cash Out: customer gives cash → operator sends GCash. GCash down, Cash up (plus profit).
-  { transaction_type: "Cash Out",        platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 2,    profit_minimum: 5  },
-  // Telco Load: operator uses GCash to load telco credit. Customer pays cash.
-  { transaction_type: "Telco Load",      platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 1, profit_rate: 3,    profit_minimum: 3  },
-  // Bills Payment: operator uses GCash to pay a bill. Customer pays cash.
-  { transaction_type: "Bills Payment",   platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5  },
-  // Bank Transfer: operator sends GCash to a bank. Customer pays cash.
-  { transaction_type: "Bank Transfer",   platform: "all", delta_platform_mult: -1, delta_cash_amount_mult: 1,  delta_cash_mult: 0, profit_rate: 0,    profit_minimum: 5  },
-  // Profit Remittance: cash leaves register (manual remittance to owner).
-  { transaction_type: "Profit Remittance", platform: "all", delta_platform_mult: 0, delta_cash_amount_mult: -1, delta_cash_mult: 0, profit_rate: null, profit_minimum: null },
-];
+/** Platform accounts a new operator starts with. */
+const DEFAULT_PLATFORMS = ["GCash", "MariBank", "Maya"];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -78,63 +82,25 @@ export default function OnboardingPage() {
     setSaving(true);
 
     try {
-      // 1. Get or create operator record
-      let operatorId: string;
-
-      const { data: existing } = await supabase
-        .from("operators")
-        .select("id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-
-      if (existing) {
-        operatorId = existing.id;
-      } else {
-        const { data: op, error: opError } = await supabase
-          .from("operators")
-          .insert({
-            user_id: session.user.id,
-            email: session.user.email ?? "",
-            name: name.trim(),
-            phone: phone.trim() || null,
-            subscription_tier: "free",
-            is_active: true,
-            settings: {},
-          })
-          .select("id")
-          .single();
-
-        if (opError || !op) {
-          throw new Error(opError?.message ?? "Could not create your account");
-        }
-        operatorId = op.id;
-      }
-
-      // 2. Upsert wallets (safe to retry)
-      const { error: walletError } = await supabase.from("wallets").upsert(
-        [
-          { operator_id: operatorId, wallet_type: "platform", wallet_name: "GCash",    balance: parseFloat(gcashBalance) || 0 },
-          { operator_id: operatorId, wallet_type: "platform", wallet_name: "MariBank", balance: parseFloat(maribankBalance) || 0 },
-          { operator_id: operatorId, wallet_type: "cash",     wallet_name: "Cash",     balance: parseFloat(cashBalance) || 0 },
-        ],
-        { onConflict: "operator_id,wallet_name" }
-      );
-
-      if (walletError) throw new Error(walletError.message);
-
-      // 3. Seed default transaction rules (skip if already exist)
-      const { count } = await supabase
-        .from("transaction_rules")
-        .select("id", { count: "exact", head: true })
-        .eq("operator_id", operatorId);
-
-      if (!count || count === 0) {
-        const { error: rulesError } = await supabase
-          .from("transaction_rules")
-          .insert(DEFAULT_RULES.map((r) => ({ ...r, operator_id: operatorId, is_active: true })));
-
-        if (rulesError) throw new Error(rulesError.message);
-      }
+      // One call, one transaction: the operator, their chart of accounts, the
+      // platform accounts, default fee rules and the opening entry.
+      //
+      // Opening balances are sent in CENTAVOS, which is the unit the ledger and
+      // `@core/money.ts` work in end to end. A fractional value is rejected
+      // server-side rather than rounded, because a caller sending pesos would
+      // otherwise book 1/100th of the intended balance.
+      await provisionOperator({
+        userId: session.user.id,
+        name: name.trim(),
+        email: session.user.email ?? "",
+        phone: phone.trim() || null,
+        platforms: DEFAULT_PLATFORMS,
+        openingMinor: {
+          GCash: pesosToMinor(parseFloat(gcashBalance) || 0),
+          MariBank: pesosToMinor(parseFloat(maribankBalance) || 0),
+          Cash: pesosToMinor(parseFloat(cashBalance) || 0),
+        },
+      });
 
       router.replace("/");
     } catch (err) {
@@ -251,7 +217,7 @@ export default function OnboardingPage() {
             ))}
 
             <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
-              Not sure? Enter 0 for now and update it in Settings → Wallets.
+              Not sure? Enter 0 for now and set it in Settings → Wallets.
             </p>
           </div>
 

@@ -14,10 +14,23 @@
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{ "name": "next" }],
+    // `_core` is written for Deno, so its internal imports carry the `.ts`
+    // extension. Permitted here because this project never emits (noEmit, above).
+    "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // The single source of truth for the business logic.
+      // `src/lib/transaction-processing.ts` was a stale second copy that had
+      // diverged from the deployed code (Audit #5 finding 4); it and its 37
+      // tests are deleted and this alias replaces them.
+      "@core/*": ["./supabase/functions/_core/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "supabase/functions"]
+  // `supabase/functions/main` stays excluded: it is Deno and imports over
+  // https://, which tsc cannot resolve. `supabase/functions/_core` is
+  // deliberately no longer excluded — it is plain TypeScript with no Deno
+  // globals, and `src/` now imports it via `@core/*`, so it must be in the
+  // program for the alias to typecheck.
+  "exclude": ["node_modules", "supabase/functions/main"]
 }

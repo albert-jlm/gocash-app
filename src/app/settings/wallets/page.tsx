@@ -8,52 +8,67 @@ import {
   CreditCard,
   Check,
   AlertCircle,
-  Palette,
+  Scale,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import {
+  postReconciliation,
+  reconciliationDifferenceMinor,
+  formatMinorPesos,
+  formatPesos,
+  type LedgerAccount,
+} from "@/lib/ledger";
 
 // ---------------------------------------------------------------------------
-// Color palette — full static class strings so Tailwind JIT never purges them
+// Card colours
+//
+// This screen used to persist a chosen colour on `wallets.color` and let the
+// operator pick one. `wallets` is gone and `gocash.accounts` has no colour
+// column, so the picker is removed rather than repointed at a column that does
+// not exist (Audit #5 finding 7 — the old select on `color` errored and
+// silently rendered an empty wallet list). The gradient is derived from the
+// account name instead: the cards look the same, each account's colour is
+// stable, and nothing has to be stored to get it.
 // ---------------------------------------------------------------------------
 
 const COLOR_PALETTE = [
-  { id: "blue",    label: "Blue",    gradient: "from-blue-500 via-blue-600 to-blue-700",       swatch: "bg-blue-500",    accent: "text-blue-400" },
-  { id: "purple",  label: "Purple",  gradient: "from-purple-500 via-purple-600 to-purple-700", swatch: "bg-purple-500",  accent: "text-purple-400" },
-  { id: "emerald", label: "Green",   gradient: "from-emerald-500 via-emerald-600 to-emerald-700", swatch: "bg-emerald-500", accent: "text-emerald-400" },
-  { id: "rose",    label: "Red",     gradient: "from-rose-500 via-rose-600 to-rose-700",       swatch: "bg-rose-500",    accent: "text-rose-400" },
-  { id: "orange",  label: "Orange",  gradient: "from-orange-500 via-orange-600 to-orange-700", swatch: "bg-orange-500",  accent: "text-orange-400" },
-  { id: "amber",   label: "Amber",   gradient: "from-amber-500 via-amber-600 to-amber-700",    swatch: "bg-amber-500",   accent: "text-amber-400" },
-  { id: "cyan",    label: "Cyan",    gradient: "from-cyan-500 via-cyan-600 to-cyan-700",       swatch: "bg-cyan-500",    accent: "text-cyan-400" },
-  { id: "zinc",    label: "Gray",    gradient: "from-zinc-600 via-zinc-700 to-zinc-800",       swatch: "bg-zinc-500",    accent: "text-zinc-400" },
+  { id: "blue",    gradient: "from-blue-500 via-blue-600 to-blue-700",          accent: "text-blue-400" },
+  { id: "purple",  gradient: "from-purple-500 via-purple-600 to-purple-700",    accent: "text-purple-400" },
+  { id: "emerald", gradient: "from-emerald-500 via-emerald-600 to-emerald-700", accent: "text-emerald-400" },
+  { id: "rose",    gradient: "from-rose-500 via-rose-600 to-rose-700",          accent: "text-rose-400" },
+  { id: "orange",  gradient: "from-orange-500 via-orange-600 to-orange-700",    accent: "text-orange-400" },
+  { id: "amber",   gradient: "from-amber-500 via-amber-600 to-amber-700",       accent: "text-amber-400" },
+  { id: "cyan",    gradient: "from-cyan-500 via-cyan-600 to-cyan-700",          accent: "text-cyan-400" },
+  { id: "zinc",    gradient: "from-zinc-600 via-zinc-700 to-zinc-800",          accent: "text-zinc-400" },
 ] as const;
 
-type ColorId = typeof COLOR_PALETTE[number]["id"];
+// Matches the dashboard's wallet cards so one account looks the same everywhere.
+const NAMED_COLORS: Record<string, string> = {
+  GCash: "blue",
+  MariBank: "purple",
+  Maya: "emerald",
+  Cash: "emerald",
+};
 
-function getColor(id: string) {
-  return COLOR_PALETTE.find((c) => c.id === id) ?? COLOR_PALETTE[COLOR_PALETTE.length - 1];
+function getColor(name: string) {
+  const named = NAMED_COLORS[name];
+  if (named) return COLOR_PALETTE.find((c) => c.id === named) ?? COLOR_PALETTE[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return COLOR_PALETTE[hash % COLOR_PALETTE.length];
 }
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface Wallet {
-  id: string;
-  wallet_name: string;
-  wallet_type: string;
-  balance: number;
-  color: string;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatBalance(n: number): string {
-  return "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** A row of gocash.account_balances, restricted to the wallet-like kinds. */
+interface AccountRow extends LedgerAccount {
+  /** Sign-corrected book balance in pesos — what a human should read. */
+  natural_balance: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,103 +78,94 @@ function formatBalance(n: number): string {
 export default function WalletsSettingsPage() {
   const { operatorId, loading: authLoading } = useAuthGuard();
 
-  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Editing state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  // Reconciliation state
+  const [reconcilingId, setReconcilingId] = useState<string | null>(null);
+  const [countedValue, setCountedValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successId, setSuccessId] = useState<string | null>(null);
-
-  // Color picker state
-  const [colorPickerOpenId, setColorPickerOpenId] = useState<string | null>(null);
-  const [savingColor, setSavingColor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!operatorId) return;
     const opId = operatorId;
-    async function fetchWallets() {
-      const { data } = await supabase
-        .from("wallets")
-        .select("id, wallet_name, wallet_type, balance, color")
+    async function fetchAccounts() {
+      // Derived balances. There is no stored balance left to read.
+      const { data, error: readError } = await supabase
+        .from("account_balances")
+        .select("account_id, name, kind, balance_minor, natural_balance")
         .eq("operator_id", opId)
-        .order("wallet_type");
-      // Cast needed until Supabase types are regenerated with the color column
-      if (data) setWallets(data as unknown as Wallet[]);
+        // `revenue` and `equity` are bookkeeping accounts: an operator cannot
+        // count a drawer of "fees earned", so they are neither wallets nor
+        // reconcilable and are not listed here.
+        .in("kind", ["platform", "cash"])
+        .order("kind")
+        .order("name");
+
+      if (readError) setError(readError.message);
+      if (data) setAccounts(data as AccountRow[]);
       setDataLoading(false);
     }
-    fetchWallets();
+    fetchAccounts();
   }, [operatorId]);
 
-  function startEdit(wallet: Wallet) {
-    setEditingId(wallet.id);
-    setEditValue(wallet.balance.toString());
-    setColorPickerOpenId(null);
-    setError(null);
-    setSuccessId(null);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditValue("");
+  function startReconcile(account: AccountRow) {
+    setReconcilingId(account.account_id);
+    // Pre-filled with the book balance, so the operator corrects a number
+    // rather than retyping one that probably already matches.
+    setCountedValue(account.natural_balance.toFixed(2));
     setError(null);
   }
 
-  async function saveBalance(walletId: string) {
-    const newBalance = parseFloat(editValue);
-    if (isNaN(newBalance) || newBalance < 0) {
-      setError("Enter a valid amount");
+  function cancelReconcile() {
+    setReconcilingId(null);
+    setCountedValue("");
+    setError(null);
+  }
+
+  /** What the correction would post, in centavos; null while the field is unparseable. */
+  function differenceMinor(account: AccountRow): number | null {
+    const counted = parseFloat(countedValue);
+    if (!Number.isFinite(counted)) return null;
+    return reconciliationDifferenceMinor({
+      operatorId: operatorId ?? "",
+      account,
+      countedPesos: counted,
+    });
+  }
+
+  async function submitReconcile(account: AccountRow) {
+    if (!operatorId) return;
+    const counted = parseFloat(countedValue);
+    if (!Number.isFinite(counted) || counted < 0) {
+      setError("Enter the amount you counted");
       return;
     }
 
     setSaving(true);
     setError(null);
 
-    const { error: updateError } = await supabase
-      .from("wallets")
-      .update({ balance: newBalance })
-      .eq("id", walletId);
-
-    setSaving(false);
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-
-    setWallets((prev) =>
-      prev.map((w) => (w.id === walletId ? { ...w, balance: newBalance } : w))
-    );
-    setEditingId(null);
-    setEditValue("");
-    setSuccessId(walletId);
-    setTimeout(() => setSuccessId(null), 2000);
-  }
-
-  async function saveColor(walletId: string, colorId: ColorId) {
-    setSavingColor(walletId);
-
-    // Optimistic update
-    setWallets((prev) =>
-      prev.map((w) => (w.id === walletId ? { ...w, color: colorId } : w))
-    );
-    setColorPickerOpenId(null);
-
-    const { error: updateError } = await supabase
-      .from("wallets")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ color: colorId } as any)
-      .eq("id", walletId);
-
-    setSavingColor(null);
-
-    if (updateError) {
-      // Revert on failure
-      setWallets((prev) =>
-        prev.map((w) => (w.id === walletId ? { ...w, color: w.color } : w))
-      );
+    try {
+      // Posts a correction entry — the difference against the ledger, with the
+      // owner's equity as the balancing leg.
+      //
+      // This REPLACES the inline balance editor, which ran
+      // `UPDATE gocash.wallets SET balance = ...` straight from the browser: an
+      // overwrite that left no trace at all (Audit #5 finding 14) and that a
+      // derived balance makes impossible in any case. The operator can still
+      // correct a wrong balance; now the correction is a visible posting that
+      // says how much and when, instead of a number quietly replaced.
+      await postReconciliation({
+        operatorId,
+        account,
+        countedPesos: counted,
+        memo: "Counted in Settings → Wallets",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not post the correction");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -183,21 +189,20 @@ export default function WalletsSettingsPage() {
         </Link>
         <div>
           <h1 className="text-base font-semibold">Wallets</h1>
-          <p className="text-xs text-muted-foreground">View, adjust balances and customise colours</p>
+          <p className="text-xs text-muted-foreground">Check your balances against what you counted</p>
         </div>
       </header>
 
-      {/* Wallet List */}
+      {/* Account list */}
       <section className="px-5 flex-1 space-y-3 pb-10">
-        {wallets.map((w) => {
-          const color = getColor(w.color);
-          const isEditing = editingId === w.id;
-          const justSaved = successId === w.id;
-          const isColorOpen = colorPickerOpenId === w.id;
+        {accounts.map((a) => {
+          const color = getColor(a.name);
+          const isReconciling = reconcilingId === a.account_id;
+          const diff = isReconciling ? differenceMinor(a) : null;
 
           return (
-            <div key={w.id} className="rounded-2xl overflow-hidden">
-              {/* Card header — gradient from chosen color */}
+            <div key={a.account_id} className="rounded-2xl overflow-hidden">
+              {/* Card header — gradient derived from the account name */}
               <div className={`relative bg-gradient-to-br ${color.gradient} p-5 overflow-hidden`}>
                 {/* Decorative blur */}
                 <div className="absolute top-0 right-0 w-28 h-28 bg-white/10 rounded-full blur-2xl -translate-y-8 translate-x-8 pointer-events-none" />
@@ -208,68 +213,24 @@ export default function WalletsSettingsPage() {
                       <CreditCard className="w-4 h-4 text-white" />
                     </div>
                     <div>
-                      <p className="text-white/70 text-xs font-medium">{w.wallet_name}</p>
+                      <p className="text-white/70 text-xs font-medium">{a.name}</p>
+                      {/* natural_balance, not balance: the sign-corrected figure
+                          is the one a human should read. */}
                       <p className="text-white text-[22px] font-bold tracking-tight tabular-nums leading-tight">
-                        {formatBalance(w.balance)}
+                        {formatPesos(a.natural_balance)}
                       </p>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Success indicator */}
-                    {justSaved && (
-                      <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2.5 py-1">
-                        <Check className="w-3 h-3 text-white" />
-                        <span className="text-[11px] text-white font-medium">Saved</span>
-                      </div>
-                    )}
-                    {/* Color picker toggle */}
-                    <button
-                      onClick={() => setColorPickerOpenId(isColorOpen ? null : w.id)}
-                      className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center"
-                      title="Change colour"
-                    >
-                      {savingColor === w.id
-                        ? <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-                        : <Palette className="w-3.5 h-3.5 text-white" />
-                      }
-                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Color picker — slides open */}
-              {isColorOpen && (
-                <div className="bg-white/[0.06] border-x border-white/[0.05] px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">
-                    Choose colour
-                  </p>
-                  <div className="grid grid-cols-8 gap-2">
-                    {COLOR_PALETTE.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => saveColor(w.id, c.id)}
-                        title={c.label}
-                        className={[
-                          "w-7 h-7 rounded-full transition-all",
-                          c.swatch,
-                          w.color === c.id
-                            ? "ring-2 ring-white ring-offset-1 ring-offset-transparent scale-110"
-                            : "opacity-70 hover:opacity-100 hover:scale-105",
-                        ].join(" ")}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Adjustment section */}
+              {/* Reconciliation */}
               <div className="bg-white/[0.04] border border-white/[0.05] border-t-0 rounded-b-2xl">
-                {isEditing ? (
+                {isReconciling ? (
                   <div className="p-4 space-y-3">
                     <div className="space-y-1.5">
                       <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                        New balance
+                        Counted balance
                       </Label>
                       <div className="relative">
                         <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none ${color.accent}`}>
@@ -278,32 +239,64 @@ export default function WalletsSettingsPage() {
                         <Input
                           type="number"
                           inputMode="decimal"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
+                          value={countedValue}
+                          onChange={(e) => setCountedValue(e.target.value)}
                           autoFocus
                           className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 text-sm tabular-nums"
                         />
                       </div>
                     </div>
 
+                    {/* The count against the books */}
+                    <div className="rounded-xl bg-white/[0.04] px-3.5 py-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground">Book balance</span>
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                          {formatPesos(a.natural_balance)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground">Difference</span>
+                        <span
+                          className={[
+                            "text-[13px] font-semibold tabular-nums",
+                            diff === null || diff === 0
+                              ? "text-muted-foreground"
+                              : diff > 0
+                                ? "text-emerald-400"
+                                : "text-red-400",
+                          ].join(" ")}
+                        >
+                          {diff === null ? "—" : (diff > 0 ? "+" : "") + formatMinorPesos(diff)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/60 leading-relaxed pt-0.5">
+                        {diff === null || diff === 0
+                          ? "Your count matches the ledger — there is nothing to post."
+                          : diff > 0
+                            ? "You counted more than the ledger says. The difference is posted as a correction against the owner's equity."
+                            : "You counted less than the ledger says. The difference is posted as a correction against the owner's equity."}
+                      </p>
+                    </div>
+
                     {error && (
-                      <div className="flex items-center gap-2 text-xs text-red-400">
-                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                        {error}
+                      <div className="flex items-start gap-2 text-xs text-red-400">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <span className="leading-relaxed">{error}</span>
                       </div>
                     )}
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => saveBalance(w.id)}
-                        disabled={saving}
+                        onClick={() => submitReconcile(a)}
+                        disabled={saving || diff === null || diff === 0}
                         className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        Update
+                        Post correction
                       </button>
                       <button
-                        onClick={cancelEdit}
+                        onClick={cancelReconcile}
                         className="px-4 py-2.5 bg-white/[0.07] text-muted-foreground font-medium rounded-xl text-sm"
                       >
                         Cancel
@@ -312,10 +305,11 @@ export default function WalletsSettingsPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => startEdit(w)}
-                    className="w-full px-4 py-3 text-left text-sm text-muted-foreground hover:bg-white/[0.03] transition-colors"
+                    onClick={() => startReconcile(a)}
+                    className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm text-muted-foreground hover:bg-white/[0.03] transition-colors"
                   >
-                    Set balance manually →
+                    <Scale className="w-3.5 h-3.5 flex-shrink-0" />
+                    Reconcile against a count →
                   </button>
                 )}
               </div>
@@ -324,8 +318,9 @@ export default function WalletsSettingsPage() {
         })}
 
         <p className="text-[11px] text-muted-foreground/50 text-center pt-4 leading-relaxed">
-          Manual adjustments are for correcting discrepancies only.
-          Transaction-based changes happen automatically.
+          Balances are worked out from your transactions, so they cannot be typed over.
+          When a count disagrees with the ledger, post the difference here — it stays on
+          the record, so you can always see why a balance is what it is.
         </p>
       </section>
     </div>

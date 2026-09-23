@@ -27,7 +27,14 @@ export type TransactionStatus =
   | "edited"
   | "failed";
 
-export type WalletType = "platform" | "cash";
+// Account classes live in the ledger core so the client and the Edge Functions
+// cannot drift apart on them: "platform" | "cash" | "revenue" | "equity".
+import type { AccountKind } from "@core/types.ts";
+export type { AccountKind };
+
+// NOTE: `WalletType` and the `wallets` table are gone. Balances are no longer
+// stored anywhere — they are derived from `gocash.postings` and read through
+// the `gocash.account_balances` view. `wallets` is dropped by its own migration.
 
 export interface Database {
   gocash: {
@@ -113,25 +120,60 @@ export interface Database {
         Update: Partial<Database["gocash"]["Tables"]["transactions"]["Insert"]>;
         Relationships: [];
       };
-      wallets: {
+      // Replaces `wallets`. There is no balance column by design — see the
+      // `account_balances` view below.
+      accounts: {
         Row: {
           id: string;
           operator_id: string;
-          wallet_type: WalletType;
-          wallet_name: string;
-          balance: number;
-          last_transaction_id: string | null;
+          kind: AccountKind;
+          name: string;
+          currency: string;
+          is_active: boolean;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           operator_id: string;
-          wallet_type: WalletType;
-          wallet_name: string;
-          balance?: number;
-          last_transaction_id?: string | null;
+          kind: AccountKind;
+          name: string;
+          currency?: string;
+          is_active?: boolean;
         };
-        Update: Partial<Database["gocash"]["Tables"]["wallets"]["Insert"]>;
+        Update: Partial<Database["gocash"]["Tables"]["accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      // The ledger itself. Append-only and written exclusively by the Edge
+      // Functions with the service-role key: RLS grants the browser SELECT and
+      // nothing else, so both of these are read-only from `src/`.
+      ledger_entries: {
+        Row: {
+          id: string;
+          operator_id: string;
+          transaction_id: string | null;
+          kind: "opening" | "transaction" | "reversal" | "reconciliation";
+          reverses_entry_id: string | null;
+          currency: string;
+          memo: string | null;
+          idempotency_key: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      postings: {
+        Row: {
+          id: string;
+          entry_id: string;
+          account_id: string;
+          operator_id: string;
+          amount_minor: number;
+          created_at: string;
+        };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       transaction_rules: {
@@ -186,7 +228,40 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      // Derived balances — the replacement for `wallets.balance`.
+      //
+      // `balance_minor` is integer centavos, `balance` the same value in pesos,
+      // and `natural_balance` is what a human should read: for `revenue` and
+      // `equity` (credit-natured, so they grow negative) it is sign-flipped, so
+      // fees earned display as a positive number. Display `natural_balance`.
+      account_balances: {
+        Row: {
+          account_id: string;
+          operator_id: string;
+          name: string;
+          kind: AccountKind;
+          currency: string;
+          balance_minor: number;
+          balance: number;
+          natural_balance: number;
+          posting_count: number;
+          last_posted_at: string | null;
+        };
+        Relationships: [];
+      };
+      // Health check: any row here is a bug.
+      unbalanced_entries: {
+        Row: {
+          entry_id: string;
+          operator_id: string;
+          kind: string;
+          created_at: string;
+          out_of_balance_by_minor: number | null;
+        };
+        Relationships: [];
+      };
+    };
     Functions: Record<string, never>;
   };
 }

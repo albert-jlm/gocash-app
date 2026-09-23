@@ -31,7 +31,9 @@ export default function SettingsPage() {
       <section className="px-5 flex-1">
         <div className="bg-white/[0.05] rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
           {[
-            { label: "Wallets",          href: "/settings/wallets",       desc: "View and adjust balances" },
+            // Balances are derived from the ledger now, so this screen reconciles
+            // against a count instead of letting one be typed over.
+            { label: "Wallets",          href: "/settings/wallets",       desc: "Check balances against a count" },
             { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated" },
             { label: "Platforms",        href: "/settings/platforms",     desc: "Manage GCash, MariBank, and more" },
             { label: "Notifications",    href: "/settings/notifications", desc: "Telegram alerts (coming soon)" },
