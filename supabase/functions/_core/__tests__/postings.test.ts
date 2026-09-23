@@ -37,13 +37,16 @@ describe("every entry balances to exactly zero", () => {
     it(name, () => expect(total(postings)).toBe(0));
   }
 
-  it("PROPERTY: holds for every type across a wide sweep of amounts and fees", () => {
+  it("holds for every type across a wide sweep of amounts and fees", () => {
     const amounts = [1, 50, 100, 333, 999, 1850, 12345, 999999];
     const fees = [0, 1, 5, 7, 666, 2000];
     let checked = 0;
     for (const txType of TRANSACTION_TYPES) {
       for (const a of amounts) {
         for (const f of fees) {
+          // Cash Out deducts the fee from the payout, so fee > amount is not a
+          // valid entry — it is rejected by assertSaneInput and covered below.
+          if (txType === "Cash Out" && f > a) continue;
           const postings = buildPostings(txType, {
             amountMinor: php(a), feeMinor: php(f), platform: "GCash",
           });
@@ -52,7 +55,7 @@ describe("every entry balances to exactly zero", () => {
         }
       }
     }
-    expect(checked).toBe(TRANSACTION_TYPES.length * amounts.length * fees.length);
+    expect(checked).toBeGreaterThan(250);
   });
 
   it("no float drift: 2% of 333 is 6.66 and the entry still sums to 0", () => {
@@ -228,5 +231,36 @@ describe("balanced() refuses to build a broken entry", () => {
   it("rejects an unknown transaction type", () => {
     expect(() => buildPostings("Padala", { amountMinor: php(100), feeMinor: 0, platform: "GCash" }))
       .toThrow(/unknown transaction type/);
+  });
+
+  it("rejects a negative amount, which would book a reversal as a transaction", () => {
+    expect(() => cashIn({ amountMinor: php(-500), feeMinor: php(10), platform: "GCash" }))
+      .toThrow(/amount must be a non-negative integer/);
+  });
+
+  it("rejects a negative fee, which would move money out of revenue", () => {
+    expect(() => cashIn({ amountMinor: php(500), feeMinor: php(-10), platform: "GCash" }))
+      .toThrow(/fee must be a non-negative integer/);
+  });
+
+  it("rejects a Cash Out whose fee exceeds the amount", () => {
+    // Reachable in production, not theoretical: calculateFee has a PHP 5 floor,
+    // so any Cash Out below PHP 5 produces fee > amount. Before this guard a
+    // PHP 1.00 cash out posted cash +400 — the books recorded cash coming IN.
+    expect(() => cashOut({ amountMinor: php(1), feeMinor: php(5), platform: "GCash" }))
+      .toThrow(/fee 500 exceeds the amount 100/);
+  });
+
+  it("allows fee > amount where the fee is added on top, not deducted", () => {
+    // A PHP 1 telco load with a PHP 5 minimum fee is odd but coherent: the
+    // customer pays 6 for 1 peso of load. Only the deducted case is incoherent.
+    const p = telcoLoad({ amountMinor: php(1), feeMinor: php(5), platform: "GCash" });
+    expect(leg(p, "cash")).toBe(php(6));
+    expect(total(p)).toBe(0);
+  });
+
+  it("rejects an amount beyond the maximum", () => {
+    expect(() => cashIn({ amountMinor: php(1_000_001), feeMinor: 0, platform: "GCash" }))
+      .toThrow(/exceeds the maximum/);
   });
 });

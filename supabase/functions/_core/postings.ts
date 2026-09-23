@@ -16,7 +16,7 @@
  * indirection. That is exactly what three NUMERIC(6,4) columns could not give.
  */
 
-import type { Minor } from "./money.ts";
+import { type Minor, MAX_AMOUNT_MINOR } from "./money.ts";
 import type { AccountRef, Posting } from "./types.ts";
 
 export interface EntryInput {
@@ -29,6 +29,51 @@ export interface EntryInput {
 }
 
 export class LedgerError extends Error {}
+
+/**
+ * Sanity-check a transaction's inputs before any postings are built.
+ *
+ * `balanced()` only proves the legs sum to zero, and a sum of zero says
+ * nothing about whether the entry is meaningful. A review found three ways a
+ * nonsensical entry passed every guard:
+ *
+ *   - a negative amount produced a reversal booked as kind='transaction',
+ *   - a negative fee moved money OUT of revenue,
+ *   - and on Cash Out, a fee larger than the amount flipped the cash leg
+ *     positive, so the books recorded RECEIVING cash on a cash out.
+ *
+ * The last one is reachable in production, not theoretical: calculateFee has a
+ * PHP 5 floor, so any Cash Out below PHP 5 yields fee > amount. A PHP 1.00
+ * cash out posted cash +400.
+ */
+function assertSaneInput(
+  txType: string,
+  amountMinor: Minor,
+  feeMinor: Minor,
+  opts: { feeDeducted: boolean }
+): void {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new LedgerError(
+      `${txType}: amount must be a non-negative integer number of centavos, got ${amountMinor}`
+    );
+  }
+  if (!Number.isSafeInteger(feeMinor) || feeMinor < 0) {
+    throw new LedgerError(
+      `${txType}: fee must be a non-negative integer number of centavos, got ${feeMinor}`
+    );
+  }
+  if (amountMinor > MAX_AMOUNT_MINOR) {
+    throw new LedgerError(
+      `${txType}: amount ${amountMinor} exceeds the maximum of ${MAX_AMOUNT_MINOR} centavos`
+    );
+  }
+  if (opts.feeDeducted && feeMinor > amountMinor) {
+    throw new LedgerError(
+      `${txType}: fee ${feeMinor} exceeds the amount ${amountMinor}; the payout would be ` +
+      `negative, which would record cash coming IN on a cash out`
+    );
+  }
+}
 
 /**
  * Validates and normalises a set of postings.
@@ -102,6 +147,7 @@ export function reverse(postings: readonly Posting[]): Posting[] {
  * it backwards; those are corrected separately.
  */
 export function cashIn({ amountMinor, feeMinor, platform }: EntryInput): Posting[] {
+  assertSaneInput("cashIn", amountMinor, feeMinor, { feeDeducted: false });
   return balanced([
     { account: { kind: "cash" }, amount: amountMinor + feeMinor },
     { account: { kind: "platform", platform }, amount: -amountMinor },
@@ -121,6 +167,7 @@ export function cashIn({ amountMinor, feeMinor, platform }: EntryInput): Posting
  * the live rules. It was invisible while it lived in multiplier columns.
  */
 export function cashOut({ amountMinor, feeMinor, platform }: EntryInput): Posting[] {
+  assertSaneInput("cashOut", amountMinor, feeMinor, { feeDeducted: true });
   return balanced([
     { account: { kind: "platform", platform }, amount: amountMinor },
     { account: { kind: "cash" }, amount: -(amountMinor - feeMinor) },
@@ -136,6 +183,7 @@ export function cashOut({ amountMinor, feeMinor, platform }: EntryInput): Postin
  * on every load.
  */
 export function telcoLoad({ amountMinor, feeMinor, platform }: EntryInput): Posting[] {
+  assertSaneInput("telcoLoad", amountMinor, feeMinor, { feeDeducted: false });
   return balanced([
     { account: { kind: "cash" }, amount: amountMinor + feeMinor },
     { account: { kind: "platform", platform }, amount: -amountMinor },
@@ -150,6 +198,7 @@ export function telcoLoad({ amountMinor, feeMinor, platform }: EntryInput): Post
  * the books lose 1,835.
  */
 export function billsPayment({ amountMinor, feeMinor, platform }: EntryInput): Posting[] {
+  assertSaneInput("billsPayment", amountMinor, feeMinor, { feeDeducted: false });
   return balanced([
     { account: { kind: "cash" }, amount: amountMinor + feeMinor },
     { account: { kind: "platform", platform }, amount: -amountMinor },
@@ -164,6 +213,7 @@ export function billsPayment({ amountMinor, feeMinor, platform }: EntryInput): P
  * never booked, so the full principal disappears.
  */
 export function bankTransfer({ amountMinor, feeMinor, platform }: EntryInput): Posting[] {
+  assertSaneInput("bankTransfer", amountMinor, feeMinor, { feeDeducted: false });
   return balanced([
     { account: { kind: "cash" }, amount: amountMinor + feeMinor },
     { account: { kind: "platform", platform }, amount: -amountMinor },
@@ -184,6 +234,7 @@ export function bankTransfer({ amountMinor, feeMinor, platform }: EntryInput): P
  * destination cannot be left ambiguous.
  */
 export function profitRemittance({ amountMinor }: Pick<EntryInput, "amountMinor">): Posting[] {
+  assertSaneInput("profitRemittance", amountMinor, 0, { feeDeducted: false });
   return balanced([
     { account: { kind: "cash" }, amount: -amountMinor },
     { account: { kind: "equity" }, amount: amountMinor },

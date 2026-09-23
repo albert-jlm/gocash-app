@@ -27,26 +27,14 @@ export function isTransactionType(v: string): v is TransactionType {
 }
 
 /**
- * How a transaction moves money. Three shapes cover all six types.
- *
- * Deliberately NOT operator-configurable. Three NUMERIC(6,4) multiplier columns
- * were exactly that, and it is why four of six types were silently destroying
- * money in production. What operators configure is which platforms they use,
- * what they charge, and what they call things — never the direction.
+ * NOTE: an earlier draft exported a `SHAPE_BY_TYPE` map here, grouping the six
+ * types into three posting shapes. It was removed unused, and deliberately:
+ * a lookup table saying which direction each type moves money is *exactly*
+ * the delta-multiplier model in nicer syntax, and re-encoding direction as
+ * data is the bug class this rebuild exists to eliminate. The shapes are
+ * visible in postings.ts, where each type is written out in full and each has
+ * a test asserting the sign of every leg.
  */
-export type PostingShape =
-  | "customer_pays_cash"   // Cash In, Telco Load, Bills Payment, Bank Transfer
-  | "customer_pays_emoney" // Cash Out
-  | "equity_draw";         // Profit Remittance
-
-export const SHAPE_BY_TYPE: Readonly<Record<TransactionType, PostingShape>> = {
-  "Cash In": "customer_pays_cash",
-  "Telco Load": "customer_pays_cash",
-  "Bills Payment": "customer_pays_cash",
-  "Bank Transfer": "customer_pays_cash",
-  "Cash Out": "customer_pays_emoney",
-  "Profit Remittance": "equity_draw",
-};
 
 /** Account classes. `platform` is per-wallet; the other three are singletons. */
 export type AccountKind = "platform" | "cash" | "revenue" | "equity";

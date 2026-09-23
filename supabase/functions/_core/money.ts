@@ -59,8 +59,12 @@ export function toPesos(minor: Minor): number {
  * The live fee logic ends in Math.ceil() for Cash In and Cash Out, so fees on
  * those types are always whole pesos. Preserved exactly.
  */
-export function ceilToUnit(minor: Minor): Minor {
-  assertSafeInteger(minor, "minor");
+export function ceilToUnit(minor: number): Minor {
+  if (!Number.isFinite(minor)) {
+    throw new MoneyError(`cannot round a non-finite value: ${minor}`);
+  }
+  // Accepts a fractional centavo value on purpose: a fee of amount x 2% is
+  // fractional before it is rounded, and rounding is this function's job.
   return Math.ceil(minor / MINOR_PER_UNIT) * MINOR_PER_UNIT;
 }
 

@@ -49,6 +49,11 @@ AS $$
   );
 $$;
 
+-- Stated explicitly rather than relying on the event trigger from
+-- 20260923000002: applied to a database without it (a `supabase db reset`,
+-- or any environment where it was never created), Postgres's built-in PUBLIC
+-- EXECUTE would leave this callable by anon.
+REVOKE ALL ON FUNCTION gocash.is_my_operator(UUID) FROM PUBLIC, anon;
 -- Required by the RLS policies, which run as the querying role.
 GRANT EXECUTE ON FUNCTION gocash.is_my_operator(UUID) TO authenticated;
 
@@ -78,7 +83,10 @@ CREATE TABLE gocash.accounts (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  CONSTRAINT accounts_unique_name_per_operator UNIQUE (operator_id, name)
+  CONSTRAINT accounts_unique_name_per_operator UNIQUE (operator_id, name),
+  -- Target for the composite FK on postings below, which is what stops a
+  -- posting referencing another tenant's account.
+  CONSTRAINT accounts_id_operator_unique UNIQUE (id, operator_id)
 );
 
 -- Many platform accounts, but exactly one drawer / revenue / equity account.
@@ -133,7 +141,9 @@ CREATE TABLE gocash.ledger_entries (
 
   -- kind='reversal' if and only if it names the entry it reverses.
   CONSTRAINT ledger_entries_reversal_shape
-    CHECK ((kind = 'reversal') = (reverses_entry_id IS NOT NULL))
+    CHECK ((kind = 'reversal') = (reverses_entry_id IS NOT NULL)),
+  -- Target for the composite FK from postings.
+  CONSTRAINT ledger_entries_id_operator_unique UNIQUE (id, operator_id)
 );
 
 CREATE UNIQUE INDEX ledger_entries_idempotency
@@ -172,11 +182,33 @@ CREATE INDEX ledger_entries_transaction_idx
 
 CREATE TABLE gocash.postings (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id     UUID NOT NULL REFERENCES gocash.ledger_entries(id) ON DELETE RESTRICT,
-  account_id   UUID NOT NULL REFERENCES gocash.accounts(id) ON DELETE RESTRICT,
+  entry_id     UUID NOT NULL,
+  account_id   UUID NOT NULL,
+  -- Denormalised from the parent entry purely so the two composite FKs below
+  -- can force the account and the entry to belong to the SAME operator.
+  operator_id  UUID NOT NULL,
+
   -- Signed. Positive means the account went up. Zero is meaningless.
-  amount_minor BIGINT NOT NULL CHECK (amount_minor <> 0),
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  --
+  -- The upper bound is not decoration. Without it a single row holding a value
+  -- past 2^53 makes account_balances fail for EVERYONE with "numeric field
+  -- overflow" — not one bad row, the whole query. 10^10 centavos is PHP 100
+  -- million, far above any real transaction.
+  amount_minor BIGINT NOT NULL
+    CHECK (amount_minor <> 0 AND abs(amount_minor) <= 10000000000),
+
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- Both FKs carry operator_id, so a posting cannot reference an account owned
+  -- by one operator from an entry owned by another. Without this, a review
+  -- confirmed an entry could post into another tenant's account and commit --
+  -- and because RLS filters postings by the ENTRY's operator, the victim read
+  -- balance 0 while the stored sum was not 0. The derived balance would
+  -- silently depend on who was asking.
+  CONSTRAINT postings_entry_fk FOREIGN KEY (entry_id, operator_id)
+    REFERENCES gocash.ledger_entries(id, operator_id) ON DELETE RESTRICT,
+  CONSTRAINT postings_account_fk FOREIGN KEY (account_id, operator_id)
+    REFERENCES gocash.accounts(id, operator_id) ON DELETE RESTRICT
 );
 
 CREATE INDEX postings_account_idx ON gocash.postings (account_id);
@@ -246,6 +278,44 @@ BEGIN
 END;
 $$;
 
+/**
+ * Refuse to append a leg to an entry that was written by an earlier
+ * transaction.
+ *
+ * The balance check is AFTER INSERT and re-aggregates the whole entry, so a
+ * self-balancing PAIR added to an already-committed entry passes it. A review
+ * confirmed this: a 2-leg entry committed, then a later transaction added
+ * +900000 / -900000 to the same entry_id and committed, leaving 4 legs.
+ * Append-only protected the rows but not the entry.
+ *
+ * NOW() is transaction start time, so every leg written by one transaction
+ * shares a created_at and a leg from any later transaction does not.
+ */
+CREATE OR REPLACE FUNCTION gocash.assert_entry_not_sealed()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = gocash, public
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM gocash.postings p
+    WHERE p.entry_id = NEW.entry_id
+      AND p.created_at <> transaction_timestamp()
+  ) THEN
+    RAISE EXCEPTION
+      'ledger entry % was written by an earlier transaction and is sealed; '
+      'post a reversal and a new entry instead of appending to it',
+      NEW.entry_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER postings_entry_sealed
+  BEFORE INSERT ON gocash.postings
+  FOR EACH ROW EXECUTE FUNCTION gocash.assert_entry_not_sealed();
+
 CREATE CONSTRAINT TRIGGER postings_must_balance
   AFTER INSERT ON gocash.postings
   DEFERRABLE INITIALLY DEFERRED
@@ -296,13 +366,13 @@ SELECT
   a.kind,
   a.currency,
   COALESCE(SUM(p.amount_minor), 0)            AS balance_minor,
-  (COALESCE(SUM(p.amount_minor), 0) / 100.0)::NUMERIC(14,2) AS balance,
+  ROUND(COALESCE(SUM(p.amount_minor), 0) / 100.0, 2) AS balance,
   -- What a human wants to read: revenue and equity are credit-natured and go
   -- negative as they grow, so flip them. Fees earned show as +250.00.
-  CASE WHEN a.kind IN ('revenue', 'equity')
-       THEN (COALESCE(-SUM(p.amount_minor), 0) / 100.0)
-       ELSE (COALESCE( SUM(p.amount_minor), 0) / 100.0)
-  END::NUMERIC(14,2)                          AS natural_balance,
+  ROUND(CASE WHEN a.kind IN ('revenue', 'equity')
+             THEN COALESCE(-SUM(p.amount_minor), 0)
+             ELSE COALESCE( SUM(p.amount_minor), 0)
+        END / 100.0, 2)                       AS natural_balance,
   COUNT(p.id)                                 AS posting_count,
   MAX(p.created_at)                           AS last_posted_at
 FROM gocash.accounts a
@@ -320,9 +390,13 @@ WITH (security_invoker = true) AS
 SELECT e.id AS entry_id, e.operator_id, e.kind, e.created_at,
        SUM(p.amount_minor) AS out_of_balance_by_minor
 FROM gocash.ledger_entries e
-JOIN gocash.postings p ON p.entry_id = e.id
+-- LEFT JOIN, not JOIN: no trigger can fire on ledger_entries alone, so an
+-- entry whose postings were never written commits silently. With an inner
+-- join such an entry could never appear here -- it would look confirmed and
+-- have moved nothing.
+LEFT JOIN gocash.postings p ON p.entry_id = e.id
 GROUP BY e.id, e.operator_id, e.kind, e.created_at
-HAVING SUM(p.amount_minor) <> 0;
+HAVING COALESCE(SUM(p.amount_minor), 0) <> 0 OR COUNT(p.id) = 0;
 
 COMMENT ON VIEW gocash.unbalanced_entries IS
   'Any row here is a bug. Worth surfacing on the dashboard.';

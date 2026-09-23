@@ -11,7 +11,7 @@
  * rate_bps = 200, minimum_minor = 500.
  */
 
-import { type Minor, MINOR_PER_UNIT } from "./money.ts";
+import { type Minor, MINOR_PER_UNIT, ceilToUnit } from "./money.ts";
 import type { FeeRule } from "./types.ts";
 
 /**
@@ -85,8 +85,7 @@ export function calculateFee(
   // Cash In and Cash Out round UP to a whole peso — operators quote whole
   // pesos across the counter and do not hand back centavos.
   if (txType === "Cash In" || txType === "Cash Out") {
-    const best = Math.max(feeMinor, minimumMinor);
-    return Math.ceil(best / MINOR_PER_UNIT) * MINOR_PER_UNIT;
+    return ceilToUnit(Math.max(feeMinor, minimumMinor));
   }
 
   // Everything else keeps centavo precision. Note the falsy check on the
