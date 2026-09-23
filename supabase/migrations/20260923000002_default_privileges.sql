@@ -63,14 +63,18 @@ BEGIN
   FOR r IN
     SELECT object_identity
     FROM pg_event_trigger_ddl_commands()
-    WHERE command_tag = 'CREATE FUNCTION'
+    -- PROCEDUREs are callable through PostgREST too, and were missed by the
+    -- first version of this guard: a CREATE PROCEDURE in gocash came out
+    -- anon-executable. CREATE OR REPLACE and ALTER FUNCTION are covered
+    -- (both carry the CREATE FUNCTION tag or leave the ACL intact).
+    WHERE command_tag IN ('CREATE FUNCTION', 'CREATE PROCEDURE')
       AND schema_name = 'gocash'
   LOOP
     -- service_role is deliberately NOT revoked: it is granted by the schema's
     -- default ACL and the Edge Functions connect with that key.
-    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', r.object_identity);
-    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM anon', r.object_identity);
-    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM authenticated', r.object_identity);
+    EXECUTE format('REVOKE ALL ON ROUTINE %s FROM PUBLIC', r.object_identity);
+    EXECUTE format('REVOKE ALL ON ROUTINE %s FROM anon', r.object_identity);
+    EXECUTE format('REVOKE ALL ON ROUTINE %s FROM authenticated', r.object_identity);
     RAISE NOTICE 'gocash: auto-revoked PUBLIC/anon/authenticated EXECUTE on %',
       r.object_identity;
   END LOOP;
@@ -80,7 +84,7 @@ $$;
 DROP EVENT TRIGGER IF EXISTS gocash_lock_new_functions;
 CREATE EVENT TRIGGER gocash_lock_new_functions
   ON ddl_command_end
-  WHEN TAG IN ('CREATE FUNCTION')
+  WHEN TAG IN ('CREATE FUNCTION', 'CREATE PROCEDURE')
   EXECUTE FUNCTION public.gocash_revoke_public_execute();
 
 -- ---------------------------------------------------------------------------

@@ -110,9 +110,26 @@ DECLARE
   v_now TIMESTAMPTZ := NOW();
   v_id  UUID;
 BEGIN
+  -- Read the role from the SIGNED JWT claim, not from current_user.
+  --
+  -- The first version of this guard used
+  --   pg_has_role(current_user, 'service_role', 'MEMBER')
+  -- which is a no-op: inside a SECURITY DEFINER function current_user is the
+  -- function's OWNER (supabase_admin), and pg_has_role returns true for a
+  -- superuser against any role. The OR was therefore unconditionally true and
+  -- is_my_operator never ran — a review proved tenant A could rewrite tenant
+  -- B's pricing. session_user is no better: PostgREST connects as
+  -- `authenticator`, which is also a member of service_role.
+  --
+  -- That is the same defect as Audit #5a, reintroduced in the file written to
+  -- demonstrate the fix. The signed claim is the only caller identity that
+  -- cannot be impersonated from inside the function.
   IF NOT (
     gocash.is_my_operator(p_operator_id)
-    OR pg_has_role(current_user, 'service_role', 'MEMBER')
+    OR COALESCE(
+         current_setting('request.jwt.claims', true)::jsonb ->> 'role',
+         ''
+       ) = 'service_role'
   ) THEN
     RAISE EXCEPTION 'not permitted for operator %', p_operator_id
       USING ERRCODE = 'insufficient_privilege';

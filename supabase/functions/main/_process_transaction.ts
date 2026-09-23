@@ -5,7 +5,6 @@ import {
   detectPlatform,
   detectType,
   calculateProfit,
-  computeWalletDeltas,
   extractAccountNumber,
   type TransactionRule,
 } from "./_shared/transaction-processing.ts";
@@ -353,7 +352,12 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
         transaction_date: ai.transaction_date ?? null,
         image_url: uploadedImagePath,
         ai_raw_text: rawText || null,
-        status: "confirmed",
+        // PHASE 1 ONLY. Balances do not move here — the operator reviews this
+        // draft and confirms it, and confirm-transaction writes the ledger
+        // entry. Until 2026-09-23 this said "confirmed" and the wallet update
+        // ran in the same request, so the confirmation gate the PRD calls
+        // mandatory did not exist.
+        status: "awaiting_confirm",
         was_edited: false,
         edit_history: [],
       })
@@ -390,50 +394,22 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       return jsonResponse(req, { error: "Failed to save transaction", detail: txError.message }, 500);
     }
 
-    const deltas = computeWalletDeltas(txType, platform, amount, netProfit, (rules ?? []) as TransactionRule[]);
-
-    if (deltas) {
-      const { error: walletError } = await adminClient.rpc(
-        "confirm_transaction_atomic",
-        {
-          p_transaction_id:           transaction.id,
-          p_operator_id:              operator.id,
-          p_user_id:                  user.id,
-          p_previous_platform_wallet: null,
-          p_previous_platform_delta:  0,
-          p_next_platform_wallet:     deltas.platform_wallet_name,
-          p_next_platform_delta:      deltas.platform_delta,
-          p_cash_delta:               deltas.cash_delta,
-          p_status:                   "confirmed",
-          p_net_profit:               netProfit,
-          p_platform:                 platform,
-          p_transaction_type:         txType,
-          p_amount:                   amount,
-          p_account_number:           accountNumber,
-          p_reference_number:         ai.reference_number ?? null,
-          p_transaction_date:         ai.transaction_date ?? null,
-          p_was_edited:               false,
-          p_edit_history:             [],
-        }
-      );
-
-      if (walletError) {
-        await supabase
-          .from("transactions")
-          .update({ status: "failed", processing_errors: ["Wallet update failed: " + walletError.message] })
-          .eq("id", transaction.id);
-
-        console.error("Wallet update failed:", walletError.message);
-        await notifyProcessingError("Transaction saved but wallet update failed");
-        return jsonResponse(req, { error: "Transaction saved but wallet update failed" }, 500);
-      }
-    }
+    // NO WALLET UPDATE HERE.
+    //
+    // This is where confirm_transaction_atomic used to be called, with
+    // p_status: "confirmed", immediately after the insert. That is what made
+    // the gate a fiction: a GPT-4o misread of PHP 1,850 as PHP 1,850,000 moved
+    // real balances before any human saw the number. The ledger is append-only,
+    // so the only remedy was a reversal that stays in the audit trail forever.
+    //
+    // Balances now move exactly once, in confirm-transaction, after the
+    // operator taps confirm.
 
     await notifyProcessed(transaction);
 
     return jsonResponse(req, {
       transaction_id: transaction.id,
-      status: "confirmed",
+      status: "awaiting_confirm",
       platform: transaction.platform,
       transaction_type: transaction.transaction_type,
       amount: transaction.amount,
@@ -441,10 +417,9 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       account_number: transaction.account_number,
       reference_number: transaction.reference_number,
       transaction_date: transaction.transaction_date,
-      wallet_deltas: deltas ? {
-        [deltas.platform_wallet_name]: deltas.platform_delta,
-        Cash: deltas.cash_delta,
-      } : null,
+      // No wallet_deltas: nothing has moved yet. The client shows this as a
+      // draft for review; confirm-transaction reports the deltas once the
+      // operator accepts it.
     });
   } catch (err) {
     console.error("Unhandled error in process-transaction:", err);
