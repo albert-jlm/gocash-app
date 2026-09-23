@@ -43,7 +43,7 @@ DECLARE
   fn RECORD;
 BEGIN
   FOR fn IN
-    SELECT p.oid::regprocedure AS sig
+    SELECT p.oid::regprocedure AS sig, p.pronargs
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'gocash'
@@ -51,7 +51,19 @@ BEGIN
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', fn.sig);
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM anon', fn.sig);
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM authenticated', fn.sig);
-    RAISE NOTICE 'revoked PUBLIC/anon/authenticated EXECUTE on %', fn.sig;
+
+    -- Granted back explicitly rather than left to the schema's default ACL.
+    -- On the live database service_role happens to be in that default, so the
+    -- revoke above leaves it intact; on a fresh database it is not, and the
+    -- revoke strips it — which made this migration pass on production and fail
+    -- everywhere else. Stating the grant makes the file replayable.
+    -- Trigger functions are skipped: triggers run in the table owner's
+    -- context and are never invoked through PostgREST.
+    IF fn.pronargs > 0 THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', fn.sig);
+    END IF;
+
+    RAISE NOTICE 'locked down %', fn.sig;
   END LOOP;
 END;
 $$;
