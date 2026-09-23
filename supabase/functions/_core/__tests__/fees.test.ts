@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { calculateFee, resolveFeeRule } from "../fees.ts";
+import { calculateFee, resolveFeeRule, detectGrossAmount } from "../fees.ts";
 import { toMinor } from "../money.ts";
 import type { FeeRule } from "../types.ts";
 
@@ -95,39 +95,124 @@ const RULES: FeeRule[] = TYPES.map((t) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Differential: the port must not change any answer
+// Differential against the live implementation.
+//
+// An earlier version of this file claimed the port was "provably faithful" on
+// the strength of 33 whole-peso amounts and four fractional ones. That was too
+// weak a sweep: a review scanning every centavo found 167 divergences per
+// non-Cash-In/Out type, the first at PHP 250.75. The claim was wrong.
+//
+// There are exactly TWO classes of divergence, both deliberate. These tests
+// assert that every difference falls into one of them — so a NEW, unexplained
+// divergence fails the build.
 // ---------------------------------------------------------------------------
 
-describe("centavo port matches the live float implementation", () => {
-  // Deliberately includes the gross-fee cases (1020 = 1000 x 1.02), the
-  // minimum-fee band, and amounts that produce fractional centavos.
-  const amounts = [
-    0, 1, 5, 20, 49, 50, 99, 100, 150, 249, 250, 251, 255, 300, 333, 500, 510,
-    765, 999, 1000, 1020, 1530, 1850, 2000, 2040, 2550, 5000, 5100, 9999,
-    12345, 50000, 99999,
-  ];
+describe("differential vs the live implementation", () => {
+  const CENTAVO_SWEEP: number[] = [];
+  for (let c = 1; c <= 60_000; c++) CENTAVO_SWEEP.push(c); // PHP 0.01 .. 600.00
 
-  for (const txType of TYPES) {
-    it(`${txType}: identical across ${amounts.length} amounts`, () => {
-      for (const amount of amounts) {
-        const legacy = legacyCalculateProfit(txType, "GCash", amount, LEGACY_RULES);
-        const ported = calculateFee(txType, "GCash", toMinor(amount), RULES);
-        expect(
-          ported,
-          `${txType} at PHP ${amount}: legacy ${legacy}, ported ${ported / 100}`
-        ).toBe(toMinor(legacy));
-      }
-    });
-  }
+  const WHOLE_PESO_SWEEP: number[] = [];
+  for (let p = 1; p <= 20_000; p++) WHOLE_PESO_SWEEP.push(p * 100);
 
-  it("agrees on fractional peso amounts too", () => {
-    for (const amount of [12.5, 99.99, 333.33, 1234.56]) {
-      for (const txType of TYPES) {
-        const legacy = legacyCalculateProfit(txType, "GCash", amount, LEGACY_RULES);
-        const ported = calculateFee(txType, "GCash", toMinor(amount), RULES);
-        expect(ported, `${txType} at PHP ${amount}`).toBe(toMinor(legacy));
+  /**
+   * DEVIATION 1 — rounding space.
+   *
+   * For types that keep centavo precision, the legacy code rounds in PESO
+   * space (`Math.round(profit * 100) / 100`) and the port rounds in CENTAVO
+   * space. At PHP 250.75, 2% is 5.015: in pesos `5.015 * 100` is
+   * 501.49999999999994 and rounds DOWN to 501; in centavos `25075 * 0.02` is
+   * exactly 501.5 and rounds UP to 502.
+   *
+   * The port is the more correct of the two — the legacy answer is an artefact
+   * of float representation, not a pricing decision — and it can only ever
+   * differ by one centavo, always in the customer's disfavour by that centavo.
+   * Accepted deliberately.
+   */
+  it("deviation 1: differs from legacy by at most 1 centavo, and only on centavo-precision types", () => {
+    const centavoTypes = TYPES.filter((t) => t !== "Cash In" && t !== "Cash Out");
+    let diffs = 0;
+    for (const txType of centavoTypes) {
+      for (const minor of CENTAVO_SWEEP) {
+        const legacy = toMinor(legacyCalculateProfit(txType, "GCash", minor / 100, LEGACY_RULES));
+        const ported = calculateFee(txType, "GCash", minor, RULES);
+        if (legacy !== ported) {
+          diffs++;
+          expect(
+            Math.abs(ported - legacy),
+            `${txType} at ${minor} centavos: legacy ${legacy}, ported ${ported}`
+          ).toBe(1);
+        }
       }
     }
+    // Divergences exist and are bounded. If this ever reaches zero the legacy
+    // oracle has been changed and this test is no longer measuring anything.
+    expect(diffs).toBeGreaterThan(0);
+  });
+
+  it("deviation 1 does not affect whole-peso amounts, which is the common case", () => {
+    for (const txType of TYPES) {
+      for (const minor of WHOLE_PESO_SWEEP) {
+        if (txType === "Cash Out") continue; // deviation 2, covered below
+        const legacy = toMinor(legacyCalculateProfit(txType, "GCash", minor / 100, LEGACY_RULES));
+        expect(calculateFee(txType, "GCash", minor, RULES), `${txType} at PHP ${minor / 100}`)
+          .toBe(legacy);
+      }
+    }
+  });
+
+  /**
+   * DEVIATION 2 — the gross-amount heuristic no longer fires on a guess.
+   *
+   * Legacy silently un-grossed any Cash Out whose amount divided to a whole
+   * peso above 250. At 2% that is every amount divisible by 51, so 510, 1020,
+   * 2040, 3060 and 5100 — ordinary figures — were each charged about a peso
+   * short. The port charges the printed amount unless explicitly told the fee
+   * is included.
+   */
+  it("deviation 2: Cash Out matches legacy except where legacy guessed", () => {
+    const guessed: number[] = [];
+    for (const minor of WHOLE_PESO_SWEEP) {
+      const legacy = toMinor(legacyCalculateProfit("Cash Out", "GCash", minor / 100, LEGACY_RULES));
+      const ported = calculateFee("Cash Out", "GCash", minor, RULES);
+      if (legacy !== ported) {
+        guessed.push(minor / 100);
+        // Legacy always charged LESS, because it took the fee off a smaller base.
+        expect(legacy, `PHP ${minor / 100}`).toBeLessThan(ported);
+      }
+    }
+    // Every divergence is an amount divisible by 51 — the gross of a whole peso.
+    for (const amount of guessed) {
+      expect(amount % 51, `PHP ${amount} diverged but is not a multiple of 51`).toBe(0);
+    }
+    expect(guessed).toContain(510);
+    expect(guessed).toContain(1020);
+    expect(guessed).toContain(5100);
+    expect(guessed.length).toBeGreaterThan(300);
+  });
+
+  it("the un-grossing is still available, but only when asked for", () => {
+    // A PHP 1,000 cash out printed as 1,020: charge on the 1,000 base.
+    expect(calculateFee("Cash Out", "GCash", toMinor(1020), RULES)).toBe(2100);
+    expect(calculateFee("Cash Out", "GCash", toMinor(1020), RULES, { amountIncludesFee: true }))
+      .toBe(2000);
+  });
+
+  it("detectGrossAmount suggests rather than decides, and derives its own floor", () => {
+    const hit = detectGrossAmount("Cash Out", "GCash", toMinor(1020), RULES);
+    expect(hit?.likely).toBe(true);
+    expect(hit?.impliedBaseMinor).toBe(toMinor(1000));
+    expect(hit?.impliedFeeMinor).toBe(2000);
+
+    // 255 / 1.02 = 250 exactly, but 250 is the crossover (min 5 / rate 2%),
+    // not above it, so it is not flagged.
+    expect(detectGrossAmount("Cash Out", "GCash", toMinor(255), RULES)).toBeNull();
+
+    // Raise the minimum to PHP 10 and the crossover moves to 500. The old
+    // hardcoded `> 250` would still have fired here.
+    const richer = RULES.map((r) => ({ ...r, minimum_minor: 1000 }));
+    expect(detectGrossAmount("Cash Out", "GCash", toMinor(408), richer)).toBeNull();
+
+    expect(detectGrossAmount("Cash In", "GCash", toMinor(1020), RULES)).toBeNull();
   });
 });
 
@@ -162,24 +247,28 @@ describe("ceil(max(2%, PHP 5))", () => {
 });
 
 describe("Cash Out receipts that already include the fee", () => {
-  it("takes the fee from the base, not the gross, when it divides cleanly", () => {
-    // A PHP 1,000 cash out shown as 1,020. Fee is 20, not 20.40.
-    expect(calculateFee("Cash Out", "GCash", toMinor(1020), RULES)).toBe(2000);
+  it("charges the printed amount by default — no guessing", () => {
+    // 1,020 is a perfectly ordinary net cash out. Legacy silently assumed it
+    // was a grossed-up 1,000 and charged 20; that under-charged every genuine
+    // cash out of 510, 1020, 2040, 5100 and 383 other amounts under 20,000.
+    expect(calculateFee("Cash Out", "GCash", toMinor(1020), RULES)).toBe(2100);
   });
 
-  it("treats a non-dividing amount as net", () => {
-    // 1000 / 1.02 = 980.39... not a whole peso, so charge 2% of 1000 = 20
-    expect(calculateFee("Cash Out", "GCash", toMinor(1000), RULES)).toBe(2000);
+  it("un-grosses only when told the fee is included", () => {
+    expect(calculateFee("Cash Out", "GCash", toMinor(1020), RULES, { amountIncludesFee: true }))
+      .toBe(2000);
   });
 
-  it("does not apply below the PHP 250 floor", () => {
-    // 255 / 1.02 = 250 exactly, but 250 is not > 250, so the heuristic is off
-    expect(calculateFee("Cash Out", "GCash", toMinor(255), RULES)).toBe(600);
+  it("the flag is a no-op on types where it makes no sense", () => {
+    const withFlag = calculateFee("Cash In", "GCash", toMinor(1020), RULES, { amountIncludesFee: true });
+    const without  = calculateFee("Cash In", "GCash", toMinor(1020), RULES);
+    expect(withFlag).toBe(without);
   });
 
-  it("applies only to Cash Out", () => {
-    // same gross-looking amount, but Cash In never second-guesses the number
-    expect(calculateFee("Cash In", "GCash", toMinor(1020), RULES)).toBe(2100);
+  it("still respects the minimum after un-grossing", () => {
+    // A tiny gross amount must not un-gross its way below the PHP 5 floor.
+    expect(calculateFee("Cash Out", "GCash", toMinor(102), RULES, { amountIncludesFee: true }))
+      .toBe(500);
   });
 });
 
