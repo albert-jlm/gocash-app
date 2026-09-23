@@ -176,33 +176,37 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
-      transaction_rules: {
+      /**
+       * Replaces transaction_rules, which 20260924000006 drops.
+       *
+       * That table mixed pricing with the three delta_* multipliers that
+       * decided which direction money moved. Direction is now code
+       * (supabase/functions/_core/postings.ts); only pricing is data.
+       *
+       * Effective-dated: rows are never edited, a price change closes the
+       * current period and opens a new one via gocash.set_fee_rule(). So there
+       * is no Update, and Insert is never — writes go through the function,
+       * which keeps the no-overlap constraint satisfied and checks ownership.
+       */
+      fee_rules: {
         Row: {
           id: string;
           operator_id: string;
           transaction_type: string;
           platform: string;
-          delta_platform_mult: number;
-          delta_cash_amount_mult: number;
-          delta_cash_mult: number;
-          profit_rate: number | null;
-          profit_minimum: number | null;
-          is_active: boolean;
+          /** Basis points: 200 = 2.00%. */
+          rate_bps: number;
+          /** Centavos: 500 = PHP 5.00. */
+          minimum_minor: number;
+          rounding: "ceil_unit" | "nearest_minor";
+          effective_from: string;
+          /** NULL means this is the rule in force now. */
+          effective_to: string | null;
           created_at: string;
           updated_at: string;
         };
-        Insert: {
-          operator_id: string;
-          transaction_type: string;
-          platform: string;
-          delta_platform_mult: number;
-          delta_cash_amount_mult: number;
-          delta_cash_mult: number;
-          profit_rate?: number | null;
-          profit_minimum?: number | null;
-          is_active?: boolean;
-        };
-        Update: Partial<Database["gocash"]["Tables"]["transaction_rules"]["Insert"]>;
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       audit_logs: {
@@ -262,6 +266,28 @@ export interface Database {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      /**
+       * Change a price. Not an UPDATE — it closes the current period and opens
+       * a new one atomically, so history survives and an amended transaction
+       * reprices at the rate that applied on its own date.
+       *
+       * Granted to authenticated, and it verifies the caller owns the operator
+       * from the signed JWT claim. This is the only gocash function the browser
+       * may call; every other one was revoked in 20260923000001 after an audit
+       * found six of them executable with the public anon key.
+       */
+      set_fee_rule: {
+        Args: {
+          p_operator_id: string;
+          p_transaction_type: string;
+          p_platform: string;
+          p_rate_bps: number;
+          p_minimum_minor: number;
+          p_rounding?: "ceil_unit" | "nearest_minor";
+        };
+        Returns: string;
+      };
+    };
   };
 }

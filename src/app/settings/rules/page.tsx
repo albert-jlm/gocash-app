@@ -60,13 +60,23 @@ const TYPE_META: Record<string, { Icon: React.ElementType; color: string; desc: 
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * A row of gocash.fee_rules currently in force (effective_to IS NULL).
+ *
+ * Replaces transaction_rules, which 20260924000006 drops. That table carried
+ * both pricing AND the three delta_* multipliers that decided which direction
+ * money moved — and operator-editable direction is why four of six transaction
+ * types were silently destroying money. Direction now lives in
+ * supabase/functions/_core/postings.ts. This screen is pricing only.
+ */
 interface Rule {
   id: string;
   transaction_type: string;
   platform: string;
-  profit_rate: number | null;
-  profit_minimum: number | null;
-  is_active: boolean;
+  /** Basis points: 200 = 2.00%. Exact integer, unlike the old NUMERIC percent. */
+  rate_bps: number;
+  /** Centavos: 500 = PHP 5.00. */
+  minimum_minor: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +87,7 @@ export default function RulesSettingsPage() {
   const { operatorId, loading: authLoading } = useAuthGuard();
 
   const [rules, setRules] = useState<Rule[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
 
   // Editing
@@ -91,21 +102,25 @@ export default function RulesSettingsPage() {
     if (!operatorId) return;
     const opId = operatorId;
     async function fetch() {
+      // effective_to IS NULL is the rule in force now. Closed periods are kept
+      // so an amended transaction reprices at the rate that applied on its own
+      // date rather than today's.
       const { data } = await supabase
-        .from("transaction_rules")
-        .select("id, transaction_type, platform, profit_rate, profit_minimum, is_active")
+        .from("fee_rules")
+        .select("id, transaction_type, platform, rate_bps, minimum_minor")
         .eq("operator_id", opId)
+        .is("effective_to", null)
         .order("transaction_type");
-      if (data) setRules(data);
+      if (data) setRules(data as Rule[]);
       setDataLoading(false);
     }
     fetch();
-  }, [operatorId]);
+  }, [operatorId, refreshKey]);
 
   function startEdit(rule: Rule) {
     setEditingId(rule.id);
-    setEditRate(rule.profit_rate?.toString() ?? "");
-    setEditMin(rule.profit_minimum?.toString() ?? "");
+    setEditRate((rule.rate_bps / 100).toString());
+    setEditMin((rule.minimum_minor / 100).toString());
     setError(null);
     setSuccessId(null);
   }
@@ -115,56 +130,54 @@ export default function RulesSettingsPage() {
     setError(null);
   }
 
-  async function saveRule(ruleId: string) {
+  async function saveRule(rule: Rule) {
     setSaving(true);
     setError(null);
 
-    const rate = editRate.trim() === "" ? null : parseFloat(editRate);
-    const min = editMin.trim() === "" ? null : parseFloat(editMin);
+    const ratePct = editRate.trim() === "" ? 0 : parseFloat(editRate);
+    const minPeso = editMin.trim() === "" ? 0 : parseFloat(editMin);
 
-    if (rate !== null && (isNaN(rate) || rate < 0 || rate > 100)) {
+    if (isNaN(ratePct) || ratePct < 0 || ratePct > 100) {
       setError("Rate must be between 0 and 100");
       setSaving(false);
       return;
     }
-    if (min !== null && (isNaN(min) || min < 0)) {
+    if (isNaN(minPeso) || minPeso < 0) {
       setError("Minimum must be 0 or more");
       setSaving(false);
       return;
     }
 
-    const { error: updateError } = await supabase
-      .from("transaction_rules")
-      .update({ profit_rate: rate, profit_minimum: min })
-      .eq("id", ruleId);
+    // Not an UPDATE. A price change closes the current period and opens a new
+    // one so history stays intact, and doing that in two client statements
+    // would leave a window where the no-overlap constraint is violated or no
+    // rule is in force. set_fee_rule() does both atomically and checks that the
+    // caller owns the operator.
+    const { error: rpcError } = await supabase.rpc("set_fee_rule", {
+      p_operator_id: operatorId!,
+      p_transaction_type: rule.transaction_type,
+      p_platform: rule.platform,
+      p_rate_bps: Math.round(ratePct * 100),
+      p_minimum_minor: Math.round(minPeso * 100),
+      p_rounding:
+        rule.transaction_type === "Cash In" || rule.transaction_type === "Cash Out"
+          ? "ceil_unit"
+          : "nearest_minor",
+    });
 
     setSaving(false);
 
-    if (updateError) {
-      setError(updateError.message);
+    if (rpcError) {
+      setError(rpcError.message);
       return;
     }
 
-    setRules((prev) =>
-      prev.map((r) => (r.id === ruleId ? { ...r, profit_rate: rate, profit_minimum: min } : r))
-    );
+    // Refetch rather than patching state: set_fee_rule returns a NEW row id,
+    // because the edited rule is a new period rather than a mutated row.
     setEditingId(null);
-    setSuccessId(ruleId);
+    setSuccessId(rule.id);
+    setRefreshKey((k) => k + 1);
     setTimeout(() => setSuccessId(null), 2000);
-  }
-
-  async function toggleActive(rule: Rule) {
-    const newVal = !rule.is_active;
-    const { error: err } = await supabase
-      .from("transaction_rules")
-      .update({ is_active: newVal })
-      .eq("id", rule.id);
-
-    if (!err) {
-      setRules((prev) =>
-        prev.map((r) => (r.id === rule.id ? { ...r, is_active: newVal } : r))
-      );
-    }
   }
 
   if (authLoading || dataLoading) {
@@ -209,9 +222,13 @@ export default function RulesSettingsPage() {
               key={rule.id}
               className={[
                 "rounded-2xl border transition-colors",
-                rule.is_active
-                  ? "bg-white/[0.04] border-white/[0.06]"
-                  : "bg-white/[0.02] border-white/[0.03] opacity-50",
+                // fee_rules has no is_active column, and it does not need one:
+                // a rule that earns nothing is a rate of 0 with a minimum of 0,
+                // which is exactly what a NULL rate meant before. Dimming the
+                // card conveys that without a second way to express it.
+                rule.rate_bps === 0 && rule.minimum_minor === 0
+                  ? "bg-white/[0.02] border-white/[0.03] opacity-50"
+                  : "bg-white/[0.04] border-white/[0.06]",
               ].join(" ")}
             >
               {/* Rule header */}
@@ -234,21 +251,12 @@ export default function RulesSettingsPage() {
                         </span>
                       )}
 
-                      {/* Active toggle */}
-                      <button
-                        onClick={() => toggleActive(rule)}
-                        className={[
-                          "relative w-9 h-5 rounded-full transition-colors",
-                          rule.is_active ? "bg-emerald-500" : "bg-white/[0.15]",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform",
-                            rule.is_active ? "left-[18px]" : "left-0.5",
-                          ].join(" ")}
-                        />
-                      </button>
+                      {/* The active toggle is gone. It set
+                          transaction_rules.is_active, and fee_rules has no
+                          equivalent — turning a price "off" is setting it to
+                          zero, edited in the same place as any other change,
+                          rather than a separate switch that could disagree with
+                          the numbers beside it. */}
                     </div>
                   </div>
 
@@ -262,13 +270,13 @@ export default function RulesSettingsPage() {
                       <div className="bg-white/[0.06] rounded-lg px-2.5 py-1.5">
                         <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Rate</p>
                         <p className="text-sm font-semibold tabular-nums">
-                          {rule.profit_rate !== null ? `${rule.profit_rate}%` : "—"}
+                          {rule.rate_bps > 0 ? `${rule.rate_bps / 100}%` : "—"}
                         </p>
                       </div>
                       <div className="bg-white/[0.06] rounded-lg px-2.5 py-1.5">
                         <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Min</p>
                         <p className="text-sm font-semibold tabular-nums">
-                          {rule.profit_minimum !== null ? `₱${rule.profit_minimum}` : "—"}
+                          {rule.minimum_minor > 0 ? `₱${(rule.minimum_minor / 100).toFixed(2)}` : "—"}
                         </p>
                       </div>
                       <button
@@ -328,7 +336,7 @@ export default function RulesSettingsPage() {
 
                   <div className="flex gap-2">
                     <button
-                      onClick={() => saveRule(rule.id)}
+                      onClick={() => saveRule(rule)}
                       disabled={saving}
                       className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
                     >
