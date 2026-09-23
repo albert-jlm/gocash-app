@@ -1,12 +1,3 @@
-/**
- * Core business logic for GoCash transaction processing.
- * Pure TypeScript — no runtime-specific imports.
- * Shared between Supabase Edge Functions and unit tests.
- */
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type TransactionType =
   | "Cash In"
@@ -30,19 +21,11 @@ export interface TransactionRule {
 }
 
 export interface WalletDelta {
-  /** Name of the platform wallet to update, e.g. "GCash" or "MariBank" */
   platform_wallet_name: string;
-  /** Amount to add (or subtract if negative) from the platform wallet */
   platform_delta: number;
-  /** Amount to add (or subtract if negative) from the Cash wallet */
   cash_delta: number;
 }
 
-// ---------------------------------------------------------------------------
-// Platform detection
-// ---------------------------------------------------------------------------
-
-/** Detect which mobile money platform a screenshot belongs to. */
 export function detectPlatform(text: string): Platform {
   const t = text.toLowerCase();
   if (t.includes("gcash") || t.includes("g-cash")) return "GCash";
@@ -51,27 +34,22 @@ export function detectPlatform(text: string): Platform {
   return "Unknown";
 }
 
-// ---------------------------------------------------------------------------
-// Transaction type detection
-// ---------------------------------------------------------------------------
-
-/** Infer transaction type from OCR text when the AI model is uncertain. */
 export function detectType(text: string): TransactionType {
   const t = text.toLowerCase();
 
   if (
     t.includes("cash in") ||
     t.includes("cashin") ||
-    t.includes("you received")
+    t.includes("send money") ||
+    t.includes("you sent") ||
+    t.includes("sent to")
   )
     return "Cash In";
 
   if (
     t.includes("cash out") ||
     t.includes("cashout") ||
-    t.includes("send money") ||
-    t.includes("you sent") ||
-    t.includes("sent to")
+    t.includes("you received")
   )
     return "Cash Out";
 
@@ -98,23 +76,9 @@ export function detectType(text: string): TransactionType {
   )
     return "Bank Transfer";
 
-  return "Cash In"; // safe default for ambiguous screenshots
+  return "Cash In";
 }
 
-// ---------------------------------------------------------------------------
-// Profit calculation
-// ---------------------------------------------------------------------------
-
-/**
- * Calculate operator profit using the matching transaction rule.
- * Rules are checked for platform match ("all" matches any platform).
- *
- * Formula: profit = max(amount × profit_rate%, profit_minimum)
- */
-/**
- * Resolve the best matching rule: exact platform match wins over "all" fallback.
- * This prevents a generic "all" rule from silently overriding platform-specific economics.
- */
 function resolveRule(
   txType: string,
   platform: string,
@@ -140,28 +104,40 @@ export function calculateProfit(
   if (!rule || (rule.profit_rate === null && rule.profit_minimum === null))
     return 0;
 
-  let profit = rule.profit_rate ? (amount * rule.profit_rate) / 100 : 0;
-  if (rule.profit_minimum) profit = Math.max(profit, rule.profit_minimum);
+  const ratePercent = rule.profit_rate ?? 0;
+  const minimum = rule.profit_minimum ?? 0;
+  const rate = ratePercent / 100;
+
+  let profit = rate > 0 ? amount * rate : 0;
+
+  // Cash Out screenshots may show the full amount already including the fee.
+  // When the amount cleanly divides back to a likely whole-peso base, compute
+  // the fee from that base instead of charging the fee twice.
+  if (txType === "Cash Out" && rate > 0) {
+    const rawBase = amount / (1 + rate);
+    const isGrossAmountWithIncludedFee =
+      rawBase > 250 && Math.abs(rawBase - Math.round(rawBase)) < 0.000001;
+
+    if (isGrossAmountWithIncludedFee) {
+      profit = rawBase * rate;
+    }
+  }
+
+  if (txType === "Cash In" || txType === "Cash Out") {
+    return Math.ceil(Math.max(profit, minimum));
+  }
+
+  if (minimum) profit = Math.max(profit, minimum);
 
   return Math.round(profit * 100) / 100;
 }
 
-// ---------------------------------------------------------------------------
-// Account number extraction
-// ---------------------------------------------------------------------------
-
-/** Numbers that belong to the operator — never recorded as customer accounts. */
 const DEFAULT_BLACKLIST = ["09990000001", "13990000002"];
 
-/**
- * Extract the customer's mobile number from OCR text.
- * Returns null if no valid non-blacklisted number is found.
- */
 export function extractAccountNumber(
   text: string,
   blacklist: string[] = DEFAULT_BLACKLIST
 ): string | null {
-  // Match PH mobile numbers: 09XXXXXXXXX or +639XXXXXXXXX
   const matches = text.match(/(?:\+639|09)\d{9}/g);
   if (!matches) return null;
 
@@ -173,20 +149,6 @@ export function extractAccountNumber(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Wallet delta computation
-// ---------------------------------------------------------------------------
-
-/**
- * Compute how wallet balances should change when a transaction is confirmed.
- *
- * Delta encoding (from transaction_rules):
- *   platform_delta = amount × delta_platform_mult
- *   cash_delta     = (amount × delta_cash_amount_mult) + (profit × delta_cash_mult)
- *
- * "Cash In" = cash enters operator's register (customer cashes out GCash for PHP).
- * "Cash Out" = cash leaves operator's register (customer loads GCash with PHP).
- */
 export function computeWalletDeltas(
   txType: string,
   platform: string,
