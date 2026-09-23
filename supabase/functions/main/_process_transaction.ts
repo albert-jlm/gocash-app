@@ -8,6 +8,8 @@ import {
   extractAccountNumber,
   type TransactionRule,
 } from "./_shared/transaction-processing.ts";
+import { detectGrossAmount } from "../_core/fees.ts";
+import { toMinor } from "../_core/money.ts";
 import {
   buildTransactionImagePath,
   TRANSACTION_IMAGE_BUCKET,
@@ -405,6 +407,22 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
     // Balances now move exactly once, in confirm-transaction, after the
     // operator taps confirm.
 
+    // Fee rules still live in transaction_rules at this point in the rollout;
+    // map the matching one into the shape _core expects so the hint is priced
+    // by the same code the gate will use.
+    const hintRule = (rules ?? []).find((r: TransactionRule) =>
+      r.transaction_type === txType && (r.platform === platform || r.platform === "all"));
+
+    const grossHint = hintRule
+      ? detectGrossAmount(txType, platform, toMinor(amount), [{
+          transaction_type: hintRule.transaction_type,
+          platform: hintRule.platform,
+          rate_bps: Math.round((hintRule.profit_rate ?? 0) * 100),
+          minimum_minor: Math.round((hintRule.profit_minimum ?? 0) * 100),
+          is_active: true,
+        }])
+      : null;
+
     await notifyProcessed(transaction);
 
     return jsonResponse(req, {
@@ -418,8 +436,21 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       reference_number: transaction.reference_number,
       transaction_date: transaction.transaction_date,
       // No wallet_deltas: nothing has moved yet. The client shows this as a
-      // draft for review; confirm-transaction reports the deltas once the
+      // draft for review; confirm-transaction reports the postings once the
       // operator accepts it.
+      //
+      // A SUGGESTION, not a decision. If this Cash Out amount divides cleanly
+      // back to a whole peso, the receipt may be showing the figure with the
+      // fee already in it. The old code silently assumed so, and at 2% the
+      // gross of any whole peso divides cleanly — 510, 1020, 2040, 5100 and
+      // 383 other amounts under 20,000 were each charged about a peso short.
+      // The number cannot answer this; the operator holding the receipt can.
+      // The gate asks, and passes the answer to confirm-transaction as
+      // `amount_includes_fee`.
+      gross_amount_hint: grossHint && {
+        implied_amount: grossHint.impliedBaseMinor / 100,
+        implied_fee: grossHint.impliedFeeMinor / 100,
+      },
     });
   } catch (err) {
     console.error("Unhandled error in process-transaction:", err);
