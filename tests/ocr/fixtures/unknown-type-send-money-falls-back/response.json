@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\n₱750.00\nYou sent ₱750.00\nto LORNA B.\n+63 927 444 8181\nRef. No. 3344556677889\n24 Sep 2026 4:18 PM",
+  "platform": "GCash",
+  "transaction_type": "Unknown",
+  "amount": 750,
+  "reference_number": "3344556677889",
+  "account_number": "09454014554",
+  "transaction_date": "2026-09-24T16:18:00+08:00"
+}

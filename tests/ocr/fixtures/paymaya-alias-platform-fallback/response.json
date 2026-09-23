@@ -1,0 +1,9 @@
+{
+  "raw_text": "PayMaya\nBuy Load\nSuccessful\nSmart Prepaid\n09171234567\n₱300.00\nReference No. 5512348899020\n24 Sep 2026 10:10 PM",
+  "platform": "Unknown",
+  "transaction_type": "Telco Load",
+  "amount": 300,
+  "reference_number": "5512348899020",
+  "account_number": "09171234567",
+  "transaction_date": "2026-09-24T22:10:00+08:00"
+}

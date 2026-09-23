@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\nSent via GCash\n₱500.00\nSep 24, 2026 9:41 AM\nSent to\nJUAN D.\n+63 917 123 4567\nAmount ₱500.00\nTotal Amount Sent ₱500.00\nRef. No. 1029384756123\nYour new balance is ₱12,430.50",
+  "platform": "GCash",
+  "transaction_type": "Cash In",
+  "amount": 500,
+  "reference_number": "1029384756123",
+  "account_number": "09171234567",
+  "transaction_date": "2026-09-24T09:41:00+08:00"
+}

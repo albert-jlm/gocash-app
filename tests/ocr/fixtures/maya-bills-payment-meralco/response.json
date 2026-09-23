@@ -1,0 +1,9 @@
+{
+  "raw_text": "Maya\nBills Payment Successful\nMERALCO\nAccount Name: CRUZ, ANA M.\nService Account No. 0301234567\nContact 09281234567\nAmount Due ₱1,850.75\nConvenience Fee ₱0.00\nTotal ₱1,850.75\nReference No. 9900112233445\n24 Sep 2026 2:47 PM",
+  "platform": "Maya",
+  "transaction_type": "Bills Payment",
+  "amount": 1850.75,
+  "reference_number": "9900112233445",
+  "account_number": "09281234567",
+  "transaction_date": "2026-09-24T14:47:00+08:00"
+}

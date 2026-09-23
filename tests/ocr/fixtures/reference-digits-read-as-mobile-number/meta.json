@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "Date-prefixed reference (MB + YYMMDD + sequence), the standard shape for Philippine bank and e-wallet references. There is no mobile number anywhere on this receipt."
+}

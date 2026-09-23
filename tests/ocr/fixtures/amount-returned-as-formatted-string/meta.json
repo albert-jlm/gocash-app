@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "The model transcribed the amount as it appeared on screen instead of converting it, despite the system prompt saying 'plain numbers in PHP (no ₱ symbol, no commas)'. JSON mode enforces valid JSON, not a schema."
+}

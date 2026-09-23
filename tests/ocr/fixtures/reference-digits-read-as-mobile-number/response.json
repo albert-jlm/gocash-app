@@ -1,0 +1,9 @@
+{
+  "raw_text": "MariBank\nTransfer Successful\n₱3,000.00\nTo Land Bank of the Philippines\nAccount ending 8842\nVia PESONet\nReference No. MB2409240001987\n24 Sep 2026 10:48 PM",
+  "platform": "MariBank",
+  "transaction_type": "Bank Transfer",
+  "amount": 3000,
+  "reference_number": "MB2409240001987",
+  "account_number": null,
+  "transaction_date": "2026-09-24T22:48:00+08:00"
+}

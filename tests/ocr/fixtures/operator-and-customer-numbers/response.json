@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\n09990000001\nJUAN OPERATOR SARI-SARI\nYou received ₱1,500.00\nfrom RICARDO T.\n09171234567\nRef. No. 1029384756124\n24 Sep 2026 5:40 PM\nGCash Balance ₱13,405.50",
+  "platform": "GCash",
+  "transaction_type": "Cash Out",
+  "amount": 1500,
+  "reference_number": "1029384756124",
+  "account_number": null,
+  "transaction_date": "2026-09-24T17:40:00+08:00"
+}

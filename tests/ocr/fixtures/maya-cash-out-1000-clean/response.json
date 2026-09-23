@@ -1,0 +1,9 @@
+{
+  "raw_text": "Maya\nYou received ₱1,000.00\nfrom MARIA S. SANTOS\n09189876543\n24 Sep 2026, 10:12 AM\nReference No. 5512348899001\nAvailable Balance ₱8,204.00",
+  "platform": "Maya",
+  "transaction_type": "Cash Out",
+  "amount": 1000,
+  "reference_number": "5512348899001",
+  "account_number": "09189876543",
+  "transaction_date": "2026-09-24T10:12:00+08:00"
+}

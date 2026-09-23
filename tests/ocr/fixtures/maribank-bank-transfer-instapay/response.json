@@ -1,0 +1,9 @@
+{
+  "raw_text": "MariBank\nTransfer Successful\n₱2,500.00\nTo BDO Unibank\nAccount ending 4417\nRECEIVED BY: ROLANDO C.\nVia InstaPay\nService Fee ₱0.00\nReference No. MB-5501123456781\n24 Sep 2026 11:05 AM",
+  "platform": "MariBank",
+  "transaction_type": "Bank Transfer",
+  "amount": 2500,
+  "reference_number": "MB-5501123456781",
+  "account_number": null,
+  "transaction_date": "2026-09-24T11:05:00+08:00"
+}

@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "Same screen as operator-and-customer-numbers, but the model answered with the header number instead of declining."
+}

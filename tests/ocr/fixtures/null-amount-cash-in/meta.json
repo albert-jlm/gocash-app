@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "Motion blur across the amount. The true figure on the receipt is ₱1,200.00. The model obeyed 'Never guess amounts' and returned null."
+}

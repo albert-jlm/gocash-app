@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "Maya Meralco bill payment. Non-round amount with centavos, on purpose."
+}

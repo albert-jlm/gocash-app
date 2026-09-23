@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ocr": "vitest run tests/ocr",
     "test:db": "bash tests/run.sh",
     "test:db:keep": "bash tests/run.sh --keep",
     "cap:sync": "next build && npx cap sync",

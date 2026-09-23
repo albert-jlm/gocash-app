@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "Operator sends from their MariBank wallet to the customer's GCash account. The model could not place the unfamiliar MariBank branding and returned Unknown."
+}

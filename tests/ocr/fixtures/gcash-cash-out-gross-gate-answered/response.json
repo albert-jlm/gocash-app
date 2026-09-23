@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\nYou received ₱1,020.00\nfrom TERESA A.\n09165552323\nRef. No. 1029384756131\n24 Sep 2026 7:58 PM",
+  "platform": "GCash",
+  "transaction_type": "Cash Out",
+  "amount": 1020,
+  "reference_number": "1029384756131",
+  "account_number": "09005208780",
+  "transaction_date": "2026-09-24T19:58:00+08:00"
+}

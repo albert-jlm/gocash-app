@@ -1,0 +1,9 @@
+{
+  "raw_text": "Maya\nPayment Successful\nSMART POSTPAID\nAccount No. 0301998877\nSubscriber CARMELA D.\nAmount ₱1,299.00\nReference No. 9900112233446\n24 Sep 2026 9:03 PM",
+  "platform": "Maya",
+  "transaction_type": "Unknown",
+  "amount": 1299,
+  "reference_number": "9900112233446",
+  "account_number": null,
+  "transaction_date": "2026-09-24T21:03:00+08:00"
+}

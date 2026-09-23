@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\nSent via GCash\n₱5,000.00\nSent to\nJ. OPERATOR\n09990000001\nAmount ₱5,000.00\nRef. No. 8812345678901\n24 Sep 2026 9:30 PM\nYour new balance is ₱7,405.50",
+  "platform": "GCash",
+  "transaction_type": "Cash In",
+  "amount": 5000,
+  "reference_number": "8812345678901",
+  "account_number": null,
+  "transaction_date": "2026-09-24T21:30:00+08:00"
+}

@@ -1,0 +1,9 @@
+{
+  "raw_text": "Maya\nSend Money\nSuccessful\n₱250.00\nTo: ELENA G.\n09338887777\n24 Sep 2026 5:05 PM",
+  "platform": "Maya",
+  "transaction_type": "Cash In",
+  "amount": 250,
+  "reference_number": null,
+  "account_number": "09338887777",
+  "transaction_date": "2026-09-24T17:05:00+08:00"
+}

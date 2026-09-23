@@ -1,0 +1,9 @@
+{
+  "raw_text": "MariBank\nSend Money\nSuccessful\n₱1,000.00\nTo GCash\nNORA V.\n09173334444\nRef No. MB-5501123456790\n24 Sep 2026 8:44 PM",
+  "platform": "Unknown",
+  "transaction_type": "Cash In",
+  "amount": 1000,
+  "reference_number": "MB-5501123456790",
+  "account_number": "09173334444",
+  "transaction_date": "2026-09-24T20:44:00+08:00"
+}

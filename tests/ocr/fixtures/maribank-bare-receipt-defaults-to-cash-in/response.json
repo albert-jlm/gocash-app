@@ -1,0 +1,9 @@
+{
+  "raw_text": "MariBank\nSuccessful\n₱1,000.00\n24 Sep 2026 8:26 PM\nRef No. MB-5501123456789\nAvailable Balance ₱6,120.00",
+  "platform": "MariBank",
+  "transaction_type": "Unknown",
+  "amount": 1000,
+  "reference_number": "MB-5501123456789",
+  "account_number": null,
+  "transaction_date": "2026-09-24T20:26:00+08:00"
+}

@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "Printed reference is 0029384756123. The model normalised it as a number and dropped the two leading zeros."
+}

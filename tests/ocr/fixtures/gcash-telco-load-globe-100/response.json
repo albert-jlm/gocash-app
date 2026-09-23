@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\nBuy Load\nSuccessful\nGlobe Prepaid\n09171234567\nGO+99\n₱100.00\nRef. No. 7008123456789\n24 Sep 2026 1:30 PM\nGCash Balance ₱11,905.50",
+  "platform": "GCash",
+  "transaction_type": "Telco Load",
+  "amount": 100,
+  "reference_number": "7008123456789",
+  "account_number": "09171234567",
+  "transaction_date": "2026-09-24T13:30:00+08:00"
+}

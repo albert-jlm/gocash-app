@@ -1,0 +1,7 @@
+{
+  "source": "synthetic",
+  "model": "gpt-4o",
+  "recorded_at": "2026-09-24",
+  "screenshot": null,
+  "note": "GCash 'You received' screen. The operator's OWN number is in the header, above the customer's, exactly as the app renders it."
+}

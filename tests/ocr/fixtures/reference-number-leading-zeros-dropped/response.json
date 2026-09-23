@@ -1,0 +1,9 @@
+{
+  "raw_text": "GCash\nSent via GCash\n₱400.00\nSent to\nBAMBI Q.\n09178889999\nAmount ₱400.00\nRef. No. 0029384756123\n24 Sep 2026 10:22 PM",
+  "platform": "GCash",
+  "transaction_type": "Cash In",
+  "amount": 400,
+  "reference_number": "29384756123",
+  "account_number": "09178889999",
+  "transaction_date": "2026-09-24T22:22:00+08:00"
+}
