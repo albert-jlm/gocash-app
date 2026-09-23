@@ -6,10 +6,39 @@
 |-------|-------|
 | Product Name | GoCash Transaction Tracker |
 | Document Type | Technical Specification |
-| Version | 3.0 |
-| Status | Active |
-| Last Updated | 2026-03-22 |
+| Version | 3.1 |
+| Status | Active — under correction mid-rebuild |
+| Last Updated | 2026-09-23 |
 | Related PRD | [PRD.md](./PRD.md) |
+
+---
+
+## Status as of 2026-09-23
+
+**Large parts of this specification describe a system that does not exist.** It is being
+corrected on `feature/ledger-rebuild`. Read alongside:
+
+- `AUDITS.md` — Audit **#5** (full review) and **#5a** (live homelab verification, which
+  corrects several #5 findings; production had drifted far ahead of the repo)
+- `~/.claude/plans/i-think-the-whole-async-sparrow.md` — the approved rebuild plan
+
+Known-wrong, corrected inline below:
+
+| Section | Problem |
+|---|---|
+| §1.2 Current State | Describes n8n as current. n8n was removed from the pipeline in March 2026 |
+| §2.1, §2.2, §3.1, §3.2, §5.3 | Supabase **Realtime** documented as a core dependency. Never used; being dropped |
+| §3.3, §6.3 | Three per-type profit formulas including a ₱5 Telco ladder. **Fiction** — one formula, all types |
+| §4.2 `initialize_operator_defaults` | Cash In / Cash Out delta directions are **inverted** |
+| §4.2, §5.2 | Status spelled both `awaiting_confirm` and `awaiting_confirmation`. The live CHECK is `awaiting_confirm` |
+| §4.2 whole DDL | Superseded by the ledger schema; also never matched production |
+| §6.2 | Hardcodes an operator's account number in shipped classification logic |
+| §6.5 | `computeDeltas` and the multiplier model are being deleted |
+| §7.5 | `operator_devices` has never existed in any database |
+| §8, §9 | The atomic-confirm function and the n8n migration strategy are both superseded |
+
+**The single largest gap: the confirmation gate does not exist.** `main/_process_transaction.ts`
+writes `status: "confirmed"` and moves balances in the same request.
 
 ---
 
@@ -19,17 +48,23 @@
 
 Transform the GoCash Transaction Tracker from a single-operator n8n workflow into a **multi-tenant SaaS platform** serving multiple GoCash operators through a **cross-platform mobile application** available on the web, iOS App Store, and Google Play Store — built from a single Next.js + Capacitor codebase.
 
-### 1.2 Current State
+### 1.2 Current State (**corrected 2026-09-23**)
+
+The table that was here described the **2026-01 n8n era** and was already historical when
+this document was written. n8n was removed from the pipeline in March 2026; the workflow ID
+it quoted is dead. Actual current state:
 
 | Aspect | Current Implementation |
 |--------|------------------------|
-| Architecture | Single n8n workflow (ID: `1O6ul5VKOzqPwtOD`) |
-| Tenancy | Single operator |
-| Storage | 3 n8n Data Tables (GoCash Database, GoCash Tx Rules, GoCash Wallet) |
-| Interface | Telegram sendAndWait form + webhook |
-| Processing | Two-phase: synchronous (Phase 1) + async human confirmation gate (Phase 2) |
-| AI Cost | 2 OpenAI calls per transaction (GPT-4O vision + gpt-4.1-mini) |
-| Confirmation | Operator MUST click "Edit" in Telegram for wallet balances to update |
+| Architecture | Next.js static export + Capacitor; Supabase Edge Functions (Deno) |
+| Tenancy | 2 operators, 8 wallets, **1 transaction**. Effectively pre-production |
+| Storage | Supabase PostgreSQL, `gocash` schema, on the shared `supabase.zether.net` instance (migrating to a dedicated stack) |
+| Interface | In-app screens; Telegram is notification-only |
+| Processing | **Single-phase.** `main/_process_transaction.ts` OCRs, writes `status: "confirmed"` and moves balances in one request |
+| AI Cost | 2 OpenAI calls per transaction (GPT-4o vision + gpt-4.1-mini), **unmetered and unmeasured** |
+| Confirmation | **None.** `confirm-transaction` rejects anything not already confirmed and functions as an edit endpoint |
+| Money model | 3 `delta_*` multiplier columns (−1/0/+1). **4 of 6 transaction types post wrong** — Telco Load −95, Bills Payment −95, Bank Transfer −100, Profit Remittance booked as a cash-in |
+| Repo ↔ production | Production drifted far ahead (7 tables / 9 functions / 6 triggers / 18 indexes vs. the repo's 5/2/0/0). Baseline captured into migrations on 2026-09-23 |
 
 ### 1.3 Target State
 
@@ -70,10 +105,8 @@ Transform the GoCash Transaction Tracker from a single-operator n8n workflow int
 │   │  │           │  │  + RLS)   │  │           │  │           │ │  │
 │   │  └───────────┘  └───────────┘  └───────────┘  └───────────┘ │  │
 │   │                                                              │  │
-│   │  ┌───────────┐                                              │  │
-│   │  │ Realtime  │  (Live wallet + transaction sync to PWA)     │  │
-│   │  │(Live sync)│                                              │  │
-│   │  └───────────┘                                              │  │
+│   │  (Realtime was drawn here. It is not used and is being       │  │
+│   │   dropped — verified zero call sites in src/.)               │  │
 │   └──────────────────────────┬──────────────────────────────────┘  │
 │                              │                                      │
 │            ┌─────────────────┼─────────────────┐                   │
@@ -103,43 +136,70 @@ Transform the GoCash Transaction Tracker from a single-operator n8n workflow int
                                 └────────────────────┬───────────────────────┘
                                                      │
 ┌──────────┐    ┌─────────────────────────────────────┐    │
-│  PWA     │◀───│    Supabase DB (Realtime)            │◀───┘
+│  PWA     │◀───│    Supabase DB                       │◀───┘
 │(Confirm  │    │ Transaction saved → status:          │
-│  Screen) │    │ 'awaiting_confirm'                   │
+│  Screen) │    │ 'awaiting_confirm'  (NO ledger entry)│
 └────┬─────┘    └─────────────────────────────────────┘
      │
      │ Operator reviews, optionally edits, then taps Confirm
      ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ Supabase Edge Fn: confirm-transaction                            │
-│ • Update transaction record with confirmed values               │
-│ • Look up transaction rules → compute deltas                    │
-│ • Update platform wallet balance                                │
-│ • Update cash wallet balance                                    │
-│ • Write wallet snapshots to transaction (starting_cash,         │
-│   wallet_balance)                                               │
+│ • Apply pre-confirm edits to the transaction row                │
+│   (not in the ledger yet, so no reversal needed)                │
+│ • Resolve the effective fee_rules row                           │
+│ • Build the balanced postings for the type                      │
+│ • Insert ONE ledger_entries row + its postings, atomically,     │
+│   guarded by an idempotency key                                 │
 │ • Set status: 'confirmed'                                       │
 └─────────────────────────────────────────────────────────────────┘
+
+Plus, new:
+  POST /void-transaction   → reversal entry, status 'voided',
+                             enqueue receipt deletion
+  POST /amend-transaction  → reversal + new entry; both retained
 ```
+
+> 🔴 **TARGET, not current.** Today `process-transaction` writes `'confirmed'` and moves
+> balances itself; `confirm-transaction` edits already-confirmed rows via the live
+> 18-argument `confirm_transaction_atomic`. Ledger tables reject DELETE, so
+> `delete_transaction_atomic` cannot be ported — that is deliberate, it was the source of
+> the orphaned receipts.
 
 ### 2.3 Transaction Status Lifecycle
 
 ```
-[uploaded] → [processing] → [awaiting_confirm] → [confirmed]
+[uploaded] → [processing] → [awaiting_confirm] → [confirmed] → [voided]
                                                ↘ [edited] (confirmed with changes)
                     ↘ [failed] (any Phase 1 error)
 ```
 
-| Status | Meaning | Wallet Updated? |
+**`awaiting_confirm` is the correct spelling** — it is what the live CHECK constraint
+accepts. `awaiting_confirmation` appears in `PRD.md` and in §5.2 of this document; no
+database has ever accepted it, and the mismatch broke the pending/review flow (AUDITS #2).
+
+| Status | Meaning | Balance Moved? |
 |--------|---------|----------------|
 | `uploaded` | Image received, processing not yet started | No |
-| `processing` | n8n pipeline running | No |
-| `awaiting_confirm` | AI done, transaction saved, waiting for operator | No |
-| `confirmed` | Operator confirmed without changes | **Yes** |
+| `processing` | Edge Function AI pipeline running | No |
+| `awaiting_confirm` | AI done, transaction saved as a draft, waiting for operator | No |
+| `confirmed` | Operator confirmed | **Yes** — one balanced ledger entry |
 | `edited` | Operator confirmed with edits | **Yes** |
+| `voided` | Reversed after confirmation | Reversal entry posted; net zero |
 | `failed` | Processing error | No |
 
-> ⚠️ **Key architectural constraint**: Wallet balances are NEVER updated before status reaches `confirmed` or `edited`. Transactions stuck in `awaiting_confirm` represent incomplete records. The system must handle this gracefully — operators should be alerted about pending confirmations.
+> `'edited'` is in the live CHECK and is queried by the dashboard, but nothing ever sets it
+> — confirm always writes `'confirmed'` and tracks edits via `was_edited`. Either wire it
+> up or drop it from the enum; do not leave it half-real.
+
+> ⚠️ **Key architectural constraint**: balances are NEVER updated before status reaches
+> `confirmed` or `edited`. Transactions stuck in `awaiting_confirm` represent incomplete
+> records; operators are alerted about pending confirmations via the dashboard badge.
+>
+> 🔴 **Currently violated.** `_process_transaction.ts` writes `confirmed` directly and
+> `awaiting_confirm` is never written by anything. Restoring this is plan Phase 1.2. The
+> one sanctioned exception, once restored, is `operators.settings.auto_confirm_below_minor`
+> (default 0 = off).
 
 ---
 
@@ -168,7 +228,7 @@ Capacitor wraps the Next.js web app in a native shell for iOS and Android, while
 | Components | shadcn/ui | Latest | |
 | State Management | TanStack Query + Zustand | 5.x / 5.x | |
 | Form Handling | React Hook Form + Zod | 7.x / 3.x | |
-| Realtime | Supabase Realtime (built-in client) | — | |
+| ~~Realtime~~ | ~~Supabase Realtime~~ | — | **Not used. Being dropped** — zero `.channel(`/`.subscribe()` call sites in `src/` |
 | **Native Shell** | **Capacitor** | **6.x** | **iOS + Android wrapper** |
 | Native Camera | `@capacitor/camera` | 6.x | Replaces WebRTC camera |
 | Push Notifications | `@capacitor/push-notifications` | 6.x | APNs (iOS) + FCM (Android) |
@@ -203,7 +263,7 @@ Capacitor wraps the Next.js web app in a native shell for iOS and Android, while
 | Feature | Description | Priority | iOS | Android | Web |
 |---------|-------------|----------|-----|---------|-----|
 | Camera Capture | Native camera via `@capacitor/camera` | P0 | ✅ | ✅ | ✅ (WebRTC) |
-| Image Upload | Supabase Storage → trigger n8n | P0 | ✅ | ✅ | ✅ |
+| Image Upload | Supabase Storage → `process-transaction` Edge Function (n8n is not involved) | P0 | ✅ | ✅ | ✅ |
 | Confirm Screen | Review + edit AI results + Confirm | P0 | ✅ | ✅ | ✅ |
 | Transaction List | History with filters/search | P0 | ✅ | ✅ | ✅ |
 | Balance Dashboard | Real-time wallet balances | P0 | ✅ | ✅ | ✅ |
@@ -221,9 +281,13 @@ Capacitor wraps the Next.js web app in a native shell for iOS and Android, while
 | Login | `/login` | Email/magic link auth | Sign in, magic link |
 | Dashboard | `/` | Wallet balances, today's transactions, pending alerts | Upload / capture |
 | Capture | `/capture` | Native camera via `@capacitor/camera` | Take photo, re-take, upload |
-| Confirm | `/confirm/[id]` | Review AI results, edit if needed, confirm | Edit fields, Confirm |
+| Confirm | `/confirm?id=...` | Review AI results, edit if needed, confirm | Edit fields, Confirm |
 | Transactions | `/transactions` | Full history with filters | Filter, search |
-| Transaction Detail | `/transactions/[id]` | View single transaction, re-confirm if pending | Edit, re-confirm |
+| Transaction Detail | `/transactions?id=...` | View single transaction, re-confirm if pending | Edit, re-confirm |
+
+> Routes are **query-param based**, not dynamic segments. Static export cannot generate
+> `/confirm/[id]` for real UUIDs. `transactions/[id]/page.tsx` still exists in the tree and
+> is unreachable — `generateStaticParams` emits only `/transactions/preview`.
 | Settings | `/settings` | User prefs, Telegram notifications, account | Save prefs |
 
 #### Capacitor Configuration (`capacitor.config.ts`)
@@ -255,7 +319,7 @@ const config: CapacitorConfig = {
 export default config;
 ```
 
-> ⚠️ **Next.js Static Export Required**: Capacitor bundles the app as static files. Next.js must be configured with `output: 'export'` in `next.config.js`. This means **no Server-Side Rendering** — all data fetching must happen client-side (which is already the case since you're using Supabase client SDK + Realtime).
+> ⚠️ **Next.js Static Export Required**: Capacitor bundles the app as static files. Next.js must be configured with `output: 'export'` in `next.config.js`. This means **no Server-Side Rendering** — all data fetching must happen client-side (which is already the case — via the Supabase client SDK, fetched on navigation; Realtime is not used).
 
 #### Native Camera Usage (with Capacitor)
 
@@ -276,7 +340,9 @@ async function captureTransactionScreenshot() {
 }
 ```
 
-#### Push Notification Setup
+#### Push Notification Setup — **NOT BUILT**
+
+> The `operator_devices` table this writes to has never existed. See §7.5.
 
 ```typescript
 import { PushNotifications } from '@capacitor/push-notifications';
@@ -331,8 +397,8 @@ async function initPushNotifications(userId: string) {
 | **Auth** | User registration, login, session management | Magic link + email/password |
 | **Database** | PostgreSQL with Row Level Security | All business data |
 | **Storage** | Transaction screenshot images | `transaction-images` bucket |
-| **Edge Functions** | Processing trigger + confirmation logic | Deno runtime |
-| **Realtime** | Live balance + transaction status updates to PWA | Postgres CDC |
+| **Edge Functions** | Processing trigger + confirmation logic | Deno runtime. Only `main/` is served — `--main-service /home/deno/functions/main`; sibling directories are never executed |
+| ~~**Realtime**~~ | ~~Live balance + transaction status updates to PWA~~ | **Not used; dropped from the new stack.** Balances are refresh-on-navigate (~123 MiB saved) |
 
 #### Auth Configuration
 
@@ -401,33 +467,27 @@ function detectPlatform(ocrText: string): 'GCash' | 'MariBank' | 'Unknown' { ...
 // Transaction type detection
 function detectType(ocrText: string, platform: string): TransactionType { ... }
 
-// Profit calculation
-function calculateProfit(type: TransactionType, amount: number): number {
-  switch (type) {
-    case 'Cash In':
-      return Math.ceil(Math.max(amount * 0.02, 5));
-    case 'Cash Out':
-      const raw_base = amount / 1.02;
-      const earnings = (Number.isInteger(raw_base) && raw_base > 250)
-        ? raw_base * 0.02
-        : amount * 0.02;
-      return Math.max(Math.ceil(earnings), 5);
-    case 'Telco Load':
-      if (amount % 5 === 0) return Math.max(Math.trunc(amount * 0.02 * 100) / 100, 5);
-      const pre_total = amount + 5;
-      const next_multiple = pre_total + ((pre_total % 5 === 0) ? 0 : 5 - (pre_total % 5));
-      return Math.max(Math.trunc((next_multiple - amount) * 100) / 100, 5);
-    default:
-      return 0;
-  }
-}
+// Fee calculation — ONE formula for all six types, resolved from fee_rules
+// (rate_bps = 200, minimum_minor = 500). See §6.3 for the full corrected version.
+function calculateFee(txType, platform, amountMinor, rules): Minor { ... }
 
-// Account number extraction (with operator blacklist)
-const BLACKLIST = ['09990000001', '13990000002', '639990000001'];
+// Account number extraction (blacklists the operator's own numbers)
+// The numbers are NOT listed here — see §6.4.
 function extractAccountNumber(ocrText: string): string | null { ... }
 ```
 
-> The business logic lives in `lib/transaction-processing.ts` and is imported by the Edge Function. It can also be unit-tested independently with Vitest.
+> 🔴 **Corrected.** The per-type `calculateProfit` switch that was here — with a distinct
+> Cash Out base calculation and a Telco Load "round up to the next ₱5" ladder — described
+> pricing that does not exist. There is **one** formula:
+> `ceil(max(amount × 2%, ₱5))`, for all six types.
+
+> **Where the logic lives:** `supabase/functions/_core/` (`money.ts`, `postings.ts`,
+> `fees.ts`, `types.ts`) — Deno-compatible, zero runtime deps, imported directly by the
+> Edge Functions and by Next.js through a tsconfig path alias.
+>
+> `lib/transaction-processing.ts` referenced above was a **copy-paste that diverged from
+> the deployed copy**, and all 37 of its Vitest tests exercised code that never ran in
+> production (AUDITS #5 finding 4). It is being deleted.
 
 ---
 
@@ -461,6 +521,23 @@ function extractAccountNumber(ocrText: string): string | null { ... }
 ```
 
 ### 4.2 Full SQL DDL
+
+> 🔴 **This DDL is superseded and never matched production.** It is retained as the record
+> of the model being replaced. Two things to know before reading it:
+>
+> 1. **It was never the live schema.** Production was built by hand and ran ahead of it:
+>    7 tables, 9 functions, 6 triggers, 18 indexes, and a different
+>    `confirm_transaction_atomic` signature. The captured baseline is
+>    `supabase/migrations/20260923000000_baseline_gocash.sql`.
+> 2. **The seeded `transaction_rules` below have Cash In and Cash Out backwards** — see the
+>    correction on that block.
+>
+> The replacement is `accounts` / `ledger_entries` / `postings` / `account_balances` +
+> `fee_rules` (migrations `20260924000001` and `20260924000002`). `wallets`,
+> `transaction_rules`, `update_wallet_balance`, `confirm_transaction_atomic`, both
+> `delete_transaction_atomic` overloads and `initialize_operator_defaults` are dropped.
+> `transactions` loses `starting_cash`, `wallet_balance`, `time_24hr`, `full_date`, `year`,
+> `month`, `day`.
 
 ```sql
 -- Enable UUID extension
@@ -584,8 +661,11 @@ CREATE INDEX idx_wallets_operator ON wallets(operator_id);
 
 -- =============================================================================
 -- TRANSACTION RULES TABLE
--- Mirrors current n8n "GoCash Tx Rules" table (ID: 8WYdo1hXpavBttLN)
+-- Mirrored the n8n-era "GoCash Tx Rules" data table (long since removed).
 -- delta_platform_mult, delta_cash_amount_mult, delta_cash_mult
+-- 🔴 This whole table is being replaced by gocash.fee_rules. The three delta_*
+--    columns only ever held -1/0/+1 and encoded DIRECTION as configurable data,
+--    which is why 4 of 6 transaction types were wrong in production.
 -- =============================================================================
 CREATE TABLE transaction_rules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -683,8 +763,26 @@ CREATE POLICY "rules_delete_own" ON transaction_rules
 CREATE POLICY "audit_select_own" ON audit_logs
     FOR SELECT USING (operator_id = auth.uid());
 
--- NOTE: Service role key (used by n8n + Edge Functions) bypasses RLS by default.
+-- NOTE: Service role key (used by the Edge Functions) bypasses RLS by default.
 -- Never expose service_role key to the client. Use anon key in the PWA.
+--
+-- 🔴 TWO DEFECTS IN THE POLICIES ABOVE, both confirmed live (AUDITS #5 #15, #5a):
+--
+-- 1. Every UPDATE policy specifies USING only, with NO WITH CHECK. A user can update a
+--    row they own and set operator_id (or operators.user_id) to another tenant's id,
+--    writing rows into someone else's ledger. It also lets a user set their own
+--    subscription_tier. Add WITH CHECK to all of them.
+--
+-- 2. Nothing here REVOKEs EXECUTE on the SECURITY DEFINER functions. All six live ones
+--    carried the PostgreSQL default grant to PUBLIC, making them callable with the
+--    public anon key and NO session -- verified end to end. None reference auth.uid();
+--    all take p_operator_id as a caller-supplied parameter. Fixed on this branch by
+--    20260923000001_revoke_public_execute.sql and 20260923000002_default_privileges.sql.
+--
+-- CI asserts this generically so the next function added without a REVOKE is caught:
+--    SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+--    WHERE n.nspname = 'gocash' AND has_function_privilege('anon', p.oid, 'EXECUTE');
+-- must return zero rows, forever.
 
 -- =============================================================================
 -- UTILITY FUNCTIONS & TRIGGERS
@@ -749,20 +847,35 @@ BEGIN
         (NEW.id, 'platform', 'MariBank', 0),
         (NEW.id, 'cash', 'Cash', 0);
 
-    -- Create default transaction rules (mirrored from current n8n Tx Rules table)
-    -- Cash In: GCash/MariBank balance goes up, Cash goes down (customer gives cash, wallet gets credited)
-    -- Cash Out: GCash/MariBank balance goes down, Cash goes up
-    -- Telco Load: GCash balance goes down, Cash gets profit
+    -- 🔴 WRONG — RETAINED AS THE RECORD OF THE BUG.
+    --
+    -- The comments and the Cash In / Cash Out rows below are INVERTED. A Cash In is
+    -- the customer handing over CASH and receiving e-money: the drawer goes UP and the
+    -- platform wallet goes DOWN. This block says the opposite, and so do
+    -- src/app/onboarding/page.tsx:245 and src/app/settings/rules/page.tsx.
+    --
+    -- The live DB rules and the OCR prompt have it right; the repo seed does not, so any
+    -- operator onboarded with current repo code gets backwards rules (AUDITS #5a, #6).
+    --
+    -- Four of the six rows are wrong in a second way: the deltas do not sum to the fee
+    -- earned. On a PHP 100 transaction, Telco Load comes to -95, Bills Payment -95,
+    -- Bank Transfer -100, and Profit Remittance records a cash-IN. Nothing detected this
+    -- because nothing asserted that the books must balance.
+    --
+    -- Correct directions are in PRD.md §3.3 and supabase/functions/_core/postings.ts.
+    -- This whole function is dropped and replaced by gocash.provision_operator(), which
+    -- seeds fee_rules instead: direction is fixed per type, only rate and minimum are
+    -- operator-configurable.
     INSERT INTO transaction_rules (
         operator_id, transaction_type, platform,
         delta_platform_mult, delta_cash_amount_mult, delta_cash_mult
     ) VALUES
-        (NEW.id, 'Cash In',           'all', 1,  -1, 1),
-        (NEW.id, 'Cash Out',          'all', -1,  1, 1),
-        (NEW.id, 'Telco Load',        'all', -1,  0, 1),
-        (NEW.id, 'Bills Payment',     'all', -1,  0, 1),
-        (NEW.id, 'Bank Transfer',     'all', -1,  0, 0),
-        (NEW.id, 'Profit Remittance', 'all', -1,  1, 0);
+        (NEW.id, 'Cash In',           'all', 1,  -1, 1),   -- WRONG: should be -1, +1
+        (NEW.id, 'Cash Out',          'all', -1,  1, 1),   -- WRONG: should be +1, -1
+        (NEW.id, 'Telco Load',        'all', -1,  0, 1),   -- WRONG: loses the principal
+        (NEW.id, 'Bills Payment',     'all', -1,  0, 1),   -- WRONG: loses the principal
+        (NEW.id, 'Bank Transfer',     'all', -1,  0, 0),   -- WRONG: loses principal AND fee
+        (NEW.id, 'Profit Remittance', 'all', -1,  1, 0);   -- WRONG: records a cash-in
 
     RETURN NEW;
 END;
@@ -804,7 +917,7 @@ interface ProcessTransactionRequest {
 
 interface ProcessTransactionResponse {
   transaction_id: string;
-  status: 'awaiting_confirmation';
+  status: 'awaiting_confirm';   // corrected: matches the live CHECK constraint
   // Pre-filled data for the review screen:
   platform: 'GCash' | 'MariBank' | 'Unknown' | string;
   transaction_type: 'Cash In' | 'Cash Out' | 'Telco Load' | 'Unknown' | string;
@@ -830,9 +943,14 @@ interface ProcessTransactionResponse {
 //    (hard stop if date cannot be parsed)
 // 10. Upsert transaction record with all extracted fields
 //     Dedup key: UNIQUE(operator_id, reference_number)
-//     Status → 'awaiting_confirmation'
+//     Status → 'awaiting_confirm'   [corrected spelling]
+//     NO ledger entry is written here and NO balance moves.
 // 11. Return ProcessTransactionResponse
 ```
+
+> 🔴 **Step 10 is TARGET.** The live function writes `status: "confirmed"` and applies the
+> balance change here. Also note: the image should upload *after* extraction succeeds, not
+> before (step 2) — uploading first is one of the three bugs that leaves orphaned receipts.
 
 #### `confirm-transaction`
 Called when operator taps "Save Transaction" on the review screen. Replaces the old Telegram confirmation gate.
@@ -841,6 +959,7 @@ Called when operator taps "Save Transaction" on the review screen. Replaces the 
 // POST /functions/v1/confirm-transaction
 interface ConfirmTransactionRequest {
   transaction_id: string;
+  idempotency_key: string;   // required: a double-tap must not post twice
   // Optionally edited fields:
   transaction_type?: string;
   amount?: number;
@@ -858,147 +977,194 @@ interface ConfirmTransactionResponse {
   };
 }
 
-// Flow:
-// 1. Verify auth + ownership of transaction_id
+// Flow (TARGET):
+// 1. Verify auth + ownership of transaction_id; require status = 'awaiting_confirm'
 // 2. Determine if any fields were edited (compare to current DB values)
 // 3. Update transaction with confirmed values + set status='confirmed' or 'edited'
-// 4. Look up transaction_rules by transaction_type
-// 5. Compute: deltaPlatform = amount × delta_platform_mult
-//             deltaCash = (amount × delta_cash_amount_mult) + (profit × delta_cash_mult)
-// 6. Read current platform wallet balance
-// 7. Update platform wallet: balance += deltaPlatform
-// 8. Read current cash wallet balance (starting_cash snapshot = this value)
-// 9. Update cash wallet: balance += deltaCash
-// 10. Update transaction: starting_cash = pre-step-8 cash balance,
-//                         wallet_balance = post-step-7 platform balance,
-//                         confirmed_at = now(), confirmed_by = 'operator'
-// 11. Log to audit_logs
-// 12. Return updated wallet balances
+//    (nothing is in the ledger yet, so a pre-confirm edit needs no reversal)
+// 4. Resolve the effective fee_rules row for (type, platform, transaction_date)
+// 5. Build the balanced postings for the type (see _core/postings.ts)
+// 6. Insert ONE ledger_entries row + its postings in one transaction.
+//    The zero-sum trigger rejects the entry if the legs do not sum to zero.
+//    A replayed idempotency_key is rejected -- one entry, not two.
+// 7. Snapshot the resolved rate on the entry, so "why was this PHP 7?" is answerable
+// 8. Return balances read back from account_balances
 ```
 
-### 5.3 Realtime Subscriptions (PWA)
+> 🔴 **Steps 4–8 are TARGET.** The live endpoint requires status `confirmed`/`edited`
+> (it is an *edit* endpoint) and calls the 18-argument `confirm_transaction_atomic`, a
+> hand-rolled reversal engine. That function also has **no status guard** in its
+> transaction UPDATE, so two concurrent confirms both apply deltas (AUDITS #5 finding 3).
+>
+> One more live bug this flow must not inherit: `edits.account_number ?? tx.account_number`
+> means a client sending `null` to *clear* a field silently keeps the old value. Applies to
+> `account_number`, `reference_number` and `transaction_date`.
+
+### 5.3 ~~Realtime Subscriptions (PWA)~~ — **REMOVED**
+
+**This section described code that was never written.** Two `supabase.channel(...)`
+subscriptions were specified here and reproduced as a core dependency across `README.md`,
+`project-spec.md`, `architecture.md` and `CLAUDE.md`. A `grep` for `.channel(` and
+`.subscribe()` across `src/` returns **zero call sites**. Realtime has never been used.
+
+It is dropped from the new stack (~123 MiB of RAM for a feature nothing calls). Balances
+and transaction status are read on navigation:
 
 ```typescript
-// Subscribe to transaction status changes for live updates
-const subscription = supabase
-  .channel('transaction-updates')
-  .on('postgres_changes', {
-    event: 'UPDATE',
-    schema: 'gocash',
-    table: 'transactions',
-    filter: `operator_id=eq.${userId}`
-  }, (payload) => {
-    // Update local state when n8n writes results back
-    // e.g., status changes from 'processing' → 'awaiting_confirm'
-    updateTransaction(payload.new);
-  })
-  .subscribe();
-
-// Subscribe to wallet balance changes
-const walletSub = supabase
-  .channel('wallet-updates')
-  .on('postgres_changes', {
-    event: 'UPDATE',
-    schema: 'gocash',
-    table: 'wallets',
-    filter: `operator_id=eq.${userId}`
-  }, (payload) => {
-    updateWalletBalance(payload.new);
-  })
-  .subscribe();
+// Dashboard: read derived balances on mount / navigation
+const { data: balances } = await supabase
+  .from('account_balances')
+  .select('account_id, kind, platform, natural_balance')
+  .eq('operator_id', operatorId);
 ```
+
+PRD **FR-13** promised "instant" balance updates. That requirement is **changed, not
+deleted**: it becomes refresh-on-navigate, which is what operators have actually been
+getting for six months.
 
 ---
 
 ## 6. Business Logic Reference
 
-All business logic lives in `lib/transaction-processing.ts` — pure TypeScript, no Node.js dependencies, importable by Edge Functions and unit-testable with Vitest.
+All business logic lives in `supabase/functions/_core/` — pure TypeScript, Deno-compatible,
+zero runtime dependencies, imported directly by the Edge Functions and by Next.js through a
+tsconfig path alias, and unit-tested with Vitest.
+
+> **Corrected location.** This said `lib/transaction-processing.ts`. That file was a
+> copy-paste of the deployed logic that then diverged from it: the deployed copy gained
+> `resolveRule()` (exact platform beats `"all"`) and Maya detection; the client copy kept
+> first-match-wins and had neither. All 37 tests imported the client copy, so **every
+> passing test exercised code that never ran in production** (AUDITS #5 finding 4). One
+> source now, two runtimes.
 
 ### 6.1 Platform Detection
 
 ```typescript
-const GCASH_KEYWORDS = ['sent via gcash', 'transfer from 09990000001', 'buy load', 'to 09990000001'];
+// Keyword tables come from data, not literals: platform_catalog (global) +
+// operator_platforms.keywords (per tenant). The operator's own mobile numbers are
+// interpolated per request from gocash.operator_numbers -- see the note in §6.2.
 
-function detectPlatform(ocrText: string): 'GCash' | 'MariBank' | 'Unknown' {
-  const lower = ocrText.toLowerCase();
-  if (GCASH_KEYWORDS.some(k => lower.includes(k.toLowerCase()))) return 'GCash';
-  if (ocrText.includes('MariBank')) return 'MariBank';  // case-sensitive
-  return 'Unknown';
+function detectPlatform(ocrText: string, catalog): Platform {
+  // GCash / MariBank / Maya / Unknown
 }
 ```
+
+> The `Unknown → "GCash"` fallback is **dropped**. `Unknown` means the gate asks the
+> operator. Silently guessing a platform in a multi-tenant product posts to the wrong
+> account.
 
 ### 6.2 Transaction Type Detection
 
 ```typescript
-function detectType(ocrText: string): TransactionType {
-  const lower = ocrText.toLowerCase();
-  if (lower.includes('sent via gcash') || lower.includes('transfer from 09990000001')
-      || lower.includes('seabank: 13990000002'))         return 'Cash In';
-  if (ocrText.includes('to 09990000001'))                return 'Cash Out';  // case-sensitive
-  if (lower.includes('buy load') || lower.includes('load completed')
-      || lower.includes('telco promo') || lower.includes('product name')) return 'Telco Load';
-  return 'Unknown';
+function detectType(ocrText: string, operatorNumbers: string[]): TransactionType {
+  // "send money" / "you sent" / "sent to"  -> Cash In
+  // "you received"                          -> Cash Out
+  // "buy load" / "load completed" / "telco promo" / "product name" -> Telco Load
+  // otherwise                               -> Unknown
 }
 ```
 
-### 6.3 Profit Calculation
+> 🔴 **Two corrections to what was here.**
+>
+> 1. **An operator's personal account number was hardcoded in shipped classification
+>    logic** — a `seabank: <number>` literal here, plus two more in §6.1 and four in the
+>    §6.4 blacklist. Those literals are removed from this document. They still exist in
+>    the OCR prompt and shared logic; Phase 2 of
+>    the plan moves them to `gocash.operator_numbers`, loaded per request, with the exit
+>    criterion being **zero hardcoded references anywhere in the codebase**. A keyword
+>    table that names one tenant cannot serve a second one.
+>
+> 2. **The Cash In / Cash Out keyword mappings were swapped** between the repo copy and
+>    the live copy (AUDITS #5a, finding 7). The live mapping shown above is the correct
+>    one; the 37 repo tests asserted the repo's inverted mapping.
+
+### 6.3 Fee Calculation — **CORRECTED**
+
+**One formula for all six types**, resolved from `fee_rules` rather than hardcoded per type:
+
+```
+fee = ceil(max(amount × 2%, ₱5))          // rate_bps = 200, minimum_minor = 500
+```
+
+`supabase/functions/_core/fees.ts`, in integer centavos:
 
 ```typescript
-function calculateProfit(type: TransactionType, amount: number): number {
-  if (amount <= 0) throw new Error('Amount must be greater than 0');
+export function calculateFee(
+  txType: string, platform: string, amountMinor: Minor, rules: readonly FeeRule[]
+): Minor {
+  const rule = resolveFeeRule(txType, platform, rules);   // exact platform beats "all"
+  if (!rule) return 0;                                    // unpriced earns nothing, no guessing
 
-  switch (type) {
-    case 'Cash In':
-      return Math.ceil(Math.max(amount * 0.02, 5));
+  const rate = rule.rate_bps / 10_000;
+  let feeMinor = rate > 0 ? amountMinor * rate : 0;
 
-    case 'Cash Out': {
-      const raw_base = amount / 1.02;
-      const earnings = (Number.isInteger(raw_base) && raw_base > 250)
-        ? raw_base * 0.02
-        : amount * 0.02;
-      return Math.max(Math.ceil(earnings), 5);
-    }
-
-    case 'Telco Load':
-      if (amount % 5 === 0) {
-        return Math.max(Math.trunc(amount * 0.02 * 100) / 100, 5);
-      } else {
-        const pre_total = amount + 5;
-        const next_multiple = pre_total + ((pre_total % 5 === 0) ? 0 : 5 - (pre_total % 5));
-        return Math.max(Math.trunc((next_multiple - amount) * 100) / 100, 5);
-      }
-
-    default:
-      return 0;  // Bills Payment, Bank Transfer, Profit Remittance, Unknown
+  // Cash Out: the receipt may already include the fee. If the amount divides
+  // cleanly back to a whole-peso base above PHP 250, take the fee from that base
+  // so it is not charged twice.
+  if (txType === 'Cash Out' && rate > 0) {
+    const base = grossBasePesos(amountMinor / MINOR_PER_UNIT, rate);
+    if (base !== null) feeMinor = base * rate * MINOR_PER_UNIT;
   }
+
+  // NUANCE: the ceiling is applied to Cash In and Cash Out ONLY.
+  if (txType === 'Cash In' || txType === 'Cash Out') {
+    return ceilToUnit(Math.max(feeMinor, rule.minimum_minor));
+  }
+  // The other four types keep centavo precision. A deliberate deviation from the
+  // decision as stated, preserving live behaviour.
+  if (rule.minimum_minor) feeMinor = Math.max(feeMinor, rule.minimum_minor);
+  return Math.round(feeMinor);
 }
 ```
+
+> 🔴 **What was here was fiction.** Three different per-type formulas, including a Telco
+> Load "round up to the next ₱5" bracket ladder. No deployed code has ever done that.
+>
+> Fee rules are **effective-dated** (`effective_from`/`effective_to`, with a GiST exclusion
+> constraint rejecting overlapping periods). Because a confirmed entry can be reversed and
+> re-posted, a fee change without a time axis would silently rewrite history when an old
+> transaction is amended. The resolved rate is snapshotted on the entry.
 
 ### 6.4 Account Number Extraction
 
 ```typescript
-const BLACKLIST = new Set(['09990000001', '13990000002', '639990000001', '6313990000002']);
+// The blacklist is the operator's own numbers, loaded per request from
+// gocash.operator_numbers. It is NOT a module-level literal -- the four numbers
+// previously hardcoded here belong to one operator and are removed from this document.
 
-function extractAccountNumber(ocrText: string): string | null {
+function extractAccountNumber(ocrText: string, blacklist: Set<string>): string | null {
   const matches = ocrText.match(/(?:\+63|0)[\d\s\-]{9,12}/g) ?? [];
   for (const match of matches) {
     const normalized = match.replace(/[\s\-]/g, '').replace(/^\+63/, '0');
-    if (!BLACKLIST.has(normalized)) return normalized;
+    if (!blacklist.has(normalized)) return normalized;
   }
   return null;
 }
 ```
 
-### 6.5 Wallet Delta Calculation (used in confirm-transaction)
+### 6.5 ~~Wallet Delta Calculation~~ → Posting Construction
 
-```typescript
-function computeDeltas(rule: TransactionRule, amount: number, profit: number) {
-  return {
-    deltaPlatform: amount * rule.delta_platform_mult,
-    deltaCash: (amount * rule.delta_cash_amount_mult) + (profit * rule.delta_cash_mult),
-  };
-}
-```
+**`computeDeltas` and the three `delta_*` multiplier columns are deleted.** Their values
+were only ever −1/0/+1, they encoded *direction* as operator-configurable data, and four of
+the six types were consequently wrong in production with nothing to detect it.
+
+The replacement is `_core/postings.ts`: three posting shapes, six named functions for
+readability, every entry summing to zero.
+
+| Shape | Types | Legs |
+|---|---|---|
+| `customer_pays_cash` | Cash In, Telco Load, Bills Payment, Bank Transfer | Cash **+(amount + fee)**, Platform **−amount**, Revenue **−fee** |
+| `customer_pays_emoney` | Cash Out | Platform **+amount**, Cash **−(amount − fee)**, Revenue **−fee** |
+| `equity_draw` | Profit Remittance | Cash **−amount**, Equity **+amount** |
+
+The Cash Out asymmetry — fee *deducted* rather than added on top — is real and comes from
+the live rules. It was invisible while it lived in multiplier columns.
+
+Amounts are integer centavos in TypeScript. Postgres NUMERIC is exact, but the old float +
+`round2()` guard could disagree with it; since the fee model produces whole pesos this
+costs nothing. `accounts.currency` is `CHAR(3) NOT NULL DEFAULT 'PHP'` and an entry is
+constrained to a single currency — a mixed-currency entry that sums to zero would be a
+catastrophic silent bug.
 
 ### 6.6 Error Handling Strategy
 
@@ -1076,10 +1242,14 @@ npx cap open ios     # Opens Xcode
 npx cap open android # Opens Android Studio
 ```
 
-### 7.5 Device Tokens Table (for push notifications)
+### 7.5 Device Tokens Table (for push notifications) — **NOT BUILT**
+
+> 🔴 **`operator_devices` has never existed** in any GoCash database. It was proposed here,
+> then listed in `architecture.md` as if it were part of the live schema for six months.
+> Push notifications remain unbuilt. The DDL below is a proposal, not a record.
 
 ```sql
--- Add to schema: track per-device push tokens per operator
+-- PROPOSED (never applied): track per-device push tokens per operator
 CREATE TABLE operator_devices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     operator_id UUID NOT NULL REFERENCES operators(id) ON DELETE CASCADE,
@@ -1095,7 +1265,24 @@ CREATE INDEX idx_devices_operator ON operator_devices(operator_id);
 
 ---
 
-## 9. SaaS Migration Strategy
+## 9. SaaS Migration Strategy — **SUPERSEDED**
+
+> 🔴 **This entire section is historical.** It plans a migration *from* n8n Data Tables
+> *to* Supabase that completed in March 2026, and its "Keep — no change" row for the n8n AI
+> pipeline is the opposite of what happened: n8n was removed from the pipeline entirely.
+> Phase 0 and Phase 1 below both describe states the project passed through and left.
+>
+> **The current plan is `~/.claude/plans/i-think-the-whole-async-sparrow.md`:**
+>
+> | Phase | Work | Status |
+> |---|---|---|
+> | 0 | Close the anon RPC hole, lock CORS, capture production into the repo, stand up the dedicated 5-service stack | In progress (4 commits on `feature/ledger-rebuild`) |
+> | 1 | The ledger and the gate; golden receipt set for OCR accuracy | In progress |
+> | 2 | Tenant safety — nothing hardcoded to one operator; receipt retention; `ai_usage` metering | Next |
+> | 4 | Durability — fix the offsite backup, verify a restore. **Hard gate before Phase 3** | Not started |
+> | 3 | Self-serve signup + billing (**PayMongo**, not Stripe — it is PH-local and supports GCash/Maya) | Deferred until someone asks to pay |
+>
+> Retained below for the record.
 
 ### 7.1 What Changes vs. What Stays
 
@@ -1146,7 +1333,29 @@ CREATE INDEX idx_devices_operator ON operator_devices(operator_id);
 
 ---
 
-## 8. Wallet Balance Update — Postgres Function (Recommended)
+## 8. Wallet Balance Update — Postgres Function — **SUPERSEDED**
+
+> 🔴 **This function is being dropped, and the shipped descendant of it was the problem.**
+>
+> The design below was implemented, then grew to **18 arguments** as it gained reversal
+> support for edit-after-confirm. It became a hand-rolled reversal engine — and its
+> expense is the most likely reason the confirmation gate was bypassed in the first place.
+>
+> Three concrete defects in the live descendant:
+> - **No status guard** in its transaction `UPDATE`, so two concurrent confirms both apply
+>   deltas (double-tap, retry on slow network).
+> - **`SECURITY DEFINER` with `EXECUTE` granted to `PUBLIC`**, no `auth.uid()` check, and
+>   `p_operator_id` as a caller-supplied parameter — callable with the public anon key and
+>   no session.
+> - The repo's `confirm-transaction` calls it with argument names it no longer has, so that
+>   call returns PGRST202 against the live database.
+>
+> **Replacement:** confirming becomes "insert one balanced entry with an idempotency key".
+> Atomicity comes from a single INSERT plus the `DEFERRABLE INITIALLY DEFERRED` zero-sum
+> trigger, not from a procedure that reimplements arithmetic. Balances are derived from
+> `account_balances`, so there is no second copy of the number to keep in step.
+>
+> Retained below for the record.
 
 To prevent partial wallet updates (platform updated, cash not), wrap the confirmation in a database function:
 
@@ -1259,3 +1468,5 @@ $$;
 | 1.0 | 2026-01-22 | Claude | Initial technical specification |
 | 2.0 | 2026-03-20 | Claude | Full accuracy audit; corrected two-phase write model, confirmation gate behavior (wallets only update after confirm), added transaction status lifecycle, fixed RLS INSERT policy gap on operators, renamed wallet_balance field context, added Postgres atomic confirm function, n8n node-by-node phase analysis, SaaS migration strategy and risks |
 | 2.1 | 2026-03-20 | Claude | Added iOS + Android distribution via Capacitor; replaced PWA-only with cross-platform architecture; added App Store requirements, Capacitor config, native camera/push code samples, device tokens table, build pipeline |
+| 3.0 | 2026-03-22 | Claude | Full Edge Function spec; n8n removed from the AI pipeline |
+| 3.1 | 2026-09-23 | Claude | **Accuracy correction after Audits #5/#5a.** Added the status banner. Corrected §1.2 (described the n8n era as current). Marked the confirmation gate as target state throughout — it does not exist; `_process_transaction.ts` confirms and moves balances in one request. Replaced the three fictional per-type profit formulas (§3.3, §6.3) with the single `ceil(max(amount × 2%, ₱5))` rule, including the accurate Cash In/Cash Out-only ceiling nuance. Flagged the inverted Cash In/Cash Out seed rules in §4.2 and the four types whose deltas do not balance. Removed §5.3 Realtime (never used, zero call sites) and struck it from §2.1/§3.1/§3.2. Normalised `awaiting_confirmation` → `awaiting_confirm`. Removed an operator's hardcoded account numbers from §6.2/§6.4 and the §3.3 blacklist. Replaced §6.5 `computeDeltas` with the three posting shapes. Marked §7.5 `operator_devices` as never built, and §8/§9 as superseded. Documented the missing RLS `WITH CHECK` and the anon-EXECUTE hole in §4.2 |

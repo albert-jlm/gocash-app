@@ -1,8 +1,14 @@
 # GoCash App
 
-AI-powered transaction tracker for GoCash/MariBank operators. Captures payment screenshots, extracts transaction data via OCR (GPT-4O), calculates commissions automatically, and tracks wallet balances — with a mandatory human confirmation gate before any balance changes.
+AI-powered transaction tracker for Philippine e-wallet agents (GCash/Maya/MariBank). Captures payment screenshots, extracts transaction data via OCR (GPT-4o), calculates the operator's fee automatically, and tracks wallet balances.
 
-**Current phase:** Building the cross-platform mobile app (Next.js + Capacitor) to replace the Telegram confirmation workflow.
+**Current phase:** Mid-rebuild on `feature/ledger-rebuild` — replacing the multiplier-based balance model with a double-entry ledger and restoring the confirmation gate.
+
+> ⚠️ **The confirmation gate is a target, not current behaviour.** The live
+> `process-transaction` writes `status: "confirmed"` and moves balances in the same
+> request; `confirm-transaction` has become an edit endpoint. Restoring the gate is
+> Phase 1 of the rebuild. See `AUDITS.md` #5/#5a and
+> `~/.claude/plans/i-think-the-whole-async-sparrow.md`.
 
 ---
 
@@ -10,12 +16,20 @@ AI-powered transaction tracker for GoCash/MariBank operators. Captures payment s
 
 | Layer | Choice |
 |-------|--------|
-| Frontend | Next.js 15 (App Router) |
+| Frontend | Next.js 15 (App Router, static export) |
 | Native Shell | Capacitor (iOS + Android) |
 | Styling | Tailwind CSS + Shadcn/ui |
-| Backend | Supabase (Auth + PostgreSQL + RLS + Realtime + Storage) |
-| AI Pipeline | n8n (existing workflow — GPT-4O OCR + gpt-4.1-mini) |
-| Hosting | Vercel (frontend) + Homelab (n8n) |
+| Backend | Supabase (Auth + PostgreSQL + RLS + Storage) — **no Realtime** (see below) |
+| AI Pipeline | Supabase Edge Functions (Deno) + OpenAI (GPT-4o OCR + gpt-4.1-mini) |
+| Hosting | Static export (frontend) + dedicated 5-service Supabase stack at `~/homelab/gocash/docker-compose.yml` |
+
+> **n8n and Vercel are both gone.** n8n was removed from the AI pipeline in March 2026;
+> the frontend is a static export, not a Vercel deployment. n8n survives in the plan only
+> as the scheduler for receipt-retention cleanup (Phase 2).
+>
+> **Supabase Realtime was never used.** It is documented across these docs as a core
+> dependency, but `grep` for `.channel(` / `.subscribe()` across `src/` finds nothing.
+> It is being dropped from the new stack; balance updates are refresh-on-navigate.
 
 ---
 

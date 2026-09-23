@@ -5,7 +5,60 @@
 
 ---
 
-## [Unreleased]
+## [Unreleased] — Ledger Rebuild (`feature/ledger-rebuild`)
+
+Driven by `AUDITS.md` #5 and #5a and the approved plan at
+`~/.claude/plans/i-think-the-whole-async-sparrow.md`.
+
+**Why:** the money model had no invariant, and **4 of its 6 transaction types were posting
+wrong in production** — on a ₱100 transaction, Telco Load came to −95, Bills Payment −95,
+Bank Transfer −100, and Profit Remittance recorded a cash-*in*. Balances were mutated in
+place and could not be recomputed, so the damage was not repairable either. Separately, the
+confirmation gate — the product's stated core premise — **did not exist**, and six
+`SECURITY DEFINER` functions were callable with the public anon key and no session.
+
+### Security (`eb7f86f`)
+- `20260923000001_revoke_public_execute.sql` — `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` on all six `SECURITY DEFINER` functions. They carried the PostgreSQL default grant to `PUBLIC`, took `p_operator_id` as a caller parameter, and referenced `auth.uid()` nowhere. Verified exploitable end-to-end with the public anon key
+- `20260923000002_default_privileges.sql` — stops the next function added from inheriting the same grant
+
+### Added
+- `supabase/migrations/20260923000000_baseline_gocash.sql` (`eb7f86f`) — the live schema captured as a squashed baseline. Production had been built **entirely by hand**: 7 tables, 9 functions, 6 triggers, 18 indexes, against the repo's 5/2/0/0. The repo is the source of truth again
+- `supabase/functions/_core/` (`c16164c`) — `money.ts`, `postings.ts`, `fees.ts`, `types.ts` + tests. Integer centavos, the six posting shapes, fee resolution. Deno-compatible with zero runtime deps; imported directly by the Edge Functions and by Next.js via a tsconfig path alias
+- `supabase/migrations/20260924000001_ledger_tables.sql` (`acef102`) — `accounts`, `ledger_entries`, `postings`, the `account_balances` view (`security_invoker = true`), append-only triggers, and a `DEFERRABLE INITIALLY DEFERRED` zero-sum trigger. Balances are now **derived**, never mutated
+- `supabase/migrations/20260924000002_fee_rules.sql` (`acef102`) — effective-dated `fee_rules` (`rate_bps`, `minimum_minor`, `rounding`, `effective_from`/`to`) with a GiST exclusion constraint on overlapping periods. Needed because a reversible-and-repostable entry would otherwise have its history silently rewritten by a fee change
+- `~/homelab/gocash/docker-compose.yml` — dedicated 5-service Supabase stack (`db`, `rest`, `auth`, `storage`, `functions`, ~485 MiB). Own `auth.users`, own JWT secret and keys, routed by the existing Traefik. No Kong, analytics, studio, pooler, imgproxy or realtime
+
+### Fixed
+- `962f1cd` — five holes found in review of the ledger work
+
+### Changed — decisions recorded
+- **Cash In direction corrected.** The customer hands over **cash** and receives e-money: drawer **UP** by amount + fee, platform wallet **DOWN** by amount, revenue up by the fee. `PRD.md` FR-21, `TECH_SPEC.md` §4.2, `settings/rules/page.tsx` and `onboarding/page.tsx` all stated the inverse — so any operator onboarded with then-current repo code got backwards rules
+- **One fee formula for all six types:** `ceil(max(amount × 2%, ₱5))`. The three per-type formulas in the docs, including a ₱5 Telco Load bracket ladder, were fiction. *(Nuance: `_core/fees.ts` applies the ceiling to Cash In and Cash Out only; the other four keep centavo precision — a deliberate deviation preserving live behaviour.)*
+- **Direction is no longer operator-configurable.** Configurable direction is exactly what the `delta_*` multiplier columns were. Profit Settings becomes fee-only
+- **Multi-tenant SaaS is the target**, with billing deferred until someone asks to pay
+- **Hosting:** dedicated GoCash stack, not the shared instance. The shared-schema strategy in `architecture.md` and `CLAUDE.md` is superseded
+
+### Deprecated / to be removed
+- `gocash.wallets`, `transaction_rules` and the three `delta_*` columns
+- `update_wallet_balance`, `confirm_transaction_atomic` (which had grown to 18 arguments as a hand-rolled reversal engine), both `delete_transaction_atomic` overloads, `initialize_operator_defaults`
+- `src/lib/transaction-processing.ts` **and its 37 tests** — a copy-paste that diverged from the deployed logic. Every passing test exercised code that never ran in production, and they asserted the *inverted* Cash In/Cash Out keyword mapping
+- Supabase **Realtime** — documented as a core dependency across six files and never used (zero `.channel(`/`.subscribe()` call sites)
+
+### Documentation (this pass)
+- Status banners added to `PRD.md`, `TECH_SPEC.md`, `architecture.md` pointing at AUDITS #5/#5a and the plan
+- Present-tense claims about the confirmation gate re-marked as target state in `README.md`, `CLAUDE.md`, `architecture.md`, `PRD.md`
+- `project-status.md` "feature-complete" and "All High/Medium findings resolved" corrected
+- Status value normalised to `awaiting_confirm` (the live CHECK) throughout
+- Removed a dead n8n webhook ID, an operator's personal phone numbers (`project-spec.md`, `CLAUDE.md`, `PRD.md`) and a hardcoded operator account number in shipped classification logic (`TECH_SPEC.md` §6.2)
+- Corrected a `tx_rules` table name that never existed and an `operator_devices` table that never existed
+- Added **FR-27 receipt retention** — PH Data Privacy Act; no doc had ever mentioned retention or deletion
+
+### Still open (not addressed by these commits)
+- **The confirmation gate is not yet restored** — `_process_transaction.ts` still writes `status: "confirmed"` and moves balances in one request
+- No RLS `WITH CHECK` on any UPDATE policy
+- Live CORS is still `*` — a regression against Audit #4's "CORS restricted" claim
+- Golden receipt set not started; the OCR still has no accuracy measurement
+- Offsite backup has never succeeded (33 consecutive nights); no restore ever tested
 
 ### To Do
 - iOS Share Extension (P2 — separate Xcode target)
