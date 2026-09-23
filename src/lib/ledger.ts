@@ -16,6 +16,7 @@
 import { toMinor, toPesos, type Minor } from "@core/money.ts";
 import { reconcile } from "@core/postings.ts";
 import type { AccountRef, Posting } from "@core/types.ts";
+import { supabase } from "@/lib/supabase/client";
 
 /**
  * Thrown by any call whose server endpoint has not been built yet.
@@ -53,6 +54,25 @@ export interface ReconciliationInput {
   /** What the operator actually counted, in pesos, as typed. */
   countedPesos: number;
   memo?: string;
+  /**
+   * Guards the race between two taps that both read the same book balance.
+   *
+   * The endpoint derives a fallback key from the state transition if this is
+   * absent, but a client-supplied one is stronger: it is stable across a retry
+   * of the SAME submission, where a derived key would change if the book
+   * balance moved in between.
+   */
+  idempotencyKey?: string;
+}
+
+export interface ReconciliationResult {
+  /** False when the count matched the ledger and there was nothing to write. */
+  posted: boolean;
+  /** True when this exact correction had already been posted. */
+  replayed: boolean;
+  entryId: string | null;
+  differenceMinor: Minor;
+  newBalanceMinor: Minor;
 }
 
 /**
@@ -96,15 +116,49 @@ export function previewReconciliation(input: ReconciliationInput): Posting[] {
  * postings, using the service-role key. Until that exists this throws rather
  * than pretending, and no endpoint is invented here to paper over it.
  */
-export async function postReconciliation(input: ReconciliationInput): Promise<never> {
-  // Validate locally first, so a bad form never reaches the (future) endpoint
-  // and so the thrown error is about the real problem when there is one.
+export async function postReconciliation(
+  input: ReconciliationInput
+): Promise<ReconciliationResult> {
+  // Validate locally first, so a bad form never reaches the endpoint and the
+  // thrown error is about the real problem when there is one.
   previewReconciliation(input);
 
-  throw new NotImplementedError(
-    "NOT_IMPLEMENTED: posting a reconciliation entry requires the " +
-      "`reconcile-account` Edge Function route, which has not been built yet."
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/reconcile-account`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      // operator_id is deliberately NOT sent. The endpoint resolves it from the
+      // verified JWT; a caller-supplied operator id is the shape that caused
+      // Audit #5a. The book balance is not sent either — the server reads it,
+      // so a stale page cannot decide how much to adjust by.
+      body: JSON.stringify({
+        account_id: input.account.account_id,
+        counted_pesos: input.countedPesos,
+        memo: input.memo,
+        idempotency_key: input.idempotencyKey,
+      }),
+    }
   );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error ?? "Could not post the reconciliation");
+  }
+
+  return {
+    posted: data.posted !== false,
+    replayed: data.replayed === true,
+    entryId: data.entry_id ?? null,
+    differenceMinor: data.difference_minor ?? 0,
+    newBalanceMinor: data.new_balance_minor ?? input.account.balance_minor,
+  };
 }
 
 export interface ProvisionOperatorInput {
@@ -150,13 +204,78 @@ export interface ProvisionOperatorInput {
  * VERIFIED JWT rather than the request body, and calls the RPC with the
  * service-role key. Until that exists this throws.
  */
-export async function provisionOperator(input: ProvisionOperatorInput): Promise<never> {
-  void input;
-  throw new NotImplementedError(
-    "NOT_IMPLEMENTED: signing up requires the `provision-operator` Edge Function " +
-      "route, which has not been built yet. The database function it needs to call " +
-      "(gocash.provision_operator) is service-role only and cannot be called from here."
+export interface ProvisionOperatorResult {
+  operatorId: string;
+  accounts: { id: string; kind: string; name: string }[];
+  openingEntryId: string | null;
+  /**
+   * False when the phone number could not be saved.
+   *
+   * gocash.provision_operator has no p_phone argument, so the endpoint writes
+   * it in a second statement OUTSIDE the provisioning transaction. That makes
+   * it best-effort by construction: the operator, accounts and opening entry
+   * are already committed, so failing the request would report a successful
+   * signup as failed — and the retry would then hit the already-provisioned
+   * 409. Surfaced rather than hidden so the UI can prompt for it later.
+   */
+  phoneSaved: boolean;
+}
+
+export async function provisionOperator(
+  input: ProvisionOperatorInput
+): Promise<ProvisionOperatorResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/provision-operator`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      // userId is sent but the endpoint uses the VERIFIED token id; it only
+      // compares them and rejects a mismatch. gocash.provision_operator is
+      // service-role only precisely because p_user_id is caller-supplied —
+      // granting it to authenticated would be an account-takeover primitive.
+      body: JSON.stringify({
+        userId: input.userId,
+        name: input.name,
+        email: input.email,
+        phone: input.phone ?? null,
+        platforms: input.platforms,
+        openingMinor: input.openingMinor,
+      }),
+    }
   );
+
+  const data = await response.json();
+
+  if (response.status === 409 && data.operator_id) {
+    // Already provisioned. A retry after a lost response lands here, and so
+    // does a stale tab — the endpoint returns 409 rather than 200 because the
+    // platforms and opening balances in THIS request were discarded, and a
+    // success screen would be claiming an opening entry that was never written.
+    // The id is returned either way, so the caller can route to the dashboard.
+    const err = new Error("This account has already been set up") as Error & {
+      code?: string; operatorId?: string;
+    };
+    err.code = "ALREADY_PROVISIONED";
+    err.operatorId = data.operator_id;
+    throw err;
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error ?? "Could not set up your account");
+  }
+
+  return {
+    operatorId: data.operator_id,
+    accounts: data.accounts ?? [],
+    openingEntryId: data.opening_entry_id ?? null,
+    phoneSaved: data.phone_saved !== false,
+  };
 }
 
 /** Pesos as typed into a form, to the exact centavo integer the ledger uses. */

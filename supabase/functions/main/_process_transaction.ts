@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import {
@@ -91,7 +91,13 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
   }
 
   let uploadedImagePath: string | null = null;
-  let adminClient: ReturnType<typeof createClient> | null = null;
+  // Annotated with the schema generic. `ReturnType<typeof createClient>` leaves
+  // SchemaName defaulted to 'public', so assigning a client built with
+  // `db: { schema: "gocash" }` fails to typecheck — the long-standing TS2322
+  // here, which the runtime never saw because the edge runtime strips types
+  // without checking them.
+  // deno-lint-ignore no-explicit-any
+  let adminClient: SupabaseClient<any, "gocash"> | null = null;
   let operatorNotifications: OperatorNotificationRow | null = null;
 
   async function cleanupUploadedImage() {

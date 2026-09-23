@@ -12,6 +12,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { handleProcessTransaction } from "./_process_transaction.ts";
 import { handleConfirmTransaction } from "./_confirm_transaction.ts";
 import { handleVoidTransaction } from "./_void_transaction.ts";
+import { handleReconcileAccount } from "./_reconcile_account.ts";
+import { handleProvisionOperator } from "./_provision_operator.ts";
 
 // NOTE: the `mago-admin` route was removed. It belongs to MagoHQ, a separate
 // product that shares the OLD edge runtime; it lives in its own repo at
@@ -29,6 +31,13 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   // to delete; it now voids, which is the only thing an append-only ledger can
   // honestly offer. Remove once the app no longer calls it.
   "delete-transaction": handleVoidTransaction,
+  // The nightly drawer count. Replaces Settings > Wallets overwriting a
+  // balance with no trace — with a derived ledger that write is not merely
+  // untracked, it is impossible.
+  "reconcile-account": handleReconcileAccount,
+  // Signup. gocash.provision_operator is service-role only because p_user_id
+  // is caller-supplied; this route is what turns a verified JWT into that call.
+  "provision-operator": handleProvisionOperator,
 };
 
 // `update-transaction` is deliberately gone. It aliased confirm-transaction
