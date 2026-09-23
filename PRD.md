@@ -496,8 +496,17 @@ Receipt screenshots are **kept N days, then purged**. `N` is per-plan
 > served `delete_transaction_atomic` passes NULL for bucket/path so nothing is ever
 > enqueued; `cleanup-receipts` sits in a directory the edge runtime never loads, with its
 > secret unset and no scheduler wired up. Five orphaned storage objects were found in the
-> audit. Scheduling comes from the existing n8n instance — `pg_cron` is not installed and
-> adding it means changing the Postgres image under a financial database.
+> audit.
+>
+> **Correction (2026-09-23):** an earlier revision of this section said scheduling must come
+> from the existing n8n instance because "`pg_cron` is not installed and adding it means
+> changing the Postgres image under a financial database." That is false. `pg_cron` is
+> already compiled into `supabase/postgres:15.8.1.085` and already listed in
+> `shared_preload_libraries`; enabling it is one `CREATE EXTENSION pg_cron;` with no image
+> change, no config edit and no restart. `pg_net` 0.14.0 is already installed, so Postgres
+> can make the HTTP call itself. Receipt cleanup therefore has no dependency on n8n.
+> The scheduler was never the blocker in any case — `cleanup-receipts` is unroutable and
+> its secret is unset.
 
 ---
 
