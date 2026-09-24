@@ -59,10 +59,36 @@ Step 2 — using that text, fill in the JSON below:
   "transaction_date": <ISO 8601 datetime if a date/time is visible, null if not found>
 }
 
-Platform detection hints:
-- GCash: green branding, "GCash", "G-Xchange"
-- MariBank: purple/blue branding, "MariBank", "mari"
-- Maya: "Maya", "PayMaya", teal branding
+Identify the ISSUING APP — the app whose interface rendered this screen — NOT any
+institution named inside it. Receipts routinely name a DIFFERENT institution as the
+destination of a transfer, and that name is not the issuer:
+- A Maya receipt reading "Account Type: GCash" is a MAYA receipt.
+- A GCash receipt listing "Maya Philippines, Inc." is a GCASH receipt.
+Decide from the TOP of the screen: the title bar, the success headline, the block
+above the amount. Ignore brand names appearing after "Transfer to", "Sent to",
+"Bank", or "Account Type" — those are the counterparty.
+
+Issuer fingerprints:
+- GCash: "Sent via GCash", "Express Send", "GCash Padala", "Total Amount Sent",
+  "Ref No."/"Ref. No." followed by 13 digits (often grouped 4-3-6),
+  "Your new balance is PHP", "AVAILABLE BALANCE", GSave/GInsure/GInvest/GForest/
+  GGives, a "gCO2e" carbon-footprint card. BLUE interface. Uppercase AM/PM.
+- Maya (formerly PayMaya): "Sent money via Instapay", "Paid bill",
+  "Payment successful", a "Completed" status chip, "Bill amount", "Biller's fee",
+  "Paid using"/"My Wallet", "Reference ID", "Wallet balance", a lowercase "maya"
+  wordmark inside the receipt card. GREEN interface. Lowercase am/pm.
+- MariBank (formerly SeaBank — renamed September 2025; both names appear in the
+  wild): "MariBank", "SeaBank", "MariCard", "Scan & Pay", "Transfer Type: Realtime",
+  "Transfer Fee: FREE", "Acct. No.:", "Deposits are insured by PDIC".
+  24-hour timestamps such as "01 Sep 2025, 12:28".
+
+Do NOT use "G-Xchange" as evidence of GCash: it is the label Maya's own bank picker
+uses FOR GCash, so it appears on Maya receipts.
+
+Some receipts show no brand name at all. If you cannot identify the issuer from the
+screen itself, return "Unknown" — do not infer it from the counterparty, the colour
+alone, or the transaction type. An honest Unknown is asked about at review; a
+confident wrong answer silently posts against the wrong wallet.
 
 Transaction type rules (from the CUSTOMER's perspective):
 - "Cash In": customer gives the operator CASH and receives e-wallet credit; on the operator's receipt this is usually "Send Money", "You sent", or "Sent to"

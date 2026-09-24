@@ -29,7 +29,13 @@ export interface WalletDelta {
 export function detectPlatform(text: string): Platform {
   const t = text.toLowerCase();
   if (t.includes("gcash") || t.includes("g-cash")) return "GCash";
-  if (t.includes("maribank") || t.includes("mari bank")) return "MariBank";
+  // "seabank" matters as much as "maribank". SeaBank Philippines, Inc. was
+  // renamed MariBank Philippines, Inc. in September 2025 (BSP CL-2025-037), and
+  // the Android package is still ph.seabank.seabank. Every screenshot taken
+  // before the rebrand says SeaBank — and without this alias every one of them
+  // returned Unknown.
+  if (t.includes("maribank") || t.includes("mari bank") || t.includes("seabank")
+      || t.includes("sea bank")) return "MariBank";
   if (t.includes("maya") || t.includes("paymaya")) return "Maya";
   return "Unknown";
 }
