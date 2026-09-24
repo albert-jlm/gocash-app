@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Check,
@@ -79,6 +79,19 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const isPreview = transactionId === "preview";
 
   const [tx, setTx] = useState<TransactionDraft | null>(null);
+  /**
+   * One key per mounted confirmation, not per tap.
+   *
+   * crypto.randomUUID needs a secure context; Capacitor's webview and
+   * localhost both qualify, but the fallback keeps this working if that ever
+   * changes rather than throwing at the moment of saving money.
+   */
+  const idempotencyKey = useRef<string>(
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `confirm-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+  const [amountIncludesFee, setAmountIncludesFee] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -125,7 +138,12 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   }, [transactionId, isPreview]);
 
   function populate(data: TransactionDraft) {
-    setPlatform(data.platform ?? "GCash");
+    // NOT `?? "GCash"`. An unidentified platform must stay unidentified: a
+    // pre-filled field on a mobile confirm screen is a field the operator taps
+    // past, and a wrong platform costs twice the transaction amount across two
+    // accounts while passing every ledger invariant. Absent is cheap and loud;
+    // wrong is expensive and silent.
+    setPlatform(data.platform === "Unknown" ? "" : (data.platform ?? ""));
     setTxType(data.transaction_type ?? "Cash In");
     setAmount(data.amount?.toString() ?? "0");
     setProfit(data.net_profit?.toString() ?? "0");
@@ -167,6 +185,15 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           body: JSON.stringify({
             transaction_id: tx.id,
             edits: Object.keys(edits).length > 0 ? edits : undefined,
+            // Required by the gate. Held in a ref so it is STABLE across
+            // retries of this same confirmation: a double tap, or a Save that
+            // errored after the entry was already posted, replays the same key
+            // and post_entry returns the original entry instead of posting a
+            // second one. Generating it inline would defeat the whole point.
+            idempotency_key: idempotencyKey.current,
+            // The operator's answer to the gross-amount question, when it was
+            // asked. Never inferred — see gross_amount_hint below.
+            amount_includes_fee: amountIncludesFee,
           }),
         }
       );
@@ -227,16 +254,35 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       </header>
 
       {/* AI read badge */}
+      {/* The banner tells the truth about what happened.
+          It used to render the green "AI read your screenshot" success state
+          unconditionally — including over a platform the model explicitly said
+          it could not identify, styled identically to a confident read. */}
       <section className="px-5 mb-4">
-        <div className="flex items-center gap-2.5 bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3">
-          <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+        {platform === "" ? (
+          <div className="flex items-start gap-2.5 bg-amber-500/[0.10] border border-amber-500/20 rounded-2xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-300">
+                We couldn&apos;t tell which app this was
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Some receipts don&apos;t show the app&apos;s name anywhere. Pick it below
+                — the amount and reference were read normally.
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-emerald-400">AI read your screenshot</p>
-            <p className="text-[11px] text-muted-foreground">{platform} · edit any field below if needed</p>
+        ) : (
+          <div className="flex items-center gap-2.5 bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3">
+            <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-emerald-400">AI read your screenshot</p>
+              <p className="text-[11px] text-muted-foreground">{platform} · edit any field below if needed</p>
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* Form */}
@@ -260,7 +306,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 <SelectItem value="GCash">GCash</SelectItem>
                 <SelectItem value="MariBank">MariBank</SelectItem>
                 <SelectItem value="Maya">Maya</SelectItem>
-                <SelectItem value="Unknown">Unknown</SelectItem>
               </SelectContent>
             </Select>
           </FieldRow>
@@ -346,7 +391,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <button
           onClick={handleSave}
-          disabled={saving || isPreview}
+          disabled={saving || isPreview || platform === ""}
           className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
         >
           {saving ? (
