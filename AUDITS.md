@@ -374,3 +374,128 @@ Effectively pre-production. Very little is at risk today, and the schema fixes a
 - [ ] Add the status guard to `confirm_transaction_atomic`.
 - [ ] Drop the duplicate `(operator_id, reference_number)` index.
 - [ ] Verify the `Profit Remittance` rule direction and the NULL profit rates.
+
+---
+
+## 2026-09-24 Audit #6 (Ledger Rebuild — Phase 0 and Phase 1)
+
+### Scope
+- Implementation audit across 15 commits on `feature/ledger-rebuild`, covering Phase 0
+  (security, repo reconciliation) and Phase 1 (ledger, gate, shared core) of the plan.
+- Nine review passes by separate reviewers: ledger correctness, security/tenancy, PRD
+  conformance, n8n dependency, and an OCR replay harness.
+
+### Validation Gates
+- `pnpm run typecheck`: PASS (clean — including `supabase/functions/_core`, which tsconfig
+  previously excluded and therefore never checked)
+- `pnpm run test`: PASS (92) — 63 domain + 29 OCR replay. The 37 tests counted in every
+  prior audit are **deleted**: they exercised `src/lib/transaction-processing.ts`, a stale
+  copy that never ran in production (finding 4 of Audit #5).
+- `npm run test:db`: PASS (27 assertions, mutation-tested — see below)
+- `npx next build`: PASS (15 routes, static export)
+- `deno check` on all Edge Functions: PASS (0 errors)
+- `pnpm run lint`: still FAIL — no ESLint config. Open since Audit #1.
+
+### Three findings from earlier audits were WRONG
+
+Recording these because two of them were re-reported by independent reviewers during this
+session, and one was nearly acted on.
+
+1. **Audit #5 finding 15 / #5a item 2 — "no UPDATE policy has `WITH CHECK`, so a tenant can
+   rewrite `operator_id` into another tenant's books" — is FALSE.** PostgreSQL uses the
+   `USING` expression as the `WITH CHECK` when the latter is omitted for UPDATE. Verified
+   directly against a policy of exactly that shape: as tenant A,
+   `UPDATE t SET owner = <tenant B>` raises `new row violates row-level security policy`,
+   while `UPDATE t SET note = 'edited'` succeeds. The five policies are safe. An explicit
+   `WITH CHECK` is legibility only.
+2. **"`authenticated` holds DELETE on five tables with no DELETE policy, so a user can
+   delete their own audit rows" — FALSE.** RLS denies by default: `DELETE 0`, row survives.
+3. **The `ALTER DEFAULT PRIVILEGES` fix in `20260923000001` did not work**, and its
+   assertion passed anyway because it inspected `pg_default_acl` — the mechanism — instead
+   of the outcome. Replaced with an event trigger and an assertion that creates a throwaway
+   function, checks who can execute it, and drops it.
+
+The pattern in all three: reasoning about grants while forgetting RLS's default-deny, or
+asserting a mechanism rather than an outcome. **Every RLS claim in this session was tested
+before being acted on.**
+
+### Key Findings
+
+**Closed and verified**
+1. The anon RPC hole (Audit #5a finding 1) is closed. All 9 `gocash` functions:
+   `anon=f, authenticated=f, service_role=t`. Verified end-to-end over HTTPS with the anon
+   key AND a minted user JWT — the probe that previously executed the function body now
+   returns `permission denied`. A DDL event trigger auto-revokes on every new function and
+   procedure, because `ALTER DEFAULT PRIVILEGES` provably cannot remove PUBLIC's built-in
+   EXECUTE on this Postgres.
+2. The confirmation gate exists for the first time. `process-transaction` writes a draft and
+   moves nothing; `confirm-transaction` posts one balanced entry behind a required
+   idempotency key.
+3. Four of six transaction types were silently destroying money (Telco Load, Bills Payment,
+   Bank Transfer lost the principal; Profit Remittance was booked as a cash-in). The
+   delta-multiplier model is replaced by postings that must sum to zero, enforced by a
+   deferred constraint trigger.
+4. Five further ledger holes found by review and closed, each demonstrated before and
+   verified blocked after: cross-operator postings committing (with the victim reading a
+   balance of 0 while the stored sum was not), legs appendable to an already-committed
+   entry, no bound on `amount_minor` (one row broke `account_balances` for everyone), empty
+   entries invisible to the health check, and `is_my_operator` relying on the event trigger
+   for its revoke.
+5. **A guard written as the fix pattern was itself a no-op.** `set_fee_rule` used
+   `pg_has_role(current_user, 'service_role', 'MEMBER')`; inside a `SECURITY DEFINER`
+   function `current_user` is the OWNER and that returns true for a superuser regardless of
+   caller, so the ownership check never ran. Proven: tenant A could rewrite tenant B's
+   pricing. Now reads the signed JWT claim. `session_user` would have failed identically —
+   PostgREST connects as `authenticator`, also a member of `service_role`.
+
+**Open, and material**
+6. **NEW — the "balanced but wrong" class.** The zero-sum invariant proves an entry balances,
+   not that it is correct. The OCR replay harness found 5 of 22 fixtures producing entries
+   that sum to zero, pass every guard, and move the wrong money:
+   - `detectType` has no "unknown"; its default is `return "Cash In"`. The types are mirror
+     images, so a misdetected Cash Out **inverts** the entry — PHP 2,000 of error on a
+     PHP 1,000 receipt.
+   - Profit Remittance is absent from the extraction prompt's enum, so a JSON-mode model
+     cannot return it. The one type where money leaves books the drawer +5,100 when 5,000
+     left it, and never touches equity.
+   - `ai.amount ?? 0` turns "could not read" into "was zero"; the PHP 5 floor then posts
+     `cash +5 / revenue -5` — balanced, fictional, undetectable.
+   - `detectPlatform` scans in platform order, not text order, so a MariBank receipt
+     mentioning GCash drains GCash.
+   - Nothing feeds the gross/net question into the fee calculation.
+7. **The operator blacklist is half dead code.** It only runs when the model returned null,
+   and one of its two hardcoded numbers can never match the regex it is checked against
+   (`/(?:\+639|09)\d{9}/` — the number begins "13"). It has been a no-op since written.
+8. **The customer-number regex is unanchored** and matched a mobile-shaped substring inside
+   a reference number, fabricating a customer mobile on a receipt that had none.
+   Date-prefixed references are the PH standard, so this fires seasonally.
+9. **`public.documents` was world-readable and world-deletable** — RLS off, zero policies,
+   `anon` holding SELECT and DELETE, returning rows unauthenticated over both REST and
+   GraphQL. Not GoCash; same shared instance. RLS has since been enabled by the owner, but
+   the anon grant remains, so one `DISABLE ROW LEVEL SECURITY` reopens it.
+   `/home/zether/homelab/supabase/lockdown-public.sql` is written and unapplied.
+10. **`public.remove_app_user_access` is an anon-callable escalation primitive** — SECURITY
+    DEFINER, takes the actor's identity as a parameter, deletes admin rows.
+11. **The `storage.objects` policies bind to `operators.name`**, a tenant-editable display
+    name, instead of `objects.name`. An operator renaming themselves to `<their-uuid>/x`
+    would read every receipt in the bucket. These policies exist only in the live database
+    and in no migration.
+12. **The rebuild plan's own reasoning was wrong** about the receipt-cleanup scheduler:
+    `pg_cron` is already compiled into `supabase/postgres:15.8.1.085` and already in
+    `shared_preload_libraries`, and `pg_net` is installed. Corrected in the plan and the PRD.
+
+### Follow-Ups
+- [ ] Fix the five balanced-but-wrong defects (finding 6). `detectType`'s default and
+      `ai.amount ?? 0` are one-line changes with the largest consequences.
+- [ ] De-hardcode and repair the operator blacklist (findings 7, 8) — Phase 2 moves it to
+      `gocash.operator_numbers`; the exit criterion is zero references in the codebase.
+- [ ] Apply `lockdown-public.sql` (findings 9, 10). Its two n8n pre-flights are moot — the
+      document workflows fail at their first hop, `getaddrinfo ENOTFOUND paperless-ngx`.
+- [ ] Fix the `storage.objects` policies and put them in a migration (finding 11). Applying
+      breaks all 6 existing objects unless they are already under `<operator_id>/` paths.
+- [ ] Apply migrations 0003–0007 to a scratch copy of live, stand up the trimmed stack, cut
+      over. `wallets` holds the only copy of the balances until `0006` runs and verifies.
+- [ ] Record 20 real receipt fixtures from a second operator. Worth more than anything else
+      outstanding — the current OCR numbers measure the pipeline, not the model.
+- [ ] Add `p_phone` to `provision_operator`; add a non-negative CHECK on opening balances.
+- [ ] Finally add an ESLint config. Open since Audit #1.
