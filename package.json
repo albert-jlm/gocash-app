@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "typecheck:deno": "bash scripts/deno-check.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ocr": "vitest run tests/ocr",

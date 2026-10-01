@@ -391,7 +391,7 @@ export default function Dashboard() {
             <Home className="w-5 h-5 text-foreground" />
             <span className="text-[10px] text-foreground font-medium">Home</span>
           </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
+          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
             <Plus className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">New</span>
           </Link>

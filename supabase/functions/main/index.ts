@@ -10,6 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { handleProcessTransaction } from "./_process_transaction.ts";
+import { handleCreateTransaction } from "./_create_transaction.ts";
 import { handleConfirmTransaction } from "./_confirm_transaction.ts";
 import { handleVoidTransaction } from "./_void_transaction.ts";
 import { handleReconcileAccount } from "./_reconcile_account.ts";
@@ -21,7 +22,11 @@ import { handleProvisionOperator } from "./_provision_operator.ts";
 // resolves static imports eagerly, so a parse error in an unrelated inventory
 // app would stop GoCash serving.
 const routes: Record<string, (req: Request) => Promise<Response>> = {
-  // Phase 1: OCR, save a DRAFT. Moves no money.
+  // Phase 1a: typed by the operator, save a DRAFT. Moves no money.
+  // The primary path: it needs no network round-trip to a vision model and
+  // cannot misread anything, because nothing is being read.
+  "create-transaction": handleCreateTransaction,
+  // Phase 1b: the same DRAFT, read off a receipt image instead of typed.
   "process-transaction": handleProcessTransaction,
   // Phase 2: the gate. The only place balances change.
   "confirm-transaction": handleConfirmTransaction,

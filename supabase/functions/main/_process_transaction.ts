@@ -392,6 +392,10 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
         // ran in the same request, so the confirmation gate the PRD calls
         // mandatory did not exist.
         status: "awaiting_confirm",
+        // Stated, not defaulted. 20260924000008 dropped the column default so
+        // that a row whose origin is unknown fails to insert rather than
+        // quietly claiming to have been read from an image.
+        entry_source: "ocr",
         was_edited: false,
         edit_history: [],
       })

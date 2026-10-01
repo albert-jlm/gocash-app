@@ -221,7 +221,20 @@ export default function CapturePage() {
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
-        <h1 className="text-base font-semibold">New Transaction</h1>
+        <div className="flex-1">
+          <h1 className="text-base font-semibold">From a receipt</h1>
+          <p className="text-xs text-muted-foreground">Read off a screenshot</p>
+        </div>
+        {/* An escape hatch, not a nicety. When the receipt is cropped, the share
+            sheet is missing, or the extraction comes back wrong, the operator
+            still has to record the transaction — and before /entry existed there
+            was nowhere for them to go. */}
+        <Link
+          href="/entry"
+          className="text-[11px] text-muted-foreground underline flex-shrink-0"
+        >
+          Type it instead
+        </Link>
       </header>
 
       {/* Main Content */}
@@ -311,7 +324,7 @@ export default function CapturePage() {
             <Home className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">Home</span>
           </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
+          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
             <Plus className="w-5 h-5 text-foreground" />
             <span className="text-[10px] text-foreground font-medium">New</span>
           </Link>

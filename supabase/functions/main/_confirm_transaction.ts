@@ -25,8 +25,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
-import { calculateFee } from "../_core/fees.ts";
-import { buildPostings } from "../_core/postings.ts";
+import { resolveRuleAt } from "./_shared/fee_rules.ts";
+import { quoteEntry } from "../_core/entry.ts";
 import { toMinor, toPesos } from "../_core/money.ts";
 import { TRANSACTION_TYPES, isTransactionType } from "../_core/types.ts";
 import type { FeeRule, Posting } from "../_core/types.ts";
@@ -189,15 +189,25 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
       }, 422);
     }
 
+    // ----- price it and build the entry -----
+    // One call, shared with create-transaction and the entry form, so the
+    // figure the operator saw on the form is produced by the same code that
+    // posts it rather than by a second implementation that agrees today.
     const amountMinor = toMinor(amountPesos);
-    const feeMinor = calculateFee(txType, platform, amountMinor, [rule], {
-      amountIncludesFee: body.amount_includes_fee === true,
-    });
-
-    // ----- build the entry -----
+    let feeMinor: number;
     let postings: Posting[];
     try {
-      postings = buildPostings(txType, { amountMinor, feeMinor, platform });
+      const quote = quoteEntry(
+        {
+          transactionType: txType,
+          platform,
+          amountMinor,
+          amountIncludesFee: body.amount_includes_fee === true,
+        },
+        [rule],
+      );
+      feeMinor = quote.feeMinor;
+      postings = quote.postings;
     } catch (err) {
       // _core refuses nonsensical entries — a negative amount, or a Cash Out
       // whose fee exceeds the payout. Those are 422s, not 500s: the request was
@@ -297,41 +307,4 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     console.error("Unhandled error in confirm-transaction:", err);
     return jsonResponse(req, { error: "Internal server error" }, 500);
   }
-}
-
-/**
- * The fee rule in force for this type/platform at a given instant.
- *
- * Mirrors resolveFeeRule in _core/fees.ts: an exact platform match wins over
- * the "all" fallback, so a generic rule can never silently override
- * platform-specific pricing. gocash.fee_rule_at() matches one platform exactly,
- * so the fallback is a second call rather than a clever query.
- */
-async function resolveRuleAt(
-  // deno-lint-ignore no-explicit-any
-  admin: any,
-  operatorId: string,
-  txType: string,
-  platform: string,
-  at: string
-): Promise<FeeRule | null> {
-  for (const candidate of [platform, "all"]) {
-    const { data } = await admin.rpc("fee_rule_at", {
-      p_operator_id: operatorId,
-      p_transaction_type: txType,
-      p_platform: candidate,
-      p_at: at,
-    });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (row && row.id) {
-      return {
-        transaction_type: row.transaction_type,
-        platform: row.platform,
-        rate_bps: Number(row.rate_bps),
-        minimum_minor: Number(row.minimum_minor),
-        is_active: true,
-      };
-    }
-  }
-  return null;
 }

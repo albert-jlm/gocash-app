@@ -5,17 +5,22 @@
  * `gocash.account_balances` view. Nothing here writes a balance, because a
  * derived balance cannot be written — the only way to change one is to post an
  * entry, and the ledger's RLS grants the browser SELECT and nothing else. Every
- * write below therefore belongs to an Edge Function that does not exist yet.
+ * write below therefore goes through an Edge Function holding the service-role
+ * key: `create-transaction`, `confirm-transaction`, `reconcile-account`,
+ * `provision-operator`.
  *
  * The posting arithmetic itself is NOT reimplemented here. It lives in
  * `@core/postings.ts`, which is the single source of truth shared with the
  * Edge Functions — the same module the deleted `src/lib/transaction-processing.ts`
- * used to shadow (Audit #5 finding 4).
+ * used to shadow (Audit #5 finding 4). What this file computes is a PREVIEW:
+ * the server reprices at the gate and the server wins. They agree because
+ * they are the same function, not because the figures are kept in step.
  */
 
 import { toMinor, toPesos, type Minor } from "@core/money.ts";
 import { reconcile } from "@core/postings.ts";
-import type { AccountRef, Posting } from "@core/types.ts";
+import { quoteEntry, type EntryQuote } from "@core/entry.ts";
+import type { AccountRef, FeeRule, Posting, TransactionType } from "@core/types.ts";
 import { supabase } from "@/lib/supabase/client";
 
 /**
@@ -109,12 +114,10 @@ export function previewReconciliation(input: ReconciliationInput): Posting[] {
  * already exists server-side as `reconcile()` in
  * `supabase/functions/_core/postings.ts`.
  *
- * MISSING ENDPOINT: there is no route that calls it yet. It needs a
- * `reconcile-account` handler — `supabase/functions/main/_reconcile_account.ts`,
- * registered in the `routes` map in `supabase/functions/main/index.ts` — which
- * writes a `kind = 'reconciliation'` row to `gocash.ledger_entries` plus the two
- * postings, using the service-role key. Until that exists this throws rather
- * than pretending, and no endpoint is invented here to paper over it.
+ * The endpoint is `supabase/functions/main/_reconcile_account.ts`, registered as
+ * `reconcile-account`. It writes a `kind = 'reconciliation'` entry plus the two
+ * postings with the service-role key, and it reads the book balance itself —
+ * which is why this function does not send one.
  */
 export async function postReconciliation(
   input: ReconciliationInput
@@ -157,7 +160,14 @@ export async function postReconciliation(
     replayed: data.replayed === true,
     entryId: data.entry_id ?? null,
     differenceMinor: data.difference_minor ?? 0,
-    newBalanceMinor: data.new_balance_minor ?? input.account.balance_minor,
+    // `balance_minor`, not `new_balance_minor`. The endpoint has never returned
+    // a field by the latter name, so this read was always undefined and fell
+    // through to the PRE-count balance — the form reported a successful
+    // reconciliation and then showed the figure that had just been corrected,
+    // which looks exactly like the correction not having been applied.
+    newBalanceMinor: typeof data.balance_minor === "number"
+      ? data.balance_minor
+      : input.account.balance_minor,
   };
 }
 
@@ -292,4 +302,211 @@ export function formatPesos(pesos: number): string {
 /** Same, from centavos. */
 export function formatMinorPesos(minor: Minor): string {
   return formatPesos(toPesos(minor));
+}
+
+// ===========================================================================
+// Manual entry
+//
+// Typing a transaction instead of photographing one. This is the primary path:
+// no vision model, no upload, nothing to misread, and it works on a connection
+// too weak to carry a 2 MB image. `process-transaction` stays as the
+// screenshot convenience on top of it.
+// ===========================================================================
+
+export interface EntryContext {
+  /** Platform names this operator actually holds an active account for. */
+  platforms: string[];
+  /** Fee rules currently in force, for the live preview. */
+  rules: FeeRule[];
+}
+
+/**
+ * Everything the entry form needs to price and validate without a round-trip.
+ *
+ * Both reads are RLS-scoped to the signed-in operator: `account_balances` is a
+ * `security_invoker` view and `fee_rules` has a SELECT-only policy. Neither
+ * takes an operator id from this code, so a tampered client sees its own rows
+ * or none.
+ */
+export async function loadEntryContext(): Promise<EntryContext> {
+  const [{ data: accounts, error: accountsError }, { data: rules, error: rulesError }] =
+    await Promise.all([
+      supabase
+        .from("account_balances")
+        .select("name, kind")
+        .eq("kind", "platform")
+        .order("name"),
+      supabase
+        .from("fee_rules")
+        .select("transaction_type, platform, rate_bps, minimum_minor")
+        .is("effective_to", null),
+    ]);
+
+  if (accountsError) throw new Error(accountsError.message);
+  if (rulesError) throw new Error(rulesError.message);
+
+  return {
+    platforms: (accounts ?? []).map((a) => a.name as string),
+    rules: (rules ?? []).map((r) => ({
+      transaction_type: r.transaction_type as string,
+      platform: r.platform as string,
+      rate_bps: Number(r.rate_bps),
+      minimum_minor: Number(r.minimum_minor),
+      is_active: true,
+    })),
+  };
+}
+
+export interface EntryInput {
+  transactionType: TransactionType;
+  /** Empty for Profit Remittance, which touches no platform wallet. */
+  platform: string;
+  amountPesos: number;
+  referenceNumber?: string | null;
+  accountNumber?: string | null;
+  transactionDate?: string | null;
+  /** Cash Out only. Never inferred — the operator answers it. */
+  amountIncludesFee?: boolean;
+  /**
+   * Stable across every retry of ONE Save tap. Hold it in a ref; generating it
+   * inside the submit handler defeats the entire purpose, which is that a
+   * double tap or a lost response cannot produce a second draft or a second
+   * ledger entry.
+   */
+  idempotencyKey: string;
+  memo?: string | null;
+}
+
+/**
+ * Re-exported under the name the UI uses. Not restated: a second declaration of
+ * the same four fields is a second thing to keep in step.
+ */
+export type EntryPreview = EntryQuote;
+
+/**
+ * What saving this form would do, computed locally so the figures update as the
+ * operator types.
+ *
+ * A thin adapter over `quoteEntry` in `@core/entry.ts` — the same function
+ * `create-transaction` and `confirm-transaction` run server-side. So the
+ * preview is not an approximation of the posting, it IS the posting, and
+ * `_core/__tests__/entry.test.ts` asserts that property directly instead of it
+ * resting on two files being kept in step by hand.
+ *
+ * One case can still disagree with the server: a fee rule changed between this
+ * page loading and Save. The gate reprices at confirm time and the gate wins.
+ */
+export function previewEntry(
+  input: Pick<EntryInput, "transactionType" | "platform" | "amountPesos" | "amountIncludesFee">,
+  rules: readonly FeeRule[],
+): EntryPreview {
+  return quoteEntry(
+    {
+      transactionType: input.transactionType,
+      platform: input.platform,
+      amountMinor: toMinor(input.amountPesos),
+      amountIncludesFee: input.amountIncludesFee,
+    },
+    rules,
+  );
+}
+
+export interface EntryResult {
+  transactionId: string;
+  entryId: string | null;
+  /** False when the draft already existed — a replayed Save, not a second one. */
+  created: boolean;
+  feePesos: number;
+}
+
+/**
+ * Save a typed transaction: create the draft, then confirm it.
+ *
+ * TWO CALLS, DELIBERATELY. `confirm-transaction` stays the only place the
+ * ledger is written, so typed and photographed transactions converge on one
+ * posting path with one copy of the arithmetic. A `create-and-post` route that
+ * built its own legs would be a second implementation of the thing that was
+ * wrong in four of the six original transaction types.
+ *
+ * The split is also better under failure. If the confirm leg fails — connection
+ * dropped, fee rule missing — the draft survives at `awaiting_confirm` and
+ * appears in the pending queue to be retried or discarded. An all-or-nothing
+ * route would lose the operator's typing.
+ *
+ * ONE KEY FOR BOTH LEGS. `transactions.idempotency_key` dedupes the draft and
+ * `ledger_entries.idempotency_key` dedupes the posting, so a retry of either
+ * leg is a no-op that returns what the first attempt produced.
+ */
+export async function createAndConfirmTransaction(input: EntryInput): Promise<EntryResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1`;
+  const headers = {
+    Authorization: `Bearer ${session.access_token}`,
+    "Content-Type": "application/json",
+  };
+
+  // operator_id is never sent. Every endpoint resolves it from the verified
+  // JWT; a caller-supplied operator id is the shape that caused Audit #5a.
+  const createResponse = await fetch(`${base}/create-transaction`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      transaction_type: input.transactionType,
+      platform: input.transactionType === "Profit Remittance" ? undefined : input.platform,
+      amount: input.amountPesos,
+      reference_number: input.referenceNumber ?? null,
+      account_number: input.accountNumber ?? null,
+      transaction_date: input.transactionDate ?? null,
+      amount_includes_fee: input.amountIncludesFee === true,
+      idempotency_key: input.idempotencyKey,
+      memo: input.memo ?? null,
+    }),
+  });
+
+  const created = await createResponse.json();
+  if (!createResponse.ok) {
+    throw new Error(created.error ?? "Could not save the entry");
+  }
+
+  const transactionId: string = created.transaction?.id;
+  if (!transactionId) throw new Error("The server did not return a transaction id");
+
+  const confirmResponse = await fetch(`${base}/confirm-transaction`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      transaction_id: transactionId,
+      idempotency_key: input.idempotencyKey,
+      amount_includes_fee: input.amountIncludesFee === true,
+    }),
+  });
+
+  const confirmed = await confirmResponse.json();
+  if (!confirmResponse.ok) {
+    // 409 means the draft is no longer awaiting confirmation, which on a retry
+    // is the FIRST attempt having succeeded. Reported as success, because the
+    // transaction is in the ledger and telling the operator it failed would
+    // invite them to enter it a second time.
+    if (confirmResponse.status === 409 && confirmed.status === "confirmed") {
+      return {
+        transactionId,
+        entryId: null,
+        created: created.created === true,
+        feePesos: created.fee_preview ?? 0,
+      };
+    }
+    throw new Error(
+      `Saved as a draft, but confirming it failed: ${confirmed.error ?? "unknown error"}. ` +
+        `It is waiting in your pending list.`,
+    );
+  }
+
+  return {
+    transactionId,
+    entryId: confirmed.entry_id ?? null,
+    created: created.created === true,
+    feePesos: confirmed.net_profit ?? created.fee_preview ?? 0,
+  };
 }

@@ -510,3 +510,80 @@ SELECT harness.expect_no_rows('layer2', '2.15 gocash.unbalanced_entries is empty
                 COALESCE(out_of_balance_by_minor::text, 'NULL — it has no postings at all')) AS violation
   FROM gocash.unbalanced_entries
   $q$);
+
+-- ---------------------------------------------------------------------------
+-- 2.16 — a repeated DRAFT idempotency_key is rejected.
+--
+-- Distinct from 2.11, which covers the LEDGER key. post_entry being idempotent
+-- makes a duplicate confirm harmless, and that is exactly why a duplicate
+-- DRAFT is the dangerous one: two rows at 'awaiting_confirm' describing one
+-- real transaction, which the operator cannot tell apart and confirms both of.
+-- Each confirm then carries its OWN ledger key, so the ledger accepts both
+-- entries, the books balance, every invariant above passes — and the drawer is
+-- short by one transaction with nothing anywhere looking wrong.
+--
+-- `transactions_unique_reference_per_operator` does not cover this: UNIQUE
+-- treats NULLs as distinct and a typed transaction often has no reference.
+--
+-- 20260924000008 carries its own version of this check, but it skips when the
+-- database has no operator — which is every fresh scratch build. This is the
+-- one that actually runs.
+-- ---------------------------------------------------------------------------
+SELECT harness.expect_error('layer2', '2.16 a repeated draft idempotency_key is rejected',
+  'Without this a double-tapped Save leaves two indistinguishable drafts, the '
+  'operator confirms both, and the ledger records one real transaction twice '
+  'while remaining perfectly balanced.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source, idempotency_key)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 100, 'awaiting_confirm', 'manual', 'dup-draft-key')$s$,
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source, idempotency_key)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 100, 'awaiting_confirm', 'manual', 'dup-draft-key')$s$
+  ],
+  'transactions_unique_idempotency_per_operator');
+
+-- ---------------------------------------------------------------------------
+-- 2.17 — two operators may use the same draft key.
+--
+-- The guard above is per-operator. If it were global, one tenant's key would
+-- collide with another's and the second operator's entry would be rejected for
+-- a reason they could neither see nor act on. Asserted because the obvious
+-- "simplification" of dropping operator_id from that index would still pass
+-- 2.16 and break every tenant but the first.
+-- ---------------------------------------------------------------------------
+SELECT harness.expect_ok('layer2', '2.17 the draft key is scoped per operator',
+  'A global uniqueness constraint on a client-generated key would make one '
+  'tenant able to lock another out of recording a transaction.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source, idempotency_key)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 100, 'awaiting_confirm', 'manual', 'shared-key')$s$,
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source, idempotency_key)
+       VALUES ('22222222-2222-2222-2222-222222222222',
+               'Cash In', 'GCash', 100, 'awaiting_confirm', 'manual', 'shared-key')$s$
+  ]);
+
+-- ---------------------------------------------------------------------------
+-- 2.18 — entry_source has no default.
+--
+-- The column exists to answer one question later: are the TYPED rows or the
+-- READ rows the ones that turn out wrong? A default would answer it falsely
+-- for every caller that forgot, and the whole point is that the answer cannot
+-- be reconstructed after the fact. 20260924000008 sets 'ocr' only long enough
+-- to label the pre-existing rows and then drops it.
+-- ---------------------------------------------------------------------------
+SELECT harness.expect_error('layer2', '2.18 entry_source must be stated explicitly',
+  'A default on entry_source would silently label typed rows as OCR-read, '
+  'destroying the only measurement that can justify or retire the OCR path.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 100, 'awaiting_confirm')$s$
+  ],
+  'entry_source');
