@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toMinor, toPesos, ceilToUnit, formatMinor, MoneyError } from "../money.ts";
+import { toMinor, toPesos, ceilToUnit, formatMinor, MoneyError, parsePesosInput } from "../money.ts";
 
 describe("peso <-> centavo conversion", () => {
   it("converts whole and fractional pesos exactly", () => {
@@ -50,5 +50,40 @@ describe("formatMinor", () => {
   });
   it("handles negatives", () => {
     expect(formatMinor(-50000)).toBe("-PHP 500.00");
+  });
+});
+
+describe("parsePesosInput — what a person typed, read exactly or not at all", () => {
+  it("reads plain and comma-grouped amounts to centavos", () => {
+    expect(parsePesosInput("1850")).toBe(185000);
+    expect(parsePesosInput("1,850")).toBe(185000);
+    expect(parsePesosInput("12,500.50")).toBe(1250050);
+    expect(parsePesosInput("1,234,567.8")).toBe(123456780);
+    expect(parsePesosInput("₱ 1,850")).toBe(185000);
+    expect(parsePesosInput(" 500 ")).toBe(50000);
+    expect(parsePesosInput("6.66")).toBe(666);
+    expect(parsePesosInput(".5")).toBe(50);
+    expect(parsePesosInput("0")).toBe(0);
+  });
+
+  it("is exact where float parsing is not", () => {
+    // 1.15 * 100 is 114.99999999999999 in float64.
+    expect(parsePesosInput("1.15")).toBe(115);
+    expect(parsePesosInput("339.66")).toBe(33966);
+  });
+
+  it("refuses anything parseFloat would silently truncate", () => {
+    // parseFloat gives 1, 12 and 500 for the first three.
+    expect(parsePesosInput("1,85")).toBeNull();
+    expect(parsePesosInput("12,5000")).toBeNull();
+    expect(parsePesosInput("500abc")).toBeNull();
+    expect(parsePesosInput("1.850,00")).toBeNull();
+    expect(parsePesosInput("1850.505")).toBeNull();
+    expect(parsePesosInput("5e3")).toBeNull();
+    expect(parsePesosInput("-5")).toBeNull();
+    expect(parsePesosInput("")).toBeNull();
+    expect(parsePesosInput("   ")).toBeNull();
+    expect(parsePesosInput(".")).toBeNull();
+    expect(parsePesosInput("₱")).toBeNull();
   });
 });

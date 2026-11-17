@@ -78,3 +78,32 @@ export function formatMinor(minor: Minor): string {
   const grouped = units.toLocaleString("en-PH");
   return `${negative ? "-" : ""}PHP ${grouped}.${String(cents).padStart(2, "0")}`;
 }
+
+/**
+ * Parse an amount a person typed into a form, to centavos. Returns null when
+ * the text is not an unambiguous peso amount.
+ *
+ * WHY NOT parseFloat
+ * parseFloat reads as far as it can and stops: "1,850" is 1, "12,500.50" is
+ * 12, "500abc" is 500. On a confirm screen that turns a pasted or
+ * comma-formatted amount into a different, perfectly valid-looking number,
+ * and the ledger posts it. An amount that cannot be read exactly must be
+ * refused, not approximated.
+ *
+ * Accepts: "1850", "1850.5", "1,850", "1,850.50", "₱ 1,850", ".50", "0".
+ * Rejects: "", "1,85", "1850.505", "1.850,00", "-5", "5e3", "500abc".
+ */
+export function parsePesosInput(text: string): Minor | null {
+  const cleaned = text.replace(/[₱\s]/g, "");
+  if (cleaned === "") return null;
+
+  const plain = /^(\d+)?(?:\.(\d{1,2}))?$/;
+  const grouped = /^(\d{1,3}(?:,\d{3})+)(?:\.(\d{1,2}))?$/;
+  const match = plain.exec(cleaned) ?? grouped.exec(cleaned);
+  if (!match || (match[1] === undefined && match[2] === undefined)) return null;
+
+  const units = Number((match[1] ?? "0").replace(/,/g, ""));
+  const cents = Number((match[2] ?? "0").padEnd(2, "0"));
+  const minor = units * MINOR_PER_UNIT + cents;
+  return Number.isSafeInteger(minor) ? minor : null;
+}

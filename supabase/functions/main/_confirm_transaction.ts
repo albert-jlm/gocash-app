@@ -165,7 +165,10 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
 
     const platform = edits.platform ?? tx.platform;
     const txType = edits.transaction_type ?? tx.transaction_type;
-    const amountPesos = edits.amount ?? tx.amount;
+    // `"amount" in edits`, not `??`. A client that sent NaN (which JSON turns
+    // into null) used to fall back silently to the AI's figure; an amount the
+    // operator supplied is either usable or refused.
+    const amountPesos = "amount" in edits ? edits.amount : tx.amount;
     const accountNumber = "account_number" in edits ? edits.account_number : tx.account_number;
     const referenceNumber = "reference_number" in edits ? edits.reference_number : tx.reference_number;
     const transactionDate = "transaction_date" in edits ? edits.transaction_date : tx.transaction_date;
@@ -177,9 +180,13 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     }
 
     if (typeof amountPesos !== "number" || !isFinite(amountPesos)
-        || amountPesos < 0 || amountPesos > MAX_AMOUNT_PESOS) {
+        || amountPesos <= 0 || amountPesos > MAX_AMOUNT_PESOS) {
+      // Zero is refused too. A draft whose amount could not be read is stored
+      // as 0, and confirming it would post the minimum fee against nothing:
+      // cash +5 / revenue -5, balanced and fictional.
       return jsonResponse(req, {
-        error: `Invalid amount: must be a number between 0 and ${MAX_AMOUNT_PESOS}`,
+        error: `Enter the amount: it must be more than 0 and at most ${MAX_AMOUNT_PESOS}`,
+        code: "invalid_amount",
       }, 400);
     }
 

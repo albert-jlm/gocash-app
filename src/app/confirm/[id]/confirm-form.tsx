@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
   Check,
@@ -20,6 +20,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
+import { parsePesosInput, toMinor } from "@core/money.ts";
+import { isTransactionType } from "@core/types.ts";
+import {
+  formatPesos,
+  loadEntryContext,
+  previewEntry,
+  type EntryContext,
+} from "@/lib/ledger";
+
+// Shown only if the operator's wallets could not be loaded, so the form is
+// still usable. The server checks the platform against real accounts anyway.
+const FALLBACK_PLATFORMS = ["GCash", "MariBank", "Maya"];
+
+const ACCOUNT_LABEL: Record<string, string> = {
+  cash: "Drawer cash",
+  revenue: "Your earnings",
+  equity: "Owner's equity",
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,7 +117,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const [platform, setPlatform] = useState("");
   const [txType, setTxType] = useState("");
   const [amount, setAmount] = useState("");
-  const [profit, setProfit] = useState("");
+  const [context, setContext] = useState<EntryContext | null>(null);
   const [accountNumber, setAccountNumber] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [txDate, setTxDate] = useState("");
@@ -137,6 +155,53 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     load();
   }, [transactionId, isPreview]);
 
+  // Wallets and fee rules, for the platform list and the fee preview. A
+  // failure here is not fatal: the form falls back to the standard platforms
+  // and shows no preview, and the server still prices and checks everything.
+  useEffect(() => {
+    if (isPreview) return;
+    let cancelled = false;
+    loadEntryContext()
+      .then((ctx) => { if (!cancelled) setContext(ctx); })
+      .catch(() => { /* fallback list, no preview */ });
+    return () => { cancelled = true; };
+  }, [isPreview]);
+
+  // Only Cash Out can have the fee inside the printed amount; a stale answer
+  // must not survive a change of type.
+  useEffect(() => {
+    if (txType !== "Cash Out") setAmountIncludesFee(false);
+  }, [txType]);
+
+  // Read exactly or not at all. parseFloat turned "1,850" into 1 here, and a
+  // blank field into NaN, which the server replaced with the AI's figure.
+  const amountMinor = useMemo(() => parsePesosInput(amount), [amount]);
+  const amountValid = amountMinor !== null && amountMinor > 0;
+
+  const preview = useMemo(() => {
+    if (!context || !amountValid || platform === "" || !isTransactionType(txType)) return null;
+    try {
+      return previewEntry(
+        {
+          transactionType: txType,
+          platform,
+          amountPesos: (amountMinor as number) / 100,
+          amountIncludesFee,
+        },
+        context.rules
+      );
+    } catch {
+      // The ledger would refuse this (a Cash Out whose fee exceeds the
+      // amount, for one). No preview; Save reports why.
+      return null;
+    }
+  }, [context, amountValid, amountMinor, platform, txType, amountIncludesFee]);
+
+  const platformOptions = useMemo(() => {
+    const list = context && context.platforms.length > 0 ? context.platforms : FALLBACK_PLATFORMS;
+    return platform !== "" && !list.includes(platform) ? [...list, platform] : list;
+  }, [context, platform]);
+
   function populate(data: TransactionDraft) {
     // NOT `?? "GCash"`. An unidentified platform must stay unidentified: a
     // pre-filled field on a mobile confirm screen is a field the operator taps
@@ -146,7 +211,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     setPlatform(data.platform === "Unknown" ? "" : (data.platform ?? ""));
     setTxType(data.transaction_type ?? "Cash In");
     setAmount(data.amount?.toString() ?? "0");
-    setProfit(data.net_profit?.toString() ?? "0");
     setAccountNumber(data.account_number ?? "");
     setReferenceNumber(data.reference_number ?? "");
     setTxDate(data.transaction_date ? data.transaction_date.slice(0, 16) : "");
@@ -158,6 +222,10 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   async function handleSave() {
     if (!tx || isPreview) return;
+    if (amountMinor === null || amountMinor <= 0) {
+      setSaveError("Enter the amount, for example 1850 or 1,850.50");
+      return;
+    }
     setSaveError(null);
     setSaving(true);
     try {
@@ -167,8 +235,10 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       const edits: Record<string, unknown> = {};
       if (platform !== tx.platform) edits.platform = platform;
       if (txType !== tx.transaction_type) edits.transaction_type = txType;
-      if (parseFloat(amount) !== tx.amount) edits.amount = parseFloat(amount);
-      if (parseFloat(profit) !== tx.net_profit) edits.net_profit = parseFloat(profit);
+      // Compared in centavos. The fee is not sent: the server prices the
+      // transaction from the fee rules, and an earnings figure typed here was
+      // silently dropped.
+      if (amountMinor !== toMinor(tx.amount)) edits.amount = amountMinor / 100;
       if (accountNumber !== (tx.account_number ?? "")) edits.account_number = accountNumber || null;
       if (referenceNumber !== (tx.reference_number ?? "")) edits.reference_number = referenceNumber || null;
       if (txDate && txDate !== (tx.transaction_date ?? "").slice(0, 16))
@@ -303,9 +373,9 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="GCash">GCash</SelectItem>
-                <SelectItem value="MariBank">MariBank</SelectItem>
-                <SelectItem value="Maya">Maya</SelectItem>
+                {platformOptions.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FieldRow>
@@ -327,31 +397,81 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             </Select>
           </FieldRow>
 
-          {/* Amount + Earnings */}
-          <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="Amount">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
-                <Input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  readOnly={false}
-                  className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 tabular-nums text-sm"
-                />
+          {/* Amount */}
+          <FieldRow label="Amount">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
+              <Input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                inputMode="decimal"
+                autoComplete="off"
+                aria-invalid={!amountValid}
+                className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 tabular-nums text-sm"
+              />
+            </div>
+            {!amountValid && (
+              <p className="text-[11px] text-red-400">
+                {amountMinor === 0 || amount.trim() === ""
+                  ? "Enter the amount on the receipt."
+                  : "This isn't a readable amount. Use digits like 1850 or 1,850.50."}
+              </p>
+            )}
+
+            {txType === "Cash Out" && (
+              <button
+                type="button"
+                onClick={() => setAmountIncludesFee((v) => !v)}
+                className="flex items-start gap-2.5 w-full text-left pt-1"
+              >
+                <span
+                  className={`w-4 h-4 rounded flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                    amountIncludesFee ? "bg-emerald-500" : "bg-white/[0.12]"
+                  }`}
+                >
+                  {amountIncludesFee && <Check className="w-3 h-3 text-black" />}
+                </span>
+                <span className="text-[11px] text-muted-foreground leading-relaxed">
+                  This amount already includes my fee
+                </span>
+              </button>
+            )}
+          </FieldRow>
+
+          {/* Fee and effect: computed, never typed. The same code prices it
+              on the server when Save is tapped. */}
+          {preview && (
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-3 space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-muted-foreground">Your earnings</span>
+                <span className="text-base font-semibold text-emerald-400 tabular-nums">
+                  {formatPesos(preview.feePesos)}
+                </span>
               </div>
-            </FieldRow>
-            <FieldRow label="Your earnings">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 text-sm pointer-events-none">₱</span>
-                <Input
-                  value={profit}
-                  onChange={(e) => setProfit(e.target.value)}
-                  readOnly={false}
-                  className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 text-emerald-400 font-semibold tabular-nums text-sm"
-                />
-              </div>
-            </FieldRow>
-          </div>
+              {!preview.rule && (
+                <p className="text-[11px] text-amber-300 leading-relaxed">
+                  No fee rule covers {txType} on {platform} yet, so this earns nothing.
+                  Set one in <Link href="/settings/rules" className="underline">Settings → Fees</Link>.
+                </p>
+              )}
+              <div className="h-px bg-white/[0.06]" />
+              {preview.postings.map((p, i) => {
+                const label =
+                  p.account.kind === "platform"
+                    ? p.account.platform
+                    : ACCOUNT_LABEL[p.account.kind] ?? p.account.kind;
+                const pesos = p.amount / 100;
+                return (
+                  <div key={i} className="flex items-baseline justify-between text-xs">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className={`tabular-nums font-medium ${pesos > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {pesos > 0 ? "+" : "−"}{formatPesos(Math.abs(pesos))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Customer number */}
           <FieldRow label="Customer number">
@@ -391,7 +511,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <button
           onClick={handleSave}
-          disabled={saving || isPreview || platform === ""}
+          disabled={saving || isPreview || platform === "" || !amountValid}
           className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
         >
           {saving ? (

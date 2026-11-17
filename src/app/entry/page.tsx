@@ -28,6 +28,7 @@ import {
   ArrowLeft, Check, ChevronDown, Loader2, AlertCircle, Camera,
 } from "lucide-react";
 import { TRANSACTION_TYPES, type TransactionType } from "@core/types.ts";
+import { parsePesosInput } from "@core/money.ts";
 import {
   createAndConfirmTransaction,
   loadEntryContext,
@@ -129,8 +130,10 @@ export default function EntryPage() {
   }, [txType]);
 
   const amountPesos = useMemo(() => {
-    const n = Number.parseFloat(amount);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    // Exact, and null for anything that is not unambiguously an amount:
+    // parseFloat read "1,850" as 1.
+    const minor = parsePesosInput(amount);
+    return minor !== null && minor > 0 ? minor / 100 : 0;
   }, [amount]);
 
   const preview = useMemo(() => {

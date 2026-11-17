@@ -6,7 +6,8 @@ import { Loader2, ChevronRight, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
-import { provisionOperator, pesosToMinor } from "@/lib/ledger";
+import { provisionOperator } from "@/lib/ledger";
+import { parsePesosInput } from "@core/money.ts";
 import type { Session } from "@supabase/supabase-js";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,21 @@ export default function OnboardingPage() {
   async function handleFinish() {
     if (!session) return;
     setError(null);
+
+    // Blank means zero; anything else must read exactly. parseFloat took a
+    // typed "20,000" as 20 and opened the books at a thousandth of the float.
+    const opening: Record<string, number> = {};
+    for (const [label, text] of [
+      ["GCash", gcashBalance], ["MariBank", maribankBalance], ["Cash", cashBalance],
+    ] as const) {
+      const minor = text.trim() === "" ? 0 : parsePesosInput(text);
+      if (minor === null) {
+        setError(`The ${label} balance isn't a readable amount. Use digits like 20000 or 20,000.50.`);
+        return;
+      }
+      opening[label] = minor;
+    }
+
     setSaving(true);
 
     try {
@@ -96,9 +112,9 @@ export default function OnboardingPage() {
         phone: phone.trim() || null,
         platforms: DEFAULT_PLATFORMS,
         openingMinor: {
-          GCash: pesosToMinor(parseFloat(gcashBalance) || 0),
-          MariBank: pesosToMinor(parseFloat(maribankBalance) || 0),
-          Cash: pesosToMinor(parseFloat(cashBalance) || 0),
+          GCash: opening.GCash,
+          MariBank: opening.MariBank,
+          Cash: opening.Cash,
         },
       });
 

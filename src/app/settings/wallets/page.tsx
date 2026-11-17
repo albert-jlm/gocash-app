@@ -21,6 +21,7 @@ import {
   formatPesos,
   type LedgerAccount,
 } from "@/lib/ledger";
+import { parsePesosInput } from "@core/money.ts";
 
 // ---------------------------------------------------------------------------
 // Card colours
@@ -126,8 +127,9 @@ export default function WalletsSettingsPage() {
 
   /** What the correction would post, in centavos; null while the field is unparseable. */
   function differenceMinor(account: AccountRow): number | null {
-    const counted = parseFloat(countedValue);
-    if (!Number.isFinite(counted)) return null;
+    const countedMinor = parsePesosInput(countedValue);
+    if (countedMinor === null) return null;
+    const counted = countedMinor / 100;
     return reconciliationDifferenceMinor({
       operatorId: operatorId ?? "",
       account,
@@ -137,11 +139,14 @@ export default function WalletsSettingsPage() {
 
   async function submitReconcile(account: AccountRow) {
     if (!operatorId) return;
-    const counted = parseFloat(countedValue);
-    if (!Number.isFinite(counted) || counted < 0) {
-      setError("Enter the amount you counted");
+    // Exact or refused. parseFloat read a counted "12,500" as 12, and the
+    // correction it posted would have written off the other 12,488.
+    const countedMinor = parsePesosInput(countedValue);
+    if (countedMinor === null) {
+      setError("Enter the amount you counted, for example 12500 or 12,500.50");
       return;
     }
+    const counted = countedMinor / 100;
 
     setSaving(true);
     setError(null);
