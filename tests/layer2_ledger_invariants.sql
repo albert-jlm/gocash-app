@@ -587,3 +587,169 @@ SELECT harness.expect_error('layer2', '2.18 entry_source must be stated explicit
                'Cash In', 'GCash', 100, 'awaiting_confirm')$s$
   ],
   'entry_source');
+
+-- ---------------------------------------------------------------------------
+-- 2.19–2.23 — gocash.confirm_transaction (20260925000001).
+--
+-- The first assertions in this file that go through a posting FUNCTION rather
+-- than raw inserts. The Edge Function used to read the status, post, then
+-- update the status as three separate calls; two confirms with different keys
+-- both posted, and a failed status update left a draft that could be posted
+-- again. Every invariant above still passed, because both entries balanced.
+--
+-- Each probe sets the service_role claim first: post_entry and
+-- confirm_transaction read caller identity from request.jwt.claims.
+-- ---------------------------------------------------------------------------
+SELECT harness.probe('layer2', '2.19 confirm posts one entry and marks the draft confirmed',
+  'The post and the status change must land together. If they can separate, a '
+  'draft with an entry behind it can be confirmed a second time.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('c0000000-0000-0000-0000-000000000001',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'Unknown', 0, 'awaiting_confirm', 'ocr')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000001',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,
+           "net_profit":10,"reference_number":"REF-219","was_edited":true,
+           "edit_record":{"changes":{"platform":"GCash"}}}'::jsonb,
+         'confirm-219', 'harness')$s$
+  ],
+  $q$
+  SELECT t.status = 'confirmed'
+     AND t.platform = 'GCash' AND t.amount = 500 AND t.net_profit = 10
+     AND t.reference_number = 'REF-219' AND t.was_edited
+     AND t.confirmed_at IS NOT NULL
+     AND jsonb_array_length(t.edit_history) = 1
+     AND (SELECT count(*) FROM gocash.ledger_entries e
+          WHERE e.transaction_id = t.id AND e.kind = 'transaction') = 1
+     AND (SELECT sum(p.amount_minor) FILTER (WHERE p.amount_minor > 0)
+          FROM gocash.postings p JOIN gocash.ledger_entries e ON e.id = p.entry_id
+          WHERE e.transaction_id = t.id) = 51000
+  FROM gocash.transactions t
+  WHERE t.id = 'c0000000-0000-0000-0000-000000000001'
+  $q$);
+
+SELECT harness.expect_error('layer2', '2.20 a second confirm with a different key is rejected',
+  'Two devices, or a reload that mints a new key, must not post the same '
+  'transaction twice. The idempotency key alone cannot stop this.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('c0000000-0000-0000-0000-000000000002',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'manual')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000002',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,"net_profit":10}'::jsonb,
+         'confirm-220-a', 'harness')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000002',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,"net_profit":10}'::jsonb,
+         'confirm-220-b', 'harness')$s$
+  ],
+  'not awaiting_confirm');
+
+SELECT harness.probe('layer2', '2.21 replaying the same confirm returns the original entry',
+  'A lost response must be retryable. The retry reports the first entry and '
+  'writes nothing, so the operator is not told a saved transaction failed.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('c0000000-0000-0000-0000-000000000003',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'manual')$s$,
+    $s$CREATE TEMP TABLE harness_221 ON COMMIT DROP AS
+       SELECT 1 AS attempt, gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000003',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,"net_profit":10}'::jsonb,
+         'confirm-221', 'harness') AS r$s$,
+    $s$INSERT INTO harness_221
+       SELECT 2, gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000003',
+         '[{"kind":"cash","amount_minor":99900},
+           {"kind":"platform","platform":"GCash","amount_minor":-99900}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":999,"net_profit":0}'::jsonb,
+         'confirm-221', 'harness')$s$
+  ],
+  $q$
+  SELECT (SELECT r ->> 'entry_id' FROM harness_221 WHERE attempt = 1)
+       = (SELECT r ->> 'entry_id' FROM harness_221 WHERE attempt = 2)
+     AND (SELECT (r ->> 'replayed')::boolean FROM harness_221 WHERE attempt = 2)
+     AND NOT (SELECT (r ->> 'replayed')::boolean FROM harness_221 WHERE attempt = 1)
+     AND (SELECT count(*) FROM gocash.ledger_entries
+          WHERE transaction_id = 'c0000000-0000-0000-0000-000000000003') = 1
+     AND (SELECT amount FROM gocash.transactions
+          WHERE id = 'c0000000-0000-0000-0000-000000000003') = 500
+  $q$);
+
+SELECT harness.expect_error('layer2', '2.22 a key already used by another entry cannot confirm a draft',
+  'post_entry returns the existing entry for a known key. Without this guard '
+  'a draft confirmed with a reused key is marked confirmed with nothing posted.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('c0000000-0000-0000-0000-000000000004',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'manual'),
+              ('c0000000-0000-0000-0000-000000000005',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 700, 'awaiting_confirm', 'manual')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000004',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,"net_profit":10}'::jsonb,
+         'confirm-222', 'harness')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'c0000000-0000-0000-0000-000000000005',
+         '[{"kind":"cash","amount_minor":71400},
+           {"kind":"platform","platform":"GCash","amount_minor":-70000},
+           {"kind":"revenue","amount_minor":-1400}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":700,"net_profit":14}'::jsonb,
+         'confirm-222', 'harness')$s$
+  ],
+  'already used for another entry');
+
+SELECT harness.expect_error('layer2', '2.23 one transaction cannot carry two transaction entries',
+  'The backstop under confirm_transaction: anything that reaches the ledger '
+  'by another route still cannot post the same transaction twice.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('c0000000-0000-0000-0000-000000000006',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'manual')$s$,
+    $s$INSERT INTO gocash.ledger_entries (operator_id, kind, transaction_id)
+       VALUES ('11111111-1111-1111-1111-111111111111', 'transaction',
+               'c0000000-0000-0000-0000-000000000006')$s$,
+    $s$INSERT INTO gocash.ledger_entries (operator_id, kind, transaction_id)
+       VALUES ('11111111-1111-1111-1111-111111111111', 'transaction',
+               'c0000000-0000-0000-0000-000000000006')$s$
+  ],
+  'ledger_entries_one_per_transaction');

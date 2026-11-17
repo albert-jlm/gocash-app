@@ -112,13 +112,40 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
       // One literal, not a concatenation: supabase-js parses this string at the
       // TYPE level, and a `+` defeats that, collapsing the row type to an error
       // union where every field access fails to compile.
-      .select("id, operator_id, platform, transaction_type, amount, account_number, reference_number, transaction_date, status, edit_history")
+      .select("id, operator_id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status, edit_history")
       .eq("id", body.transaction_id)
       .eq("operator_id", operator.id)   // belt and braces alongside RLS
       .single();
 
     if (txError || !tx) {
       return jsonResponse(req, { error: "Transaction not found" }, 404);
+    }
+
+    if (tx.status === "confirmed") {
+      // A retry of a confirm that already succeeded (the reply was lost, or
+      // the button was tapped twice) is a success, not an error. It is only
+      // that if the SAME key posted THIS transaction; anything else is a
+      // second confirmation and is refused.
+      const { data: prior } = await admin
+        .from("ledger_entries").select("id")
+        .eq("operator_id", operator.id)
+        .eq("transaction_id", tx.id)
+        .eq("kind", "transaction")
+        .eq("idempotency_key", body.idempotency_key)
+        .maybeSingle();
+
+      if (prior) {
+        return jsonResponse(req, {
+          transaction_id: tx.id,
+          entry_id: prior.id,
+          status: "confirmed",
+          replayed: true,
+          platform: tx.platform,
+          transaction_type: tx.transaction_type,
+          amount: tx.amount,
+          net_profit: tx.net_profit,
+        });
+      }
     }
 
     if (tx.status !== "awaiting_confirm") {
@@ -224,70 +251,79 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
         : { kind: p.account.kind, amount_minor: p.amount }
     ));
 
-    // ----- post, then mark confirmed -----
-    // Order matters. post_entry is idempotent on the key, so if the status
-    // update below fails the client can retry safely: the entry replays as a
-    // no-op and the update is re-attempted. The reverse order would leave a
-    // transaction marked confirmed with no entry behind it.
-    const { data: entryId, error: postError } = await admin.rpc("post_entry", {
-      p_operator_id: operator.id,
-      p_kind: "transaction",
-      p_legs: legs,
-      p_transaction_id: tx.id,
-      p_memo: `${txType} ${platform}`,
-      p_idempotency_key: body.idempotency_key,
-      p_created_by: user.id,
-    });
-
-    if (postError) {
-      console.error("post_entry failed:", postError.message);
-      return jsonResponse(req, { error: "Could not post the ledger entry" }, 500);
-    }
-
+    // ----- post and mark confirmed, atomically -----
+    // One database transaction (gocash.confirm_transaction): the row is
+    // locked, the entry is posted and the status changes together. Doing these
+    // as separate calls from here let two confirms with different keys both
+    // post, and let a failed status update leave a draft that could be posted
+    // again.
     const now = new Date().toISOString();
-    const history = Array.isArray(tx.edit_history) ? tx.edit_history : [];
 
-    const { error: updateError } = await admin
-      .from("transactions")
-      .update({
+    const { data: result, error: confirmError } = await admin.rpc("confirm_transaction", {
+      p_operator_id: operator.id,
+      p_transaction_id: tx.id,
+      p_legs: legs,
+      p_fields: {
         platform,
         transaction_type: txType,
         amount: amountPesos,
         net_profit: toPesos(feeMinor),
-        account_number: accountNumber,
-        reference_number: referenceNumber,
-        transaction_date: transactionDate,
-        status: "confirmed",
-        confirmed_at: now,
-        confirmed_by: user.id,
+        account_number: accountNumber ?? null,
+        reference_number: referenceNumber ?? null,
+        transaction_date: transactionDate ?? null,
         was_edited: wasEdited,
-        edit_history: wasEdited
-          ? [...history, {
-              edited_at: now,
-              edited_by: user.id,
-              changes: edits,
-              previous: {
-                platform: tx.platform,
-                transaction_type: tx.transaction_type,
-                amount: tx.amount,
-                account_number: tx.account_number,
-                reference_number: tx.reference_number,
-                transaction_date: tx.transaction_date,
+        ...(wasEdited
+          ? {
+              edit_record: {
+                edited_at: now,
+                edited_by: user.id,
+                changes: edits,
+                previous: {
+                  platform: tx.platform,
+                  transaction_type: tx.transaction_type,
+                  amount: tx.amount,
+                  account_number: tx.account_number,
+                  reference_number: tx.reference_number,
+                  transaction_date: tx.transaction_date,
+                },
               },
-            }]
-          : history,
-      })
-      .eq("id", tx.id)
-      .eq("operator_id", operator.id);
+            }
+          : {}),
+      },
+      p_idempotency_key: body.idempotency_key,
+      p_created_by: user.id,
+      p_memo: `${txType} ${platform}`,
+    });
 
-    if (updateError) {
-      console.error("Entry posted but transaction update failed:", updateError.message);
-      return jsonResponse(req, {
-        error: "Ledger entry posted but the transaction could not be marked confirmed. " +
-               "Retry with the same idempotency_key.",
-        entry_id: entryId,
-      }, 500);
+    if (confirmError) {
+      // GC001: another confirm got there first. GC002/GC003: the key or the
+      // transaction already has an entry. All three mean "do not post again".
+      if (confirmError.code === "GC001" || confirmError.code === "GC003") {
+        return jsonResponse(req, {
+          error: "Transaction is already confirmed",
+          status: "confirmed",
+        }, 409);
+      }
+      if (confirmError.code === "GC002") {
+        return jsonResponse(req, {
+          error: "This confirmation key was already used for another transaction",
+          code: "key_reused",
+        }, 409);
+      }
+      // 23505 on the reference index: an edited reference number collides
+      // with another of this operator's transactions.
+      if (confirmError.code === "23505"
+          && confirmError.message.includes("transactions_unique_reference_per_operator")) {
+        return jsonResponse(req, {
+          error: "Another transaction already has this reference number",
+          code: "duplicate_reference",
+        }, 409);
+      }
+      console.error("confirm_transaction failed:", confirmError.code, confirmError.message);
+      return jsonResponse(req, { error: "Could not post the ledger entry" }, 500);
     }
+
+    const entryId = (result as { entry_id: string }).entry_id;
 
     return jsonResponse(req, {
       transaction_id: tx.id,
