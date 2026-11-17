@@ -19,6 +19,7 @@
 
 ## Key References
 
+- 🧭 Blueprint: `BLUEPRINT.md` — why the project exists and the market problem; read first
 - 📋 PRD: `PRD.md`
 - 📐 Tech Spec: `TECH_SPEC.md`
 - 🏗️ Architecture: `architecture.md`

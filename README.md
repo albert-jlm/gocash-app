@@ -48,6 +48,7 @@ pnpm dev
 
 | Doc | Purpose |
 |-----|---------|
+| [BLUEPRINT.md](BLUEPRINT.md) | Why the project exists — the market problem, who it is for, principles |
 | [PRD.md](PRD.md) | Product requirements — what and why |
 | [TECH_SPEC.md](TECH_SPEC.md) | Technical specification — how |
 | [architecture.md](architecture.md) | System design and component overview |
