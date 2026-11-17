@@ -1,15 +1,12 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
-import {
-  detectPlatform,
-  detectType,
-  calculateProfit,
-  extractAccountNumber,
-  type TransactionRule,
-} from "./_shared/transaction-processing.ts";
-import { detectGrossAmount } from "../_core/fees.ts";
-import { toMinor } from "../_core/money.ts";
+import { extractFields, type ModelAnswer } from "./_shared/extraction.ts";
+import { resolveRuleAt } from "./_shared/fee_rules.ts";
+import { calculateFee, detectGrossAmount } from "../_core/fees.ts";
+import { toMinor, toPesos } from "../_core/money.ts";
+import { isTransactionType } from "../_core/types.ts";
+import type { FeeRule } from "../_core/types.ts";
 import {
   buildTransactionImagePath,
   TRANSACTION_IMAGE_BUCKET,
@@ -24,16 +21,6 @@ import {
 interface RequestBody {
 image_base64: string;
 mime_type?: string;
-}
-
-interface AIExtraction {
-  raw_text: string;
-  platform: string;
-  transaction_type: string;
-  amount: number | null;
-  reference_number: string | null;
-  account_number: string | null;
-  transaction_date: string | null;
 }
 
 interface OperatorNotificationRow {
@@ -307,9 +294,13 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       ],
     });
 
-    let ai: AIExtraction;
+    let ai: ModelAnswer;
     try {
-      ai = JSON.parse(completion.choices[0].message.content!) as AIExtraction;
+      const parsed: unknown = JSON.parse(completion.choices[0].message.content!);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error("not an object");
+      }
+      ai = parsed as ModelAnswer;
     } catch {
       console.error("Failed to parse AI response: [redacted for security]");
       await cleanupUploadedImage();
@@ -317,43 +308,38 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       return jsonResponse(req, { error: "AI extraction failed — could not parse response" }, 422);
     }
 
-    const rawText = ai.raw_text ?? "";
-    const platform =
-      ai.platform && ai.platform !== "Unknown"
-        ? ai.platform
-        : detectPlatform(rawText);
+    // Everything the draft is built from. An unknown platform or type, or an
+    // amount that could not be read, stays unknown and is listed in
+    // `needsReview` for the confirm screen. See _shared/extraction.ts.
+    const fields = extractFields(ai);
+    const { rawText, platform, txType, accountNumber } = fields;
+    // The column is NOT NULL. Zero means "not read": confirm-transaction
+    // refuses a zero amount, so this cannot be posted until it is entered.
+    const amount = fields.amount ?? 0;
 
-    const txType =
-      ai.transaction_type && ai.transaction_type !== "Unknown"
-        ? ai.transaction_type
-        : detectType(rawText);
+    // A preview of the fee, priced by the same rules and code the gate uses.
+    // Only a preview: confirm-transaction reprices at confirm time. Zero when
+    // any input is still unknown.
+    let rule: FeeRule | null = null;
+    let netProfit = 0;
+    if (isTransactionType(txType) && platform !== "Unknown" && fields.amount !== null) {
+      rule = await resolveRuleAt(
+        adminClient, operator.id, txType, platform,
+        fields.transactionDate ?? new Date().toISOString(),
+      );
+      if (rule && txType !== "Profit Remittance") {
+        netProfit = toPesos(calculateFee(txType, platform, toMinor(amount), [rule]));
+      }
+    }
 
-    const amount = ai.amount ?? 0;
-
-    const accountNumber =
-      ai.account_number ?? extractAccountNumber(rawText) ?? null;
-
-    const { data: rules } = await supabase
-      .from("transaction_rules")
-      .select("*")
-      .eq("operator_id", operator.id)
-      .eq("is_active", true);
-
-    const netProfit = calculateProfit(
-      txType,
-      platform,
-      amount,
-      (rules ?? []) as TransactionRule[]
-    );
-
-    if (ai.reference_number) {
+    if (fields.referenceNumber) {
       const { data: existing } = await supabase
         .from("transactions")
         .select(
           "id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date"
         )
         .eq("operator_id", operator.id)
-        .eq("reference_number", ai.reference_number)
+        .eq("reference_number", fields.referenceNumber)
         .maybeSingle();
 
       if (existing) {
@@ -382,8 +368,8 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
         amount,
         net_profit: netProfit,
         account_number: accountNumber,
-        reference_number: ai.reference_number ?? null,
-        transaction_date: ai.transaction_date ?? null,
+        reference_number: fields.referenceNumber,
+        transaction_date: fields.transactionDate,
         image_url: uploadedImagePath,
         ai_raw_text: rawText || null,
         // PHASE 1 ONLY. Balances do not move here — the operator reviews this
@@ -403,12 +389,12 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       .single();
 
     if (txError) {
-      if (txError.code === "23505" && ai.reference_number) {
+      if (txError.code === "23505" && fields.referenceNumber) {
         const { data: existing } = await supabase
           .from("transactions")
           .select("id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date")
           .eq("operator_id", operator.id)
-          .eq("reference_number", ai.reference_number)
+          .eq("reference_number", fields.referenceNumber)
           .single();
         if (existing) {
           await cleanupUploadedImage();
@@ -426,10 +412,12 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
           });
         }
       }
-      console.error("Transaction insert error:", txError);
+      // Code and message only. The full error object can carry the failing
+      // row, which holds the receipt text and a customer's mobile number.
+      console.error("Transaction insert error:", txError.code, txError.message);
       await cleanupUploadedImage();
       await notifyProcessingError("Failed to save transaction");
-      return jsonResponse(req, { error: "Failed to save transaction", detail: txError.message }, 500);
+      return jsonResponse(req, { error: "Failed to save transaction" }, 500);
     }
 
     // NO WALLET UPDATE HERE.
@@ -443,20 +431,8 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
     // Balances now move exactly once, in confirm-transaction, after the
     // operator taps confirm.
 
-    // Fee rules still live in transaction_rules at this point in the rollout;
-    // map the matching one into the shape _core expects so the hint is priced
-    // by the same code the gate will use.
-    const hintRule = (rules ?? []).find((r: TransactionRule) =>
-      r.transaction_type === txType && (r.platform === platform || r.platform === "all"));
-
-    const grossHint = hintRule
-      ? detectGrossAmount(txType, platform, toMinor(amount), [{
-          transaction_type: hintRule.transaction_type,
-          platform: hintRule.platform,
-          rate_bps: Math.round((hintRule.profit_rate ?? 0) * 100),
-          minimum_minor: Math.round((hintRule.profit_minimum ?? 0) * 100),
-          is_active: true,
-        }])
+    const grossHint = rule && fields.amount !== null
+      ? detectGrossAmount(txType, platform, toMinor(amount), [rule])
       : null;
 
     await notifyProcessed(transaction);
@@ -471,6 +447,10 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       account_number: transaction.account_number,
       reference_number: transaction.reference_number,
       transaction_date: transaction.transaction_date,
+      // What the operator has to supply before this can be saved. The confirm
+      // screen derives the same thing from the row (Unknown / zero), so this
+      // is for callers that show a summary without loading the draft.
+      needs_review: fields.needsReview,
       // No wallet_deltas: nothing has moved yet. The client shows this as a
       // draft for review; confirm-transaction reports the postings once the
       // operator accepts it.

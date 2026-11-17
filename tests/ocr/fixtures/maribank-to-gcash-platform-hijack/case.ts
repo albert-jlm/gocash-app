@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: detectPlatform no longer returns the first brand it finds. Two platforms named means Unknown, held at the gate.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: a cross-wallet transfer. The operator pays OUT of MariBank INTO the
  * customer's GCash. Both platform names appear in raw_text, and the model
  * returned "Unknown", so `detectPlatform` decides.
@@ -47,18 +50,11 @@ export const CASE: OcrCase = {
     ],
   },
   known_failure: {
-    kind: "balanced_wrong",
+    kind: "failed",
     why:
-      "detectPlatform tests GCash before MariBank, so the destination wallet wins. " +
-      "GCash is debited 1,000 and MariBank is never touched. Two wallet balances wrong " +
-      "by equal and opposite amounts, in a balanced entry.",
-    actual: {
-      platform: "GCash",
-      postings: [
-        { account: "cash", php: 1020 },
-        { account: "GCash", php: -1000 },
-        { account: "revenue", php: -20 },
-      ],
-    },
+      "The text names two platforms and the model could not identify the issuer. " +
+      "detectPlatform now returns Unknown when more than one is named, and the draft " +
+      "is held until the operator picks the wallet. No entry is written.",
+    actual: { platform: "Unknown", error_contains: "held at the gate" },
   },
 };

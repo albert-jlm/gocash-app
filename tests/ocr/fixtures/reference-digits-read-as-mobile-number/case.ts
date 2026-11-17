@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: The mobile-number regex is anchored, so digits inside a reference no longer match.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: a receipt with NO mobile number on it at all, and a date-prefixed
  * reference number. The model correctly returns account_number: null, so the
  * regex fallback runs.
@@ -48,13 +51,5 @@ export const CASE: OcrCase = {
       { account: "MariBank", php: -3000 },
       { account: "revenue", php: -60 },
     ],
-  },
-  known_failure: {
-    kind: "fields_only",
-    why:
-      "extractAccountNumber's regex is unanchored, so it matches 09022362733 inside " +
-      "MB2409240001987 and returns it as the customer's mobile. The ledger is correct; " +
-      "the customer record is fabricated.",
-    actual: { account_number: "09022362733" },
   },
 };

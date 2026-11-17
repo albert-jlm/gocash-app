@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: detectType returns Unknown when keywords for more than one type match. Held at the gate.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: a telco's name on a BILLS PAYMENT receipt. `detectType` tests the
  * telco keyword list before the bills list.
  *
@@ -45,12 +48,11 @@ export const CASE: OcrCase = {
     ],
   },
   known_failure: {
-    kind: "fields_only",
+    kind: "failed",
     why:
-      "Classified Telco Load instead of Bills Payment. The postings are identical TODAY " +
-      "because both types share one platform:'all' rule and the same posting shape — so " +
-      "the misread is invisible in the ledger and becomes real money the moment fee_rules " +
-      "prices the two types differently, which is what fee_rules exists to allow.",
-    actual: { transaction_type: "Telco Load" },
+      "The text matches both Telco Load (a telco brand) and Bills Payment (postpaid). " +
+      "detectType now returns Unknown when more than one type matches, and the draft " +
+      "is held until the operator picks. No entry is written.",
+    actual: { transaction_type: "Unknown", error_contains: "held at the gate" },
   },
 };

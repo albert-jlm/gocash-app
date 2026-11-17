@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: detectType no longer defaults to Cash In. The draft is held at the gate with the type unset.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: the highest-severity case in the set. A receipt with no directional
  * wording at all, on the platform whose success screen carries the least text.
  *
@@ -51,19 +54,11 @@ export const CASE: OcrCase = {
     ],
   },
   known_failure: {
-    kind: "balanced_wrong",
+    kind: "failed",
     why:
-      "detectType's fallthrough default is \"Cash In\". The direction inverts: cash goes " +
-      "+1,020 instead of -980 and the wallet -1,000 instead of +1,000. PHP 2,000 of error " +
-      "on a PHP 1,000 receipt, in a perfectly balanced entry.",
-    actual: {
-      transaction_type: "Cash In",
-      fee_php: 20,
-      postings: [
-        { account: "cash", php: 1020 },
-        { account: "MariBank", php: -1000 },
-        { account: "revenue", php: -20 },
-      ],
-    },
+      "The receipt carries no directional wording, so the type cannot be read from it. " +
+      "detectType now returns Unknown instead of defaulting to Cash In, and the draft " +
+      "is held until the operator picks the type. No entry is written.",
+    actual: { transaction_type: "Unknown", error_contains: "held at the gate" },
   },
 };

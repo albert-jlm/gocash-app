@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: The blacklist now runs over the model's own answer too; the customer's number is recovered from the text.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: the model confidently returns the OPERATOR's own number as
  * account_number. The blacklist never gets a chance to reject it.
  *
@@ -40,13 +43,5 @@ export const CASE: OcrCase = {
       { account: "cash", php: -784 },
       { account: "revenue", php: -16 },
     ],
-  },
-  known_failure: {
-    kind: "fields_only",
-    why:
-      "`ai.account_number ?? extractAccountNumber(...)` short-circuits, so DEFAULT_BLACKLIST " +
-      "is never applied to a non-null model answer. The entry is correct; the customer " +
-      "identity on it is the operator's own.",
-    actual: { account_number: "09990000001" },
   },
 };

@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: The amount is now parsed exactly from the string ("1,250.00" -> 1250) by extractFields, so the entry is correct.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: the model returns `amount` as a FORMATTED STRING rather than a
  * number. Everything else on the receipt is read perfectly.
  *
@@ -48,12 +51,5 @@ export const CASE: OcrCase = {
       { account: "GCash", php: -1250 },
       { account: "revenue", php: -25 },
     ],
-  },
-  known_failure: {
-    kind: "failed",
-    why:
-      "toMinor rejects a non-number, so the rebuilt pipeline throws and writes nothing. " +
-      "The live pipeline would compute NaN and insert the row anyway.",
-    actual: { amount_raw: "1,250.00", error_contains: "must be a finite number" },
   },
 };

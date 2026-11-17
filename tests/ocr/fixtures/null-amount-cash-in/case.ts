@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: A null amount is no longer defaulted to 0. The draft is held at the gate with the amount unset.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: the required null-amount case. The model does exactly what the system
  * prompt demands — "Never guess amounts" — and returns null.
  *
@@ -48,17 +51,11 @@ export const CASE: OcrCase = {
     ],
   },
   known_failure: {
-    kind: "balanced_wrong",
+    kind: "failed",
     why:
-      "`ai.amount ?? 0` defaults a refused read to zero; the PHP 5 fee minimum then " +
-      "produces cash +5 / revenue -5. Balanced, undetectable, and entirely fictional.",
-    actual: {
-      amount_php: 0,
-      fee_php: 5,
-      postings: [
-        { account: "cash", php: 5 },
-        { account: "revenue", php: -5 },
-      ],
-    },
+      "The model declined to guess the amount. It is no longer defaulted to zero: the " +
+      "draft is held until the operator enters the amount, and confirm-transaction " +
+      "refuses a zero amount. No entry is written.",
+    actual: { amount_raw: null, error_contains: "held at the gate" },
   },
 };

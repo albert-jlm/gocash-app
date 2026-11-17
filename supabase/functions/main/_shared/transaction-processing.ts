@@ -9,133 +9,61 @@ export type TransactionType =
 
 export type Platform = "GCash" | "MariBank" | "Maya" | "Unknown";
 
-export interface TransactionRule {
-  transaction_type: string;
-  platform: string;
-  delta_platform_mult: number;
-  delta_cash_amount_mult: number;
-  delta_cash_mult: number;
-  profit_rate: number | null;
-  profit_minimum: number | null;
-  is_active: boolean;
-}
-
-export interface WalletDelta {
-  platform_wallet_name: string;
-  platform_delta: number;
-  cash_delta: number;
-}
-
-export function detectPlatform(text: string): Platform {
+/**
+ * Every platform the text names, in a fixed order.
+ *
+ * "seabank" matters as much as "maribank". SeaBank Philippines, Inc. was
+ * renamed MariBank Philippines, Inc. in September 2025 (BSP CL-2025-037), and
+ * the Android package is still ph.seabank.seabank. Every screenshot taken
+ * before the rebrand says SeaBank.
+ */
+export function mentionedPlatforms(text: string): Exclude<Platform, "Unknown">[] {
   const t = text.toLowerCase();
-  if (t.includes("gcash") || t.includes("g-cash")) return "GCash";
-  // "seabank" matters as much as "maribank". SeaBank Philippines, Inc. was
-  // renamed MariBank Philippines, Inc. in September 2025 (BSP CL-2025-037), and
-  // the Android package is still ph.seabank.seabank. Every screenshot taken
-  // before the rebrand says SeaBank — and without this alias every one of them
-  // returned Unknown.
+  const found: Exclude<Platform, "Unknown">[] = [];
+  if (t.includes("gcash") || t.includes("g-cash")) found.push("GCash");
   if (t.includes("maribank") || t.includes("mari bank") || t.includes("seabank")
-      || t.includes("sea bank")) return "MariBank";
-  if (t.includes("maya") || t.includes("paymaya")) return "Maya";
-  return "Unknown";
+      || t.includes("sea bank")) found.push("MariBank");
+  if (t.includes("maya")) found.push("Maya");
+  return found;
 }
 
-export function detectType(text: string): TransactionType {
+/**
+ * The platform, if the text names exactly one. Otherwise "Unknown".
+ *
+ * This used to return the first match in a fixed order with GCash tested
+ * first, so a MariBank receipt reading "To GCash" came back as GCash and the
+ * wrong wallet was debited. Text alone cannot tell the issuer from the
+ * destination; when two platforms are named, the operator is asked.
+ */
+export function detectPlatform(text: string): Platform {
+  const found = mentionedPlatforms(text);
+  return found.length === 1 ? found[0] : "Unknown";
+}
+
+const TYPE_KEYWORDS: readonly [TransactionType, readonly string[]][] = [
+  ["Cash In", ["cash in", "cashin", "send money", "you sent", "sent to"]],
+  ["Cash Out", ["cash out", "cashout", "you received"]],
+  ["Telco Load", [" load", "promo", "globe", "smart", "dito", "tnt", "tm ", "touch mobile"]],
+  // "postpaid" and "bill" are here so a postpaid telco bill matches BOTH this
+  // and Telco Load, and is asked about instead of being read as a load.
+  ["Bills Payment", ["bills", "bill payment", "biller", "paid bill", "postpaid"]],
+  ["Bank Transfer", ["bank transfer", "instapay", "pesonet", "transfer to bank"]],
+];
+
+/**
+ * The transaction type, if the text points to exactly one. Otherwise "Unknown".
+ *
+ * This used to end in `return "Cash In"`. Cash In and Cash Out are mirror
+ * images, so an unreadable Cash Out receipt became a Cash In and every leg of
+ * the entry was inverted while still balancing. There is no safe default: no
+ * match, or more than one, means the operator is asked.
+ */
+export function detectType(text: string): TransactionType | "Unknown" {
   const t = text.toLowerCase();
-
-  if (
-    t.includes("cash in") ||
-    t.includes("cashin") ||
-    t.includes("send money") ||
-    t.includes("you sent") ||
-    t.includes("sent to")
-  )
-    return "Cash In";
-
-  if (
-    t.includes("cash out") ||
-    t.includes("cashout") ||
-    t.includes("you received")
-  )
-    return "Cash Out";
-
-  if (
-    t.includes(" load") ||
-    t.includes("promo") ||
-    t.includes("globe") ||
-    t.includes("smart") ||
-    t.includes("dito") ||
-    t.includes("tnt") ||
-    t.includes("tm ") ||
-    t.includes("touch mobile")
-  )
-    return "Telco Load";
-
-  if (t.includes("bills") || t.includes("bill payment") || t.includes("biller"))
-    return "Bills Payment";
-
-  if (
-    t.includes("bank transfer") ||
-    t.includes("instapay") ||
-    t.includes("pesonet") ||
-    t.includes("transfer to bank")
-  )
-    return "Bank Transfer";
-
-  return "Cash In";
-}
-
-function resolveRule(
-  txType: string,
-  platform: string,
-  rules: TransactionRule[]
-): TransactionRule | undefined {
-  const exact = rules.find(
-    (r) => r.is_active && r.transaction_type === txType && r.platform === platform
-  );
-  if (exact) return exact;
-  return rules.find(
-    (r) => r.is_active && r.transaction_type === txType && r.platform === "all"
-  );
-}
-
-export function calculateProfit(
-  txType: string,
-  platform: string,
-  amount: number,
-  rules: TransactionRule[]
-): number {
-  const rule = resolveRule(txType, platform, rules);
-
-  if (!rule || (rule.profit_rate === null && rule.profit_minimum === null))
-    return 0;
-
-  const ratePercent = rule.profit_rate ?? 0;
-  const minimum = rule.profit_minimum ?? 0;
-  const rate = ratePercent / 100;
-
-  let profit = rate > 0 ? amount * rate : 0;
-
-  // Cash Out screenshots may show the full amount already including the fee.
-  // When the amount cleanly divides back to a likely whole-peso base, compute
-  // the fee from that base instead of charging the fee twice.
-  if (txType === "Cash Out" && rate > 0) {
-    const rawBase = amount / (1 + rate);
-    const isGrossAmountWithIncludedFee =
-      rawBase > 250 && Math.abs(rawBase - Math.round(rawBase)) < 0.000001;
-
-    if (isGrossAmountWithIncludedFee) {
-      profit = rawBase * rate;
-    }
-  }
-
-  if (txType === "Cash In" || txType === "Cash Out") {
-    return Math.ceil(Math.max(profit, minimum));
-  }
-
-  if (minimum) profit = Math.max(profit, minimum);
-
-  return Math.round(profit * 100) / 100;
+  const found = TYPE_KEYWORDS
+    .filter(([, words]) => words.some((w) => t.includes(w)))
+    .map(([type]) => type);
+  return found.length === 1 ? found[0] : "Unknown";
 }
 
 const DEFAULT_BLACKLIST = ["09990000001", "13990000002"];
@@ -144,7 +72,10 @@ export function extractAccountNumber(
   text: string,
   blacklist: string[] = DEFAULT_BLACKLIST
 ): string | null {
-  const matches = text.match(/(?:\+639|09)\d{9}/g);
+  // Anchored on both sides. Unanchored, this matched the "09…" inside a
+  // date-prefixed reference such as MB2409240001987 and invented a customer
+  // number for a receipt that had none.
+  const matches = text.match(/(?<![\dA-Za-z])(?:\+639|09)\d{9}(?!\d)/g);
   if (!matches) return null;
 
   for (const raw of matches) {
@@ -155,21 +86,12 @@ export function extractAccountNumber(
   return null;
 }
 
-export function computeWalletDeltas(
-  txType: string,
-  platform: string,
-  amount: number,
-  netProfit: number,
-  rules: TransactionRule[]
-): WalletDelta | null {
-  const rule = resolveRule(txType, platform, rules);
-
-  if (!rule) return null;
-
-  return {
-    platform_wallet_name: platform === "Unknown" ? "GCash" : platform,
-    platform_delta: amount * rule.delta_platform_mult,
-    cash_delta:
-      amount * rule.delta_cash_amount_mult + netProfit * rule.delta_cash_mult,
-  };
+/** True when `number` is one of the operator's own. */
+export function isOperatorNumber(
+  number: string,
+  blacklist: string[] = DEFAULT_BLACKLIST
+): boolean {
+  const digits = number.replace(/[^\d+]/g, "");
+  const normalized = digits.startsWith("+63") ? "0" + digits.slice(3) : digits;
+  return blacklist.includes(normalized);
 }

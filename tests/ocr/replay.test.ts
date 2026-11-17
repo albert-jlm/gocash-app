@@ -28,7 +28,7 @@ import { dirname, resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { loadCases } from "./loader.ts";
-import { MIRRORED_GLUE, legsOf, normaliseLegs } from "./pipeline.ts";
+import { legsOf, normaliseLegs } from "./pipeline.ts";
 import { effectiveExpectation, evaluate, formatSummary, summarise } from "./report.ts";
 import { TRANSACTION_TYPES } from "../../supabase/functions/_core/types.ts";
 import type { ReplayOutcome } from "./types.ts";
@@ -41,21 +41,19 @@ const OUTCOMES: ReplayOutcome[] = [];
 // ---------------------------------------------------------------------------
 
 describe("the harness is testing the deployed pipeline", () => {
-  it("the mirrored fallback glue still matches _process_transaction.ts", () => {
+  it("the Edge Function calls the same extractFields this harness replays", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(
       resolve(here, "../../supabase/functions/main/_process_transaction.ts"),
       "utf8"
     );
-    for (const line of MIRRORED_GLUE) {
-      expect(
-        src.includes(line),
-        `pipeline.ts mirrors a line that is no longer in _process_transaction.ts:\n` +
-          `  ${line}\n` +
-          `The Edge Function's extraction glue changed. Update tests/ocr/pipeline.ts to ` +
-          `match it, or this harness is measuring code that no longer runs.`
-      ).toBe(true);
-    }
+    // The harness imports extractFields from _shared/extraction.ts. If the
+    // handler stops using it, this suite is measuring code that no longer runs.
+    expect(src).toContain('from "./_shared/extraction.ts"');
+    expect(src).toContain("extractFields(ai)");
+    // The defaults that turned "unknown" into a posting must not come back.
+    expect(src).not.toContain("ai.amount ?? 0");
+    expect(src).not.toContain("transaction_rules");
   });
 
   it("the model is still pinned by name, so drift is a real risk", () => {

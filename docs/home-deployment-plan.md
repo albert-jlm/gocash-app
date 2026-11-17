@@ -10,15 +10,15 @@ test. Nothing is merged to `main` until `deploy.yml` is retargeted.
 
 ## Step 1 — Money bugs
 
-- [ ] A transaction can be posted twice (confirm checks status, posts, then
+- [x] A transaction can be posted twice (confirm checks status, posts, then
       updates status; nothing in the database enforces one entry per
       transaction).
-- [ ] Confirm screen amount parsing: "1,850" saves as 1; a blank amount falls
+- [x] Confirm screen amount parsing: "1,850" saves as 1; a blank amount falls
       back to the AI's figure; the "Your earnings" field is ignored.
-- [ ] Screenshot drafts still read the dropped `transaction_rules` table, so
+- [x] Screenshot drafts still read the dropped `transaction_rules` table, so
       they show ₱0 earnings and never ask whether a Cash Out amount already
       includes the fee.
-- [ ] AI misreads become entries: unknown type defaults to Cash In, an
+- [x] AI misreads become entries: unknown type defaults to Cash In, an
       unreadable amount becomes ₱0. Both should ask the operator instead.
 
 ## Step 2 — Daily-use gaps

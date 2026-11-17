@@ -197,6 +197,13 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     }
   }, [context, amountValid, amountMinor, platform, txType, amountIncludesFee]);
 
+  // What the receipt reader left blank, in the operator's words.
+  const unread = [
+    platform === "" ? "which app this was" : null,
+    txType === "" ? "the transaction type" : null,
+    tx && !(tx.amount > 0) && !amountValid ? "the amount" : null,
+  ].filter((x): x is string => x !== null);
+
   const platformOptions = useMemo(() => {
     const list = context && context.platforms.length > 0 ? context.platforms : FALLBACK_PLATFORMS;
     return platform !== "" && !list.includes(platform) ? [...list, platform] : list;
@@ -209,8 +216,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     // accounts while passing every ledger invariant. Absent is cheap and loud;
     // wrong is expensive and silent.
     setPlatform(data.platform === "Unknown" ? "" : (data.platform ?? ""));
-    setTxType(data.transaction_type ?? "Cash In");
-    setAmount(data.amount?.toString() ?? "0");
+    // The same rule for type and amount. An unread type used to arrive here as
+    // "Cash In" and an unread amount as 0; both are now left empty so the
+    // operator has to supply them, and Save stays disabled until they do.
+    setTxType(isTransactionType(data.transaction_type) ? data.transaction_type : "");
+    setAmount(data.amount > 0 ? data.amount.toString() : "");
     setAccountNumber(data.account_number ?? "");
     setReferenceNumber(data.reference_number ?? "");
     setTxDate(data.transaction_date ? data.transaction_date.slice(0, 16) : "");
@@ -329,16 +339,16 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           unconditionally — including over a platform the model explicitly said
           it could not identify, styled identically to a confident read. */}
       <section className="px-5 mb-4">
-        {platform === "" ? (
+        {unread.length > 0 ? (
           <div className="flex items-start gap-2.5 bg-amber-500/[0.10] border border-amber-500/20 rounded-2xl px-4 py-3">
             <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-amber-300">
-                We couldn&apos;t tell which app this was
+                We couldn&apos;t read {unread.join(" or ")}
               </p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Some receipts don&apos;t show the app&apos;s name anywhere. Pick it below
-                — the amount and reference were read normally.
+                Fill {unread.length === 1 ? "it" : "them"} in below from the receipt.
+                Nothing is saved until you do.
               </p>
             </div>
           </div>
@@ -511,7 +521,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <button
           onClick={handleSave}
-          disabled={saving || isPreview || platform === "" || !amountValid}
+          disabled={saving || isPreview || platform === "" || txType === "" || !amountValid}
           className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
         >
           {saving ? (

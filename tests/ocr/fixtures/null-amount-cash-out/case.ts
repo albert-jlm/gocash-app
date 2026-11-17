@@ -1,4 +1,7 @@
 /**
+ * UPDATE 2026-11-18: A null amount is no longer defaulted to 0. The draft is held at the gate with the amount unset.
+ * The analysis below describes the behaviour before that change.
+ *
  * PROBE: the same null amount as null-amount-cash-in, on the mirrored type.
  * The pair exists to show that the SAME OCR failure lands in two completely
  * different severity classes depending only on which type it happened to be.
@@ -40,8 +43,8 @@ export const CASE: OcrCase = {
   known_failure: {
     kind: "failed",
     why:
-      "amount defaults to 0, calculateFee floors the fee at PHP 5, and cashOut's " +
-      "assertSaneInput refuses fee > amount. The entry is never built.",
-    actual: { amount_php: 0, error_contains: "exceeds the amount" },
+      "The model declined to guess the amount. The draft is held until the operator " +
+      "enters it. No entry is written.",
+    actual: { amount_raw: null, error_contains: "held at the gate" },
   },
 };
