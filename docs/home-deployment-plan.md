@@ -59,3 +59,16 @@ public internet, not Tailscale-only, so the phones work anywhere.
 - Moving the operator's phone numbers into a per-operator table.
 - Receipt retention rules.
 - Signup, billing, anything multi-operator.
+
+## Open question — how receipts are read
+
+Raised 2026-11-18: replace OpenAI GPT-4o with local OCR on the homelab plus
+fixed parsing rules per receipt type, keeping OpenAI as an optional fallback
+that is off by default. Reasons: per-screenshot cost, dependence on an outside
+service, and customer details leaving the server.
+
+Not decided. It needs measuring on real receipts first, using the replay
+harness in `tests/ocr`. Public sample screenshots turned out to be too few and
+too old to build rules from; the operator is collecting their own. This sits
+between step 2 and step 3, since phone sharing depends on how the image is
+read.
