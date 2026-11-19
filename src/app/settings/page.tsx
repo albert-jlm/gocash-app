@@ -1,12 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Home, Plus, History, Settings } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Home, Plus, History, Settings, LogOut } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
 
 export default function SettingsPage() {
-  const { loading } = useAuthGuard();
+  const { session, loading } = useAuthGuard();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    // useAuthGuard listens for SIGNED_OUT and sends the app to /login.
+    // `local` signs out this device only, and works without a connection.
+    await supabase.auth.signOut({ scope: "local" });
+  }
 
   if (loading) {
     return (
@@ -48,6 +58,22 @@ export default function SettingsPage() {
           ))}
         </div>
 
+        <div className="mt-4 bg-white/[0.05] rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Signed in as</p>
+            <p className="text-sm font-medium truncate">{session?.user.email ?? "—"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="flex items-center gap-2 bg-white/[0.07] text-sm font-medium px-3.5 py-2.5 rounded-xl flex-shrink-0 disabled:opacity-50"
+          >
+            {signingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+            Sign out
+          </button>
+        </div>
+
         <p className="text-[11px] text-muted-foreground/50 text-center mt-6">
           GoCash Tracker · v0.1
         </p>
@@ -60,7 +86,7 @@ export default function SettingsPage() {
             <Home className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">Home</span>
           </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
+          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
             <Plus className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">New</span>
           </Link>

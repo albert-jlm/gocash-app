@@ -19,12 +19,14 @@ export type TransactionType =
   | "Profit Remittance"
   | "Unknown";
 
+// Matches transactions_status_check after 20260924000006: "edited" is gone
+// (an edit is a void and a new entry) and "voided" was added.
 export type TransactionStatus =
   | "uploaded"
   | "processing"
   | "awaiting_confirm"
   | "confirmed"
-  | "edited"
+  | "voided"
   | "failed";
 
 // Account classes live in the ledger core so the client and the Edge Functions

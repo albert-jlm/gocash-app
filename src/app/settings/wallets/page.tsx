@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Loader2,
@@ -20,6 +20,7 @@ import {
   formatMinorPesos,
   formatPesos,
   type LedgerAccount,
+  newIdempotencyKey,
 } from "@/lib/ledger";
 import { parsePesosInput } from "@core/money.ts";
 
@@ -87,6 +88,13 @@ export default function WalletsSettingsPage() {
   const [countedValue, setCountedValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the last correction did, shown once it has posted. Without it the
+  // form simply stayed open on the old balance and the operator could not
+  // tell whether anything had happened.
+  const [notice, setNotice] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  // One key per count, so a double tap or a retry posts one correction.
+  const reconcileKey = useRef<string>(newIdempotencyKey("reconcile"));
 
   useEffect(() => {
     if (!operatorId) return;
@@ -109,7 +117,7 @@ export default function WalletsSettingsPage() {
       setDataLoading(false);
     }
     fetchAccounts();
-  }, [operatorId]);
+  }, [operatorId, reloadTick]);
 
   function startReconcile(account: AccountRow) {
     setReconcilingId(account.account_id);
@@ -117,6 +125,8 @@ export default function WalletsSettingsPage() {
     // rather than retyping one that probably already matches.
     setCountedValue(account.natural_balance.toFixed(2));
     setError(null);
+    setNotice(null);
+    reconcileKey.current = newIdempotencyKey("reconcile");
   }
 
   function cancelReconcile() {
@@ -166,7 +176,17 @@ export default function WalletsSettingsPage() {
         account,
         countedPesos: counted,
         memo: "Counted in Settings → Wallets",
+        idempotencyKey: reconcileKey.current,
       });
+
+      const diff = reconciliationDifferenceMinor({ operatorId, account, countedPesos: counted });
+      setNotice(
+        `${account.name}: ${diff > 0 ? "added" : "removed"} ${formatMinorPesos(Math.abs(diff))}. ` +
+        `The balance now matches your count of ${formatPesos(counted)}.`
+      );
+      setReconcilingId(null);
+      setCountedValue("");
+      setReloadTick((n) => n + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not post the correction");
     } finally {
@@ -200,6 +220,12 @@ export default function WalletsSettingsPage() {
 
       {/* Account list */}
       <section className="px-5 flex-1 space-y-3 pb-10">
+        {notice && (
+          <div className="flex items-start gap-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3">
+            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-emerald-200 leading-relaxed">{notice}</p>
+          </div>
+        )}
         {accounts.map((a) => {
           const color = getColor(a.name);
           const isReconciling = reconcilingId === a.account_id;

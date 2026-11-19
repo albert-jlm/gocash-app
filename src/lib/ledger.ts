@@ -510,3 +510,63 @@ export async function createAndConfirmTransaction(input: EntryInput): Promise<En
     feePesos: confirmed.net_profit ?? created.fee_preview ?? 0,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Void
+// ---------------------------------------------------------------------------
+
+export interface VoidResult {
+  transactionId: string;
+  /** The reversal entry; null when a draft was discarded (nothing was posted). */
+  entryId: string | null;
+}
+
+/**
+ * Void a transaction: reverse its ledger entry and mark it voided. For a draft
+ * that was never confirmed, this discards it.
+ *
+ * Nothing is deleted. The original entry and its reversal both stay in the
+ * ledger, which is what lets a balance be explained later. To correct a wrong
+ * transaction, void it and enter it again.
+ *
+ * `idempotencyKey` must be stable across retries of one void (hold it in a
+ * ref). The server treats "already voided" as success, so a retry after a lost
+ * response does not report a failure for something that worked.
+ */
+export async function voidTransaction(input: {
+  transactionId: string;
+  idempotencyKey: string;
+  reason?: string | null;
+}): Promise<VoidResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/void-transaction`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        transaction_id: input.transactionId,
+        idempotency_key: input.idempotencyKey,
+        reason: input.reason?.trim() || undefined,
+      }),
+    },
+  );
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error ?? "Could not void the transaction");
+  }
+  return { transactionId: input.transactionId, entryId: data.entry_id ?? null };
+}
+
+/** A fresh key for one money-moving action. Hold the result in a ref. */
+export function newIdempotencyKey(prefix: string): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}

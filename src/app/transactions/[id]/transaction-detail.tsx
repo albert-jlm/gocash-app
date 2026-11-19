@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Loader2, AlertCircle, Pencil,
+  ArrowLeft, Loader2, AlertCircle, Undo2,
   ArrowDownRight, ArrowUpLeft, Phone, Building2, Zap, TrendingDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
@@ -43,13 +44,47 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function TransactionDetail({ transactionId }: { transactionId: string }) {
+export default function TransactionDetail({
+  transactionId,
+  duplicate = false,
+}: {
+  transactionId: string;
+  /** Arrived here because a screenshot of this same receipt was captured again. */
+  duplicate?: boolean;
+}) {
   const { operatorId, loading: authLoading } = useAuthGuard();
   const router = useRouter();
 
   const [tx, setTx] = useState<TxDetail | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
+
+  // Void is two taps on purpose: it moves balances back and cannot be undone
+  // (the fix for a mistaken void is to enter the transaction again).
+  const voidKey = useRef<string>(newIdempotencyKey("void"));
+  const [askVoid, setAskVoid] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
+
+  async function handleVoid() {
+    if (!tx || voiding) return;
+    setVoiding(true);
+    setVoidError(null);
+    try {
+      await voidTransaction({
+        transactionId: tx.id,
+        idempotencyKey: voidKey.current,
+        reason: voidReason,
+      });
+      setTx({ ...tx, status: "voided" });
+      setAskVoid(false);
+    } catch (err) {
+      setVoidError(err instanceof Error ? err.message : "Could not void the transaction");
+    } finally {
+      setVoiding(false);
+    }
+  }
 
   useEffect(() => {
     if (!operatorId) return;
@@ -97,6 +132,11 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
 
   const cfg = TYPE_CONFIG[tx.transaction_type] ?? { color: "#6B7280", Icon: ArrowDownRight };
   const Icon = cfg.Icon;
+  const isVoided = tx.status === "voided";
+  const statusLabel =
+    isVoided ? "Voided — not counted in your balances"
+    : tx.status === "confirmed" ? (tx.was_edited ? "Saved (edited)" : "Saved")
+    : tx.status;
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
@@ -115,6 +155,18 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
         </div>
       </header>
 
+      {duplicate && (
+        <section className="px-5 mb-4">
+          <div className="flex items-start gap-2.5 bg-amber-500/[0.10] border border-amber-500/20 rounded-2xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-200 leading-relaxed">
+              This receipt was already recorded, so nothing new was added. This is
+              the transaction it matches.
+            </p>
+          </div>
+        </section>
+      )}
+
       <section className="px-5 mb-5">
         <div className="bg-white/[0.05] rounded-2xl p-5 flex items-center gap-4">
           <div
@@ -128,8 +180,14 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
             <p className="text-xs text-muted-foreground">{tx.platform}</p>
           </div>
           <div className="text-right">
-            <p className="text-xl font-bold tabular-nums">₱{tx.amount.toLocaleString("en-PH")}</p>
-            <p className="text-sm text-emerald-400 font-semibold tabular-nums">+₱{tx.net_profit.toFixed(2)}</p>
+            <p className={`text-xl font-bold tabular-nums ${isVoided ? "line-through text-muted-foreground" : ""}`}>
+              ₱{tx.amount.toLocaleString("en-PH")}
+            </p>
+            {isVoided ? (
+              <p className="text-xs font-semibold text-amber-400">Voided</p>
+            ) : (
+              <p className="text-sm text-emerald-400 font-semibold tabular-nums">+₱{tx.net_profit.toFixed(2)}</p>
+            )}
           </div>
         </div>
       </section>
@@ -153,7 +211,7 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
           )}
           <Field
             label="Status"
-            value={tx.was_edited ? "Saved (edited)" : "Saved"}
+            value={statusLabel}
           />
           {tx.confirmed_at && (
             <Field
@@ -168,13 +226,68 @@ export default function TransactionDetail({ transactionId }: { transactionId: st
       </section>
 
       <div className="px-5 py-8 space-y-3">
-        <Link
-          href={`/confirm?id=${tx.id}`}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm transition-colors"
-        >
-          <Pencil className="w-4 h-4" />
-          Edit Transaction
-        </Link>
+        {/* There is no Edit. A saved transaction is in the ledger; changing it
+            means reversing it and entering it again, so that is what is
+            offered. The Edit button that used to be here opened the confirm
+            form, which could only ever answer "already confirmed". */}
+        {tx.status === "confirmed" && !askVoid && (
+          <button
+            type="button"
+            onClick={() => { setAskVoid(true); setVoidError(null); }}
+            className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 font-semibold py-3.5 rounded-2xl text-sm"
+          >
+            <Undo2 className="w-4 h-4" />
+            Void this transaction
+          </button>
+        )}
+
+        {tx.status === "confirmed" && askVoid && (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 space-y-3">
+            <p className="text-sm font-semibold">Void this transaction?</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Your balances go back to what they were before it. It stays in your
+              history marked as voided. If it was recorded wrong, void it and
+              enter it again.
+            </p>
+            <input
+              type="text"
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="Reason (optional), e.g. wrong amount"
+              maxLength={120}
+              className="w-full rounded-xl bg-white/[0.07] px-3 py-2.5 text-sm"
+            />
+            {voidError && <p className="text-xs text-red-400">{voidError}</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAskVoid(false)}
+                disabled={voiding}
+                className="bg-white/[0.07] text-muted-foreground font-medium py-3 rounded-xl text-sm disabled:opacity-50"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                onClick={handleVoid}
+                disabled={voiding}
+                className="flex items-center justify-center gap-2 bg-red-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50"
+              >
+                {voiding ? <><Loader2 className="w-4 h-4 animate-spin" /> Voiding…</> : "Yes, void it"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isVoided && (
+          <Link
+            href="/entry"
+            className="w-full flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm"
+          >
+            Enter it again
+          </Link>
+        )}
+
         <Link
           href="/transactions"
           className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"

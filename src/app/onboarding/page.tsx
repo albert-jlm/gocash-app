@@ -120,6 +120,12 @@ export default function OnboardingPage() {
 
       router.replace("/");
     } catch (err) {
+      // Already set up (a second tap, or arriving here by mistake): that is
+      // the state this screen exists to reach, so go to the app.
+      if ((err as { code?: string }).code === "ALREADY_PROVISIONED") {
+        router.replace("/");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
     }

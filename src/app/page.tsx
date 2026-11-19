@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, Settings, ArrowDownRight, ArrowUpLeft, Phone,
   Building2, Home, Plus, History, ChevronRight, Zap, TrendingDown,
-  CreditCard,
+  CreditCard, Camera, Keyboard, AlertCircle,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
@@ -48,6 +48,15 @@ interface AccountBalance {
    * `natural_balance` everywhere keeps one rule for the whole app.
    */
   natural_balance: number;
+}
+
+/** A draft waiting for the operator: read from a screenshot or typed, not yet counted. */
+interface PendingRow {
+  id: string;
+  transaction_type: string;
+  platform: string;
+  amount: number;
+  created_at: string;
 }
 
 interface TxRow {
@@ -100,6 +109,9 @@ export default function Dashboard() {
 
   const [wallets, setWallets] = useState<AccountBalance[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pending, setPending] = useState<PendingRow[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const [todayStats, setTodayStats] = useState({ count: 0, total: 0, earnings: 0 });
   const [recentTx, setRecentTx] = useState<TxRow[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
@@ -152,6 +164,8 @@ export default function Dashboard() {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
+      setLoadError(false);
+
       const [walletsRes, pendingRes, todayTxRes, recentRes] = await Promise.all([
         supabase
           .from("account_balances")
@@ -166,25 +180,36 @@ export default function Dashboard() {
           .order("name"),
         supabase
           .from("transactions")
-          .select("id", { count: "exact", head: true })
+          .select("id, transaction_type, platform, amount, created_at", { count: "exact" })
           .eq("operator_id", opId)
-          .eq("status", "awaiting_confirm"),
+          .eq("status", "awaiting_confirm")
+          .order("created_at", { ascending: false })
+          .limit(5),
         supabase
           .from("transactions")
           .select("amount, net_profit")
           .eq("operator_id", opId)
-          .in("status", ["confirmed", "edited"])
+          .eq("status", "confirmed")
           .gte("created_at", todayStart.toISOString()),
         supabase
           .from("transactions")
           .select("id, transaction_type, account_number, amount, net_profit, created_at, status")
           .eq("operator_id", opId)
+          // Drafts have their own list above; this one is what has been saved.
+          .in("status", ["confirmed", "voided"])
           .order("created_at", { ascending: false })
           .limit(5),
       ]);
 
+      // A failed query used to be ignored, so being offline looked like an
+      // account with no wallets and no transactions.
+      if (walletsRes.error || pendingRes.error || todayTxRes.error || recentRes.error) {
+        setLoadError(true);
+      }
+
       if (walletsRes.data) setWallets(walletsRes.data);
-      setPendingCount(pendingRes.count ?? 0);
+      setPendingCount(pendingRes.count ?? pendingRes.data?.length ?? 0);
+      if (pendingRes.data) setPending(pendingRes.data);
 
       if (todayTxRes.data) {
         setTodayStats({
@@ -199,7 +224,7 @@ export default function Dashboard() {
     }
 
     fetchData();
-  }, [operatorId]);
+  }, [operatorId, reloadTick]);
 
   if (authLoading || dataLoading) {
     return (
@@ -286,22 +311,83 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* Pending Banner */}
+      {loadError && (
+        <section className="px-5 mb-4">
+          <button
+            type="button"
+            onClick={() => setReloadTick((n) => n + 1)}
+            className="w-full flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 text-left"
+          >
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <p className="text-xs text-red-300 flex-1">
+              Couldn&apos;t load everything. What you see may be out of date. Tap to try again.
+            </p>
+          </button>
+        </section>
+      )}
+
+      {/* Quick actions */}
+      <section className="px-5 mb-5 grid grid-cols-2 gap-2">
+        <Link
+          href="/entry"
+          className="flex items-center justify-center gap-2 bg-emerald-500 text-white font-semibold py-3 rounded-2xl text-sm"
+        >
+          <Keyboard className="w-4 h-4" />
+          Type it in
+        </Link>
+        <Link
+          href="/capture"
+          className="flex items-center justify-center gap-2 bg-white/[0.07] border border-white/[0.08] font-semibold py-3 rounded-2xl text-sm"
+        >
+          <Camera className="w-4 h-4" />
+          Screenshot
+        </Link>
+      </section>
+
+      {/* Waiting for you — drafts that are not counted until confirmed.
+          Shared screenshots land here: the share shortcut uploads and this is
+          where the operator picks them up. */}
       {pendingCount > 0 && (
         <section className="px-5 mb-5">
-          <Link
-            href="/transactions"
-            className="flex items-center gap-3 bg-amber-500/[0.10] border border-amber-500/20 rounded-2xl px-4 py-3"
-          >
-            <span className="relative flex h-2 w-2 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-            </span>
-            <p className="text-sm text-amber-300 flex-1 font-medium">
-              {pendingCount} {pendingCount === 1 ? "transaction needs" : "transactions need"} your review
-            </p>
-            <ChevronRight className="w-4 h-4 text-amber-400/50 flex-shrink-0" />
-          </Link>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+              Waiting for you · {pendingCount}
+            </h2>
+            {pendingCount > pending.length && (
+              <Link href="/transactions" className="text-[11px] text-amber-300 font-medium">
+                See all
+              </Link>
+            )}
+          </div>
+          <div className="bg-amber-500/[0.07] rounded-2xl overflow-hidden divide-y divide-amber-500/10 border border-amber-500/20">
+            {pending.map((d) => {
+              const known = d.transaction_type !== "Unknown";
+              return (
+                <Link
+                  key={d.id}
+                  href={`/confirm?id=${d.id}`}
+                  className="flex items-center gap-3 px-4 py-3 active:bg-white/[0.03]"
+                >
+                  <span className="relative flex h-2 w-2 flex-shrink-0">
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {known ? d.transaction_type : "Type not read"}
+                      {d.platform !== "Unknown" && <span className="text-muted-foreground"> · {d.platform}</span>}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatTime(d.created_at)} · not counted yet
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {d.amount > 0 ? "₱" + d.amount.toLocaleString("en-PH") : "Amount?"}
+                  </p>
+                  <ChevronRight className="w-4 h-4 text-amber-400/50 flex-shrink-0" />
+                </Link>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -343,7 +429,7 @@ export default function Dashboard() {
           <div className="bg-white/[0.04] rounded-2xl px-4 py-10 text-center border border-white/[0.05]">
             <p className="text-sm text-muted-foreground">No transactions yet.</p>
             <p className="text-xs text-muted-foreground/50 mt-1">
-              Tap &quot;New Transaction&quot; below to add your first one.
+              Use the buttons above to add your first one.
             </p>
           </div>
         ) : (
@@ -370,12 +456,16 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold tabular-nums">
+                    <p className={`text-sm font-semibold tabular-nums ${tx.status === "voided" ? "line-through text-muted-foreground" : ""}`}>
                       ₱{tx.amount.toLocaleString("en-PH")}
                     </p>
-                    <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
-                      +₱{tx.net_profit.toFixed(0)}
-                    </p>
+                    {tx.status === "voided" ? (
+                      <p className="text-[11px] text-amber-400 font-medium">Voided</p>
+                    ) : (
+                      <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
+                        +₱{tx.net_profit.toFixed(0)}
+                      </p>
+                    )}
                   </div>
                 </Link>
               );

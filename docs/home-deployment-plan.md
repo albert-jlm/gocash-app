@@ -23,12 +23,12 @@ test. Nothing is merged to `main` until `deploy.yml` is retargeted.
 
 ## Step 2 — Daily-use gaps
 
-- [ ] Void from the transaction screen; remove the "Edit" button that always
+- [x] Void from the transaction screen; remove the "Edit" button that always
       fails.
-- [ ] Show the result after a drawer reconcile.
-- [ ] Duplicate screenshot: show the existing transaction, not a dead end.
-- [ ] Logout button.
-- [ ] Pending-drafts list on the home screen.
+- [x] Show the result after a drawer reconcile.
+- [x] Duplicate screenshot: show the existing transaction, not a dead end.
+- [x] Logout button.
+- [x] Pending-drafts list on the home screen.
 
 ## Step 3 — Sharing a screenshot from the phone (both platforms)
 

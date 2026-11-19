@@ -36,11 +36,22 @@ export function useAuthGuard(): AppSession {
 
       setSession(s);
 
-      const { data: op } = await supabase
-        .from("operators")
-        .select("id")
-        .eq("user_id", s.user.id)
-        .maybeSingle();
+      // A FAILED lookup is not "no operator". Offline, or on a transient
+      // error, this used to send an operator who was already set up to
+      // onboarding, which then refused them. Keep trying instead; the page
+      // stays on its loading state until the lookup actually answers.
+      let op: { id: string } | null = null;
+      for (let attempt = 0; ; attempt++) {
+        const { data, error } = await supabase
+          .from("operators")
+          .select("id")
+          .eq("user_id", s.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!error) { op = data; break; }
+        await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** attempt, 8000)));
+        if (cancelled) return;
+      }
 
       if (!op) {
         router.replace("/onboarding");
@@ -51,6 +62,7 @@ export function useAuthGuard(): AppSession {
       setLoading(false);
     }
 
+    let cancelled = false;
     init();
 
     const {
@@ -61,7 +73,10 @@ export function useAuthGuard(): AppSession {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   return { session, operatorId, loading };

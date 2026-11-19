@@ -171,7 +171,7 @@ function TransactionsList() {
               <History className="w-6 h-6 text-muted-foreground/50" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">No transactions yet.</p>
-            <Link href="/capture" className="text-sm text-emerald-400 mt-2 font-medium">
+            <Link href="/entry" className="text-sm text-emerald-400 mt-2 font-medium">
               Add your first one →
             </Link>
           </div>
@@ -190,6 +190,7 @@ function TransactionsList() {
                   };
                   const Icon = cfg.Icon;
                   const isPending = tx.status === "awaiting_confirm";
+                  const isVoided = tx.status === "voided";
 
                   return (
                     <Link
@@ -215,14 +216,20 @@ function TransactionsList() {
 
                       {/* Amounts + badge */}
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <p className="text-sm font-semibold tabular-nums">
+                        <p className={`text-sm font-semibold tabular-nums ${isVoided ? "line-through text-muted-foreground" : ""}`}>
                           ₱{tx.amount.toLocaleString("en-PH")}
                         </p>
                         <div className="flex items-center gap-1.5">
-                          <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
-                            +₱{tx.net_profit.toFixed(0)}
-                          </p>
-                          {isPending ? (
+                          {!isVoided && (
+                            <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
+                              +₱{tx.net_profit.toFixed(0)}
+                            </p>
+                          )}
+                          {isVoided ? (
+                            <span className="text-[9px] font-bold bg-white/[0.08] text-muted-foreground px-1.5 py-0.5 rounded-full">
+                              Voided
+                            </span>
+                          ) : isPending ? (
                             <span className="flex items-center gap-1 text-[9px] font-bold bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">
                               <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
                               Review
@@ -248,7 +255,7 @@ function TransactionsList() {
             <Home className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">Home</span>
           </Link>
-          <Link href="/capture" className="flex flex-col items-center gap-1 min-w-[48px]">
+          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
             <Plus className="w-5 h-5 text-muted-foreground" />
             <span className="text-[10px] text-muted-foreground">New</span>
           </Link>
@@ -269,7 +276,11 @@ function TransactionsList() {
 function TransactionsPageInner() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
-  if (id) return <TransactionDetail transactionId={id} />;
+  if (id) {
+    return (
+      <TransactionDetail transactionId={id} duplicate={searchParams.get("duplicate") === "1"} />
+    );
+  }
   return <TransactionsList />;
 }
 

@@ -25,7 +25,9 @@ import { isTransactionType } from "@core/types.ts";
 import {
   formatPesos,
   loadEntryContext,
+  newIdempotencyKey,
   previewEntry,
+  voidTransaction,
   type EntryContext,
 } from "@/lib/ledger";
 
@@ -112,6 +114,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const [amountIncludesFee, setAmountIncludesFee] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const discardKey = useRef<string>(newIdempotencyKey("discard"));
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [platform, setPlatform] = useState("");
@@ -148,12 +152,18 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         return;
       }
       const draft = data as TransactionDraft;
+      // This form only confirms drafts. Anything already saved or voided has
+      // its own screen; opening it here could only end in a refusal.
+      if (draft.status !== "awaiting_confirm") {
+        router.replace(`/transactions?id=${draft.id}`);
+        return;
+      }
       setTx(draft);
       populate(draft);
       setLoading(false);
     }
     load();
-  }, [transactionId, isPreview]);
+  }, [transactionId, isPreview, router]);
 
   // Wallets and fee rules, for the platform list and the fee preview. A
   // failure here is not fatal: the form falls back to the standard platforms
@@ -278,11 +288,32 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         }
       );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to save");
+      // 409 "confirmed" means it is already saved: an earlier tap got through
+      // and only the reply was lost, or it was confirmed on another device.
+      // Either way it is in the ledger, and reporting a failure would invite
+      // the operator to record it a second time.
+      const alreadySaved = response.status === 409 && data.status === "confirmed";
+      if (!response.ok && !alreadySaved) throw new Error(data.error || "Failed to save");
       router.push("/transactions");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
+    }
+  }
+
+  // Discard a draft that should not be recorded: a screenshot shared by
+  // mistake, or one read so badly it is quicker to type. Nothing was posted
+  // for a draft, so this only marks it voided.
+  async function handleDiscard() {
+    if (!tx || isPreview || saving || discarding) return;
+    setDiscarding(true);
+    setSaveError(null);
+    try {
+      await voidTransaction({ transactionId: tx.id, idempotencyKey: discardKey.current });
+      router.push("/");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not discard the draft");
+      setDiscarding(false);
     }
   }
 
@@ -521,7 +552,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <button
           onClick={handleSave}
-          disabled={saving || isPreview || platform === "" || txType === "" || !amountValid}
+          disabled={saving || discarding || isPreview || platform === "" || txType === "" || !amountValid}
           className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
         >
           {saving ? (
@@ -530,6 +561,16 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             <><Check className="w-5 h-5" /> {isPreview ? "Save Transaction (preview)" : "Save Transaction"}</>
           )}
         </button>
+        {!isPreview && (
+          <button
+            type="button"
+            onClick={handleDiscard}
+            disabled={saving || discarding}
+            className="w-full text-center text-xs text-muted-foreground py-3 disabled:opacity-50"
+          >
+            {discarding ? "Discarding…" : "Not a real transaction? Discard this draft"}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -86,6 +86,15 @@ export default function CapturePage() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Failed to read screenshot");
 
+        // The same receipt was captured before. If that one is already saved,
+        // opening the confirm form on it could only fail; show the saved
+        // transaction instead. A duplicate that is still a draft goes to the
+        // confirm form like any other.
+        if (data.duplicate && data.status !== "awaiting_confirm") {
+          router.push(`/transactions?id=${data.transaction_id}&duplicate=1`);
+          return;
+        }
+
         router.push(`/confirm?id=${data.transaction_id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
