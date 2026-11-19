@@ -291,10 +291,7 @@ export async function handleCreateTransaction(req: Request): Promise<Response> {
       }
 
       console.error("Draft insert failed:", insertError.message);
-      return jsonResponse(req, {
-        error: "Failed to save the entry",
-        detail: insertError.message,
-      }, 500);
+      return jsonResponse(req, { error: "Failed to save the entry" }, 500);
     }
 
     return jsonResponse(req, {

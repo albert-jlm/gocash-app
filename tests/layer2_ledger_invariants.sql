@@ -753,3 +753,138 @@ SELECT harness.expect_error('layer2', '2.23 one transaction cannot carry two tra
                'c0000000-0000-0000-0000-000000000006')$s$
   ],
   'ledger_entries_one_per_transaction');
+
+-- ---------------------------------------------------------------------------
+-- 2.24–2.27 — gocash.void_transaction (20260925000002).
+--
+-- A void is a reversal entry plus a status change, and like confirm the two
+-- must land together. These also cover the two things a void is for: putting
+-- the books back exactly, and letting the transaction be entered again.
+-- ---------------------------------------------------------------------------
+SELECT harness.probe('layer2', '2.24 voiding a confirmed transaction returns every balance',
+  'A reversal that does not exactly cancel the original leaves the books off '
+  'by the difference, with both entries individually balanced.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$CREATE TEMP TABLE harness_224 ON COMMIT DROP AS
+       SELECT account_id, balance_minor FROM gocash.account_balances
+       WHERE operator_id = '11111111-1111-1111-1111-111111111111'$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source, reference_number)
+       VALUES ('d0000000-0000-0000-0000-000000000001',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'manual', 'REF-224')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000001',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,
+           "net_profit":10,"reference_number":"REF-224"}'::jsonb,
+         'confirm-224', 'harness')$s$,
+    $s$SELECT gocash.void_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000001',
+         'void-224', 'harness', 'wrong amount')$s$
+  ],
+  $q$
+  SELECT (SELECT status FROM gocash.transactions
+          WHERE id = 'd0000000-0000-0000-0000-000000000001') = 'voided'
+     AND (SELECT count(*) FROM gocash.ledger_entries
+          WHERE transaction_id = 'd0000000-0000-0000-0000-000000000001') = 2
+     AND (SELECT memo FROM gocash.ledger_entries
+          WHERE transaction_id = 'd0000000-0000-0000-0000-000000000001'
+            AND kind = 'reversal') = 'Voided: wrong amount'
+     AND NOT EXISTS (
+           SELECT 1 FROM gocash.account_balances b
+           JOIN harness_224 h USING (account_id)
+           WHERE b.balance_minor <> h.balance_minor)
+  $q$);
+
+SELECT harness.probe('layer2', '2.25 voiding twice posts one reversal',
+  'A double-tapped void, or a retry after a lost response, must not reverse '
+  'the entry a second time.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('d0000000-0000-0000-0000-000000000002',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'manual')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000002',
+         '[{"kind":"cash","amount_minor":51000},
+           {"kind":"platform","platform":"GCash","amount_minor":-50000},
+           {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Cash In","amount":500,"net_profit":10}'::jsonb,
+         'confirm-225', 'harness')$s$,
+    $s$CREATE TEMP TABLE harness_225 ON COMMIT DROP AS
+       SELECT 1 AS attempt, gocash.void_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000002', 'void-225-a', 'harness') AS r$s$,
+    $s$INSERT INTO harness_225
+       SELECT 2, gocash.void_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000002', 'void-225-b', 'harness')$s$
+  ],
+  $q$
+  SELECT (SELECT count(*) FROM gocash.ledger_entries
+          WHERE transaction_id = 'd0000000-0000-0000-0000-000000000002'
+            AND kind = 'reversal') = 1
+     AND (SELECT (r ->> 'replayed')::boolean FROM harness_225 WHERE attempt = 2)
+     AND (SELECT r ->> 'entry_id' FROM harness_225 WHERE attempt = 1)
+       = (SELECT r ->> 'entry_id' FROM harness_225 WHERE attempt = 2)
+  $q$);
+
+SELECT harness.probe('layer2', '2.26 voiding a draft posts nothing and blocks a later confirm',
+  'A discarded draft has nothing to reverse. Once voided it must not be '
+  'confirmable, or a discarded misread comes back as a posted transaction.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('d0000000-0000-0000-0000-000000000003',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'awaiting_confirm', 'ocr')$s$,
+    $s$SELECT gocash.void_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000003', 'void-226', 'harness')$s$,
+    $s$DO $do$
+       BEGIN
+         PERFORM gocash.confirm_transaction(
+           '11111111-1111-1111-1111-111111111111',
+           'd0000000-0000-0000-0000-000000000003',
+           '[{"kind":"cash","amount_minor":51000},
+             {"kind":"platform","platform":"GCash","amount_minor":-50000},
+             {"kind":"revenue","amount_minor":-1000}]'::jsonb,
+           '{"platform":"GCash","transaction_type":"Cash In","amount":500,"net_profit":10}'::jsonb,
+           'confirm-226', 'harness');
+         RAISE EXCEPTION 'a voided draft was confirmed';
+       EXCEPTION WHEN SQLSTATE 'GC001' THEN
+         NULL;  -- refused, as it must be
+       END
+       $do$$s$
+  ],
+  $q$
+  SELECT (SELECT status FROM gocash.transactions
+          WHERE id = 'd0000000-0000-0000-0000-000000000003') = 'voided'
+     AND (SELECT count(*) FROM gocash.ledger_entries
+          WHERE transaction_id = 'd0000000-0000-0000-0000-000000000003') = 0
+  $q$);
+
+SELECT harness.expect_ok('layer2', '2.27 a voided transaction frees its reference number',
+  'The correction for a wrong transaction is to void it and enter it again. '
+  'If the voided row still holds the reference, the re-entry is refused as a '
+  'duplicate and the operator has to leave the reference off.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source, reference_number)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 500, 'voided', 'manual', 'REF-227')$s$,
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source, reference_number)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 550, 'awaiting_confirm', 'manual', 'REF-227')$s$
+  ]);

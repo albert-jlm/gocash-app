@@ -340,6 +340,9 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
         )
         .eq("operator_id", operator.id)
         .eq("reference_number", fields.referenceNumber)
+        // A voided transaction no longer holds its reference: the way to fix
+        // a wrong one is to void it and capture the receipt again.
+        .neq("status", "voided")
         .maybeSingle();
 
       if (existing) {
@@ -395,7 +398,8 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
           .select("id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date")
           .eq("operator_id", operator.id)
           .eq("reference_number", fields.referenceNumber)
-          .single();
+          .neq("status", "voided")
+          .maybeSingle();
         if (existing) {
           await cleanupUploadedImage();
           return jsonResponse(req, {

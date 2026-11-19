@@ -86,113 +86,57 @@ export async function handleVoidTransaction(req: Request): Promise<Response> {
 
     if (txError || !tx) return jsonResponse(req, { error: "Transaction not found" }, 404);
 
-    if (tx.status === "voided") {
-      return jsonResponse(req, { error: "Transaction is already voided", status: tx.status }, 409);
-    }
-
-    // An awaiting_confirm transaction has no entry to reverse — nothing was
-    // ever posted. Mark it voided and stop; posting a reversal of nothing would
-    // fail the two-leg minimum anyway.
-    if (tx.status === "awaiting_confirm") {
-      await admin.from("transactions").update({ status: "voided" })
-        .eq("id", tx.id).eq("operator_id", operator.id);
-      await enqueueReceipt(admin, tx.image_url);
-      return jsonResponse(req, {
-        transaction_id: tx.id, status: "voided", entry_id: null,
-        note: "Nothing was posted for this transaction, so there was nothing to reverse.",
-      });
-    }
-
-    if (tx.status !== "confirmed") {
-      return jsonResponse(req, {
-        error: `Cannot void a transaction that is ${tx.status}`, status: tx.status,
-      }, 409);
-    }
-
-    // The entry to reverse. `ledger_entries_one_reversal` already makes a
-    // second reversal impossible at the database level; checking here turns
-    // that into a clear 409 rather than a constraint violation.
-    const { data: entry, error: entryError } = await admin
-      .from("ledger_entries")
-      .select("id")
-      .eq("transaction_id", tx.id)
-      .eq("kind", "transaction")
-      .maybeSingle();
-
-    if (entryError || !entry) {
-      return jsonResponse(req, {
-        error: "This transaction is confirmed but has no ledger entry. " +
-               "Refusing to void — investigate before correcting.",
-        code: "missing_entry",
-      }, 422);
-    }
-
-    const { data: existingReversal } = await admin
-      .from("ledger_entries").select("id").eq("reverses_entry_id", entry.id).maybeSingle();
-
-    if (existingReversal) {
-      return jsonResponse(req, {
-        error: "This entry has already been reversed",
-        entry_id: existingReversal.id,
-      }, 409);
-    }
-
-    // Negate the legs that were actually posted.
-    const { data: postings, error: postingsError } = await admin
-      .from("postings")
-      .select("amount_minor, accounts(kind, name)")
-      .eq("entry_id", entry.id);
-
-    if (postingsError || !postings || postings.length < 2) {
-      return jsonResponse(req, { error: "Could not read the original entry" }, 500);
-    }
-
-    // deno-lint-ignore no-explicit-any
-    const legs = (postings as any[]).map((p) => {
-      const account = Array.isArray(p.accounts) ? p.accounts[0] : p.accounts;
-      const amount = -Number(p.amount_minor);
-      return account.kind === "platform"
-        ? { kind: "platform", platform: account.name, amount_minor: amount }
-        : { kind: account.kind, amount_minor: amount };
-    });
-
-    const { data: reversalId, error: postError } = await admin.rpc("post_entry", {
+    // One database transaction (gocash.void_transaction): the row is locked,
+    // the reversal is posted from the original postings, and the status
+    // changes with it. As separate calls from here, a failed status update
+    // left a reversed transaction stuck at 'confirmed', and a void racing a
+    // confirm could leave a voided draft with a live entry.
+    const { data: result, error: voidError } = await admin.rpc("void_transaction", {
       p_operator_id: operator.id,
-      p_kind: "reversal",
-      p_legs: legs,
       p_transaction_id: tx.id,
-      p_memo: body.reason ? `Voided: ${body.reason}` : "Voided",
       p_idempotency_key: body.idempotency_key,
       p_created_by: user.id,
-      p_reverses: entry.id,
+      p_reason: body.reason ?? null,
     });
 
-    if (postError) {
-      console.error("Reversal failed:", postError.message);
-      return jsonResponse(req, { error: "Could not post the reversal" }, 500);
+    if (voidError) {
+      if (voidError.code === "GC001") {
+        return jsonResponse(req, {
+          error: `Cannot void a transaction that is ${tx.status}`, status: tx.status,
+        }, 409);
+      }
+      if (voidError.code === "GC002") {
+        return jsonResponse(req, {
+          error: "This key was already used for another entry", code: "key_reused",
+        }, 409);
+      }
+      if (voidError.code === "GC004") {
+        return jsonResponse(req, {
+          error: "This transaction is confirmed but has no ledger entry. " +
+                 "Refusing to void — investigate before correcting.",
+          code: "missing_entry",
+        }, 422);
+      }
+      console.error("void_transaction failed:", voidError.code, voidError.message);
+      return jsonResponse(req, { error: "Could not void the transaction" }, 500);
     }
 
-    const { error: updateError } = await admin
-      .from("transactions")
-      .update({ status: "voided" })
-      .eq("id", tx.id).eq("operator_id", operator.id);
+    const outcome = result as {
+      entry_id: string | null; reversed_entry_id: string | null; replayed: boolean;
+    };
 
-    if (updateError) {
-      console.error("Reversal posted but status update failed:", updateError.message);
-      return jsonResponse(req, {
-        error: "Reversal posted but the transaction could not be marked voided. " +
-               "Retry with the same idempotency_key.",
-        entry_id: reversalId,
-      }, 500);
-    }
-
-    await enqueueReceipt(admin, tx.image_url);
+    // Not on a replay: the first void already queued it.
+    if (!outcome.replayed) await enqueueReceipt(admin, tx.image_url);
 
     return jsonResponse(req, {
       transaction_id: tx.id,
       status: "voided",
-      reversed_entry_id: entry.id,
-      entry_id: reversalId,
+      reversed_entry_id: outcome.reversed_entry_id,
+      entry_id: outcome.entry_id,
+      replayed: outcome.replayed,
+      ...(outcome.entry_id === null && !outcome.replayed
+        ? { note: "Nothing was posted for this transaction, so there was nothing to reverse." }
+        : {}),
     });
   } catch (err) {
     console.error("Unhandled error in void-transaction:", err);
