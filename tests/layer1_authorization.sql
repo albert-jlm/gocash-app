@@ -414,3 +414,62 @@ SELECT harness.expect_no_rows('layer1', '1.5b UPDATE policies constrain row owne
           COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
           || COALESCE(pg_get_expr(p.polqual,   p.polrelid), '')) = 0
   $q$);
+
+-- ---------------------------------------------------------------------------
+-- 1.10–1.14 — table privileges (20260925000003).
+--
+-- Everything above inspects the catalog. These act as the browser role and
+-- try the thing, because a grant that looks right in the catalog and a
+-- request that is actually refused are not the same claim — and because the
+-- suite otherwise runs as a superuser, which is how a database with no grants
+-- at all passed every assertion.
+--
+-- SET LOCAL ROLE is undone when the harness rolls the block back.
+-- ---------------------------------------------------------------------------
+SELECT harness.expect_ok('layer1', '1.10 the browser role can read the tables the app reads',
+  'Without USAGE on the schema and SELECT on these, every screen in the app '
+  'fails with "permission denied for schema gocash".',
+  ARRAY[
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$SELECT count(*) FROM gocash.operators$s$,
+    $s$SELECT count(*) FROM gocash.transactions$s$,
+    $s$SELECT count(*) FROM gocash.account_balances$s$,
+    $s$SELECT count(*) FROM gocash.fee_rules$s$
+  ]);
+
+SELECT harness.expect_error('layer1', '1.11 the browser role cannot insert a transaction',
+  'A client that can insert transactions can write one straight to confirmed '
+  'with no ledger entry behind it.',
+  ARRAY[
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES (gen_random_uuid(), 'Cash In', 'GCash', 100, 'confirmed', 'manual')$s$
+  ],
+  'permission denied');
+
+SELECT harness.expect_error('layer1', '1.12 the browser role cannot update a transaction',
+  'A client that can update transactions can change the amount of a posted '
+  'transaction, or set a draft to confirmed, without touching the ledger.',
+  ARRAY[
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$UPDATE gocash.transactions SET status = 'confirmed'$s$
+  ],
+  'permission denied');
+
+SELECT harness.expect_error('layer1', '1.13 the browser role cannot change its plan or ownership',
+  'The operators UPDATE policy allows an operator to update their own row. '
+  'Only the column grant stops that reaching subscription_tier or user_id.',
+  ARRAY[
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$UPDATE gocash.operators SET subscription_tier = 'premium'$s$
+  ],
+  'permission denied');
+
+SELECT harness.expect_error('layer1', '1.14 anon cannot read anything in gocash',
+  'The anon key ships in the app. It must open nothing.',
+  ARRAY[
+    $s$SET LOCAL ROLE anon$s$,
+    $s$SELECT count(*) FROM gocash.operators$s$
+  ],
+  'permission denied');

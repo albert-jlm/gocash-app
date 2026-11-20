@@ -362,7 +362,11 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       }
     }
 
-    const { data: transaction, error: txError } = await supabase
+    // Written with the service client. The browser role has no INSERT or
+    // UPDATE on transactions (20260925000003): if it did, a client could write
+    // a row straight to 'confirmed' with no ledger entry behind it. operator_id
+    // comes from the verified JWT above, never from the request.
+    const { data: transaction, error: txError } = await adminClient
       .from("transactions")
       .insert({
         operator_id: operator.id,

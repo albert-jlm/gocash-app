@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import { addPlatform as addPlatformAccount, retirePlatform } from "@/lib/ledger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,41 +96,32 @@ export default function PlatformsSettingsPage() {
       setError("Enter a platform name");
       return;
     }
-    const clash = accounts.find((a) => a.name.toLowerCase() === trimmed.toLowerCase());
+    // An active wallet with this name is a clash. A removed one is not: the
+    // server brings it back with its history.
+    const clash = accounts.find(
+      (a) => a.is_active && a.name.toLowerCase() === trimmed.toLowerCase()
+    );
     if (clash) {
-      setError(
-        clash.is_active
-          ? "A platform with this name already exists"
-          : "A deactivated platform already uses this name"
-      );
+      setError("You already have a wallet with this name");
       return;
     }
 
     setAdding(true);
     setError(null);
 
-    // 1. Create the account. There is no opening balance to set here: a balance
-    //    is the sum of an account's postings, so an opening figure has to be a
-    //    posted entry, not a column. The opening-balance field this form used to
-    //    carry is gone — set the starting figure in Settings → Wallets, which
-    //    posts it as a reconciliation against zero.
-    const { data: newAccount, error: accountErr } = await supabase
-      .from("accounts")
-      .insert({
-        operator_id: operatorId,
-        kind: "platform" as const,
-        name: trimmed,
-      })
-      .select("id, name, kind, is_active")
-      .single();
-
-    if (accountErr || !newAccount) {
-      setError(accountErr?.message ?? "Failed to create the platform account");
+    // Through the server: the browser cannot write gocash.accounts. The new
+    // wallet starts at zero; its real balance is set in Settings → Wallets,
+    // which posts the figure as a counted correction.
+    let newAccount: PlatformAccount;
+    try {
+      newAccount = await addPlatformAccount(trimmed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add the wallet");
       setAdding(false);
       return;
     }
 
-    setAccounts((prev) => [...prev, newAccount]);
+    setAccounts((prev) => [...prev.filter((a) => a.id !== newAccount.id), newAccount]);
     setNewName("");
     setShowAdd(false);
     setAdding(false);
@@ -153,29 +145,17 @@ export default function PlatformsSettingsPage() {
     setDeactivatingId(account.id);
     setError(null);
 
-    // `.select()` so the affected rows come back. Reporting success on an
-    // UPDATE that matched nothing is exactly how the old delete looked like it
-    // worked while doing nothing at all; an empty result here is a failure.
-    const { data: updated, error: updateErr } = await supabase
-      .from("accounts")
-      .update({ is_active: false })
-      .eq("id", account.id)
-      .eq("operator_id", operatorId)
-      .select("id");
-
+    // Through the server, which refuses while the wallet still holds a
+    // balance: a hidden wallet with money in it is money the screen can no
+    // longer account for.
+    try {
+      await retirePlatform(account.id);
+    } catch (err) {
+      setDeactivatingId(null);
+      setError(err instanceof Error ? err.message : "Could not remove the wallet");
+      return;
+    }
     setDeactivatingId(null);
-
-    if (updateErr) {
-      setError(updateErr.message);
-      return;
-    }
-    if (!updated || updated.length === 0) {
-      setError(
-        "Nothing was changed. The ledger grants this app read-only access to accounts, " +
-          "so deactivating one needs a server-side endpoint."
-      );
-      return;
-    }
 
     setAccounts((prev) =>
       prev.map((a) => (a.id === account.id ? { ...a, is_active: false } : a))

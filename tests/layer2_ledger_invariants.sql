@@ -888,3 +888,54 @@ SELECT harness.expect_ok('layer2', '2.27 a voided transaction frees its referenc
        VALUES ('11111111-1111-1111-1111-111111111111',
                'Cash In', 'GCash', 550, 'awaiting_confirm', 'manual', 'REF-227')$s$
   ]);
+
+-- ---------------------------------------------------------------------------
+-- 2.28–2.30 — adding and retiring wallets (20260925000004).
+-- ---------------------------------------------------------------------------
+SELECT harness.probe('layer2', '2.28 a wallet added later can be transacted on',
+  'A new wallet has no fee rules of its own; the type-wide rules must cover '
+  'it, and post_entry must be able to find its account by name.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_platform('11111111-1111-1111-1111-111111111111', '  ShopeePay ')$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('d0000000-0000-0000-0000-000000000028',
+               '11111111-1111-1111-1111-111111111111',
+               'Cash Out', 'ShopeePay', 1000, 'awaiting_confirm', 'manual')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000028',
+         '[{"kind":"platform","platform":"ShopeePay","amount_minor":100000},
+           {"kind":"cash","amount_minor":-98000},
+           {"kind":"revenue","amount_minor":-2000}]'::jsonb,
+         '{"platform":"ShopeePay","transaction_type":"Cash Out","amount":1000,"net_profit":20}'::jsonb,
+         'confirm-228', 'harness')$s$
+  ],
+  $q$
+  SELECT (SELECT balance_minor FROM gocash.account_balances
+          WHERE operator_id = '11111111-1111-1111-1111-111111111111'
+            AND name = 'ShopeePay') = 100000
+     AND (SELECT count(*) FROM gocash.operator_platforms
+          WHERE operator_id = '11111111-1111-1111-1111-111111111111'
+            AND name = 'ShopeePay' AND NOT is_builtin) = 1
+  $q$);
+
+SELECT harness.expect_error('layer2', '2.29 a wallet cannot be added twice under another spelling',
+  'Two accounts called "GCash" and "gcash" would split one wallet''s balance '
+  'across two rows, and neither would match the app.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_platform('11111111-1111-1111-1111-111111111111', 'gcash')$s$
+  ],
+  'already exists');
+
+SELECT harness.expect_error('layer2', '2.30 a wallet holding money cannot be retired',
+  'A retired wallet is hidden from the app. Retiring one with a balance hides '
+  'that money while it still counts in the books.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.retire_platform('11111111-1111-1111-1111-111111111111',
+                                    'aaaa0000-0000-0000-0000-000000000001')$s$
+  ],
+  'still holds a balance');

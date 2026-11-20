@@ -15,6 +15,7 @@ import { handleConfirmTransaction } from "./_confirm_transaction.ts";
 import { handleVoidTransaction } from "./_void_transaction.ts";
 import { handleReconcileAccount } from "./_reconcile_account.ts";
 import { handleProvisionOperator } from "./_provision_operator.ts";
+import { handleManagePlatform } from "./_manage_platform.ts";
 
 // NOTE: the `mago-admin` route was removed. It belongs to MagoHQ, a separate
 // product that shares the OLD edge runtime; it lives in its own repo at
@@ -43,6 +44,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   // Signup. gocash.provision_operator is service-role only because p_user_id
   // is caller-supplied; this route is what turns a verified JWT into that call.
   "provision-operator": handleProvisionOperator,
+  // Add a wallet after signup, or retire one. The browser cannot write
+  // gocash.accounts, so this is the only way the chart of accounts changes.
+  "manage-platform": handleManagePlatform,
 };
 
 // `update-transaction` is deliberately gone. It aliased confirm-transaction

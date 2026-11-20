@@ -49,6 +49,7 @@ export default function OnboardingPage() {
   // Step 2 fields
   const [gcashBalance, setGcashBalance] = useState("");
   const [maribankBalance, setMaribankBalance] = useState("");
+  const [mayaBalance, setMayaBalance] = useState("");
   const [cashBalance, setCashBalance] = useState("");
 
   const [saving, setSaving] = useState(false);
@@ -85,7 +86,8 @@ export default function OnboardingPage() {
     // typed "20,000" as 20 and opened the books at a thousandth of the float.
     const opening: Record<string, number> = {};
     for (const [label, text] of [
-      ["GCash", gcashBalance], ["MariBank", maribankBalance], ["Cash", cashBalance],
+      ["GCash", gcashBalance], ["Maya", mayaBalance], ["MariBank", maribankBalance],
+      ["Cash", cashBalance],
     ] as const) {
       const minor = text.trim() === "" ? 0 : parsePesosInput(text);
       if (minor === null) {
@@ -113,6 +115,7 @@ export default function OnboardingPage() {
         platforms: DEFAULT_PLATFORMS,
         openingMinor: {
           GCash: opening.GCash,
+          Maya: opening.Maya,
           MariBank: opening.MariBank,
           Cash: opening.Cash,
         },
@@ -215,6 +218,7 @@ export default function OnboardingPage() {
           <div className="space-y-4 flex-1">
             {[
               { label: "GCash wallet", value: gcashBalance, onChange: setGcashBalance, color: "text-blue-400" },
+              { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-green-400" },
               { label: "MariBank wallet", value: maribankBalance, onChange: setMaribankBalance, color: "text-purple-400" },
               { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-emerald-400" },
             ].map(({ label, value, onChange, color }) => (

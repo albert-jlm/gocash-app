@@ -570,3 +570,49 @@ export function newIdempotencyKey(prefix: string): string {
     ? crypto.randomUUID()
     : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Wallets (platform accounts)
+// ---------------------------------------------------------------------------
+
+export interface PlatformAccountRow {
+  id: string;
+  name: string;
+  kind: string;
+  is_active: boolean;
+}
+
+async function callManagePlatform(body: Record<string, unknown>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/manage-platform`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error ?? "Could not update your wallets");
+  return data;
+}
+
+/**
+ * Add a wallet. It starts at zero; set its real balance from Settings →
+ * Wallets, which posts the figure as a counted correction. A wallet that was
+ * removed earlier comes back under the same name with its history.
+ */
+export async function addPlatform(name: string): Promise<PlatformAccountRow> {
+  const data = await callManagePlatform({ action: "add", name });
+  return data.account as PlatformAccountRow;
+}
+
+/** Remove a wallet from use. Refused while it still holds a balance. */
+export async function retirePlatform(accountId: string): Promise<void> {
+  await callManagePlatform({ action: "retire", account_id: accountId });
+}

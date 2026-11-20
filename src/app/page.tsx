@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase/client";
 const WALLET_STYLES: Record<string, { gradient: string; glow: string }> = {
   GCash:    { gradient: "from-blue-500 via-blue-600 to-blue-700",     glow: "rgba(59,130,246,0.30)" },
   MariBank: { gradient: "from-purple-500 via-purple-600 to-purple-700", glow: "rgba(139,92,246,0.30)" },
+  Maya:     { gradient: "from-green-500 via-green-600 to-green-700",   glow: "rgba(34,197,94,0.30)" },
   Cash:     { gradient: "from-emerald-500 via-emerald-600 to-emerald-700", glow: "rgba(16,185,129,0.30)" },
 };
 const DEFAULT_WALLET_STYLE = { gradient: "from-zinc-600 via-zinc-700 to-zinc-800", glow: "transparent" };
