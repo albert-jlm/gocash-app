@@ -18,6 +18,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { AppShell } from "@/components/app-shell";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -208,22 +209,23 @@ export default function CapturePage() {
   );
 
   return (
+    <AppShell active="screenshot" tabBar>
     <div
-      className="relative flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto"
+      className="relative flex flex-col flex-1"
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
       {/* Ambient radial glow */}
       <div
-        className="fixed inset-0 pointer-events-none max-w-[390px] mx-auto left-1/2 -translate-x-1/2"
+        className="absolute inset-0 pointer-events-none"
         style={{
           background: "radial-gradient(ellipse 60% 40% at 50% 45%, rgba(16,185,129,0.09) 0%, transparent 70%)",
         }}
       />
 
       {/* Header */}
-      <header className="relative z-10 px-5 pt-14 pb-4 flex items-center gap-3">
+      <header className="relative z-10 px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -325,28 +327,7 @@ export default function CapturePage() {
           <p className="text-sm text-muted-foreground">This usually takes a few seconds</p>
         </div>
       )}
-
-      {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent z-40">
-        <nav className="flex items-center justify-around">
-          <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Home className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Home</span>
-          </Link>
-          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Plus className="w-5 h-5 text-foreground" />
-            <span className="text-[10px] text-foreground font-medium">New</span>
-          </Link>
-          <Link href="/transactions" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <History className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">History</span>
-          </Link>
-          <Link href="/settings" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Settings className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Settings</span>
-          </Link>
-        </nav>
-      </div>
     </div>
+    </AppShell>
   );
 }

@@ -10,6 +10,7 @@ import {
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
 import { supabase } from "@/lib/supabase/client";
+import { AppShell } from "@/components/app-shell";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -236,9 +237,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
+    <AppShell active="home" tabBar wide>
       {/* Header */}
-      <header className="px-5 pt-14 pb-5 flex items-center justify-between">
+      <header className="px-5 pt-14 lg:pt-10 pb-5 flex items-center justify-between">
         <div>
           <p className="text-[11px] font-medium tracking-widest uppercase text-muted-foreground">
             Good {getTimeOfDay()}
@@ -247,7 +248,7 @@ export default function Dashboard() {
         </div>
         <Link
           href="/settings"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center lg:hidden"
         >
           <Settings className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -258,13 +259,13 @@ export default function Dashboard() {
         <div
           ref={walletScrollRef}
           onScroll={handleWalletScroll}
-          className="flex gap-3 px-5 overflow-x-auto pb-2 cursor-grab"
+          className="flex gap-3 px-5 overflow-x-auto pb-2 cursor-grab lg:grid lg:grid-cols-2 xl:grid-cols-4 lg:overflow-visible lg:cursor-default"
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {wallets.map((w) => {
             const style = WALLET_STYLES[w.name] ?? DEFAULT_WALLET_STYLE;
             return (
-              <div key={w.account_id} className="flex-shrink-0 w-[280px]" style={{ scrollSnapAlign: "start" }}>
+              <div key={w.account_id} className="flex-shrink-0 w-[280px] lg:w-auto" style={{ scrollSnapAlign: "start" }}>
                 <div
                   className={`relative h-[160px] rounded-3xl bg-gradient-to-br ${style.gradient} p-6 flex flex-col justify-between overflow-hidden`}
                   style={{ boxShadow: `0 12px 40px -12px ${style.glow}` }}
@@ -296,7 +297,7 @@ export default function Dashboard() {
 
         {/* Progress dots */}
         {wallets.length > 1 && (
-          <div className="flex justify-center gap-1.5 mt-3">
+          <div className="flex justify-center gap-1.5 mt-3 lg:hidden">
             {wallets.map((_, i) => (
               <div
                 key={i}
@@ -327,8 +328,14 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* On a phone these four sections are one column, in the order given
+          by `order-*`. On a desktop the two wrappers become side-by-side
+          columns: actions and today on the left, drafts and recent on the
+          right. */}
+      <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-2 lg:items-start lg:mt-2">
+      <div className="contents lg:block">
       {/* Quick actions */}
-      <section className="px-5 mb-5 grid grid-cols-2 gap-2">
+      <section className="order-1 px-5 mb-5 grid grid-cols-2 gap-2">
         <Link
           href="/entry"
           className="flex items-center justify-center gap-2 bg-emerald-500 text-white font-semibold py-3 rounded-2xl text-sm"
@@ -345,11 +352,36 @@ export default function Dashboard() {
         </Link>
       </section>
 
+      {/* Today's Summary */}
+      <section className="order-3 px-5 mb-5">
+        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+          Today
+        </h2>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
+            <p className="text-lg font-bold tabular-nums">{todayStats.count}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Transactions</p>
+          </div>
+          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
+            <p className="text-lg font-bold tabular-nums">{formatAmount(todayStats.total)}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Total Amount</p>
+          </div>
+          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px] border border-emerald-500/10">
+            <p className="text-lg font-bold text-emerald-400 tabular-nums">
+              ₱{todayStats.earnings.toFixed(0)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Earnings</p>
+          </div>
+        </div>
+      </section>
+
+      </div>
+      <div className="contents lg:block">
       {/* Waiting for you — drafts that are not counted until confirmed.
           Shared screenshots land here: the share shortcut uploads and this is
           where the operator picks them up. */}
       {pendingCount > 0 && (
-        <section className="px-5 mb-5">
+        <section className="order-2 px-5 mb-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
               Waiting for you · {pendingCount}
@@ -392,31 +424,8 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Today's Summary */}
-      <section className="px-5 mb-5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-          Today
-        </h2>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
-            <p className="text-lg font-bold tabular-nums">{todayStats.count}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Transactions</p>
-          </div>
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
-            <p className="text-lg font-bold tabular-nums">{formatAmount(todayStats.total)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Total Amount</p>
-          </div>
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px] border border-emerald-500/10">
-            <p className="text-lg font-bold text-emerald-400 tabular-nums">
-              ₱{todayStats.earnings.toFixed(0)}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Earnings</p>
-          </div>
-        </div>
-      </section>
-
       {/* Recent Transactions */}
-      <section className="px-5 mb-24">
+      <section className="order-4 px-5 mb-24">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Recent
@@ -474,28 +483,8 @@ export default function Dashboard() {
           </div>
         )}
       </section>
-
-      {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
-        <nav className="flex items-center justify-around pointer-events-auto">
-          <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Home className="w-5 h-5 text-foreground" />
-            <span className="text-[10px] text-foreground font-medium">Home</span>
-          </Link>
-          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Plus className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">New</span>
-          </Link>
-          <Link href="/transactions" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <History className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">History</span>
-          </Link>
-          <Link href="/settings" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Settings className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Settings</span>
-          </Link>
-        </nav>
       </div>
-    </div>
+      </div>
+    </AppShell>
   );
 }

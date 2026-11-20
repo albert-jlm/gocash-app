@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
+import { AppShell } from "@/components/app-shell";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
@@ -120,7 +121,7 @@ export default function TransactionDetail({
 
   if (fetchError || !tx) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto px-5">
+      <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto px-5">
         <div className="text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
           <p className="text-sm text-red-400">{fetchError ?? "Transaction not found"}</p>
@@ -139,8 +140,8 @@ export default function TransactionDetail({
     : tx.status;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+    <AppShell active="history">
+      <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/transactions"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -295,6 +296,6 @@ export default function TransactionDetail({
           Back to History
         </Link>
       </div>
-    </div>
+    </AppShell>
   );
 }

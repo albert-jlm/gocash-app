@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import { AppShell } from "@/components/app-shell";
 
 // ---------------------------------------------------------------------------
 // Config — plain-language descriptions for each transaction type
@@ -189,9 +190,9 @@ export default function RulesSettingsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
+    <AppShell active="settings">
       {/* Header */}
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+      <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -361,6 +362,6 @@ export default function RulesSettingsPage() {
           Disabled rules won&apos;t apply any profit.
         </p>
       </section>
-    </div>
+    </AppShell>
   );
 }

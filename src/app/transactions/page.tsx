@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
+import { AppShell } from "@/components/app-shell";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -133,9 +134,9 @@ function TransactionsList() {
   const groups = groupByDate(filtered);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
+    <AppShell active="history" tabBar wide>
       {/* Header */}
-      <header className="px-5 pt-14 pb-3">
+      <header className="px-5 pt-14 lg:pt-10 pb-3">
         <h1 className="text-xl font-semibold">My Transactions</h1>
         <p className="text-[12px] text-muted-foreground mt-0.5">
           {transactions.length} total · {transactions.filter(t => t.status === "awaiting_confirm").length} to review
@@ -208,7 +209,9 @@ function TransactionsList() {
 
                       {/* Details */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{tx.transaction_type}</p>
+                        <p className="text-sm font-medium truncate">
+                          {tx.transaction_type === "Unknown" ? "Type not read" : tx.transaction_type}
+                        </p>
                         <p className="text-[11px] text-muted-foreground truncate">
                           {maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
                         </p>
@@ -217,10 +220,12 @@ function TransactionsList() {
                       {/* Amounts + badge */}
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <p className={`text-sm font-semibold tabular-nums ${isVoided ? "line-through text-muted-foreground" : ""}`}>
-                          ₱{tx.amount.toLocaleString("en-PH")}
+                          {isPending && !(tx.amount > 0) ? "Amount?" : "₱" + tx.amount.toLocaleString("en-PH")}
                         </p>
                         <div className="flex items-center gap-1.5">
-                          {!isVoided && (
+                          {/* A draft has earned nothing yet; its fee is worked
+                              out when it is confirmed. */}
+                          {!isVoided && !isPending && (
                             <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
                               +₱{tx.net_profit.toFixed(0)}
                             </p>
@@ -247,29 +252,7 @@ function TransactionsList() {
           ))
         )}
       </div>
-
-      {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
-        <nav className="flex items-center justify-around pointer-events-auto">
-          <Link href="/" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Home className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Home</span>
-          </Link>
-          <Link href="/entry" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Plus className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">New</span>
-          </Link>
-          <Link href="/transactions" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <History className="w-5 h-5 text-foreground" />
-            <span className="text-[10px] text-foreground font-medium">History</span>
-          </Link>
-          <Link href="/settings" className="flex flex-col items-center gap-1 min-w-[48px]">
-            <Settings className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Settings</span>
-          </Link>
-        </nav>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 

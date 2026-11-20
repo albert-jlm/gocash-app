@@ -36,6 +36,7 @@ import {
   formatPesos,
   type EntryContext,
 } from "@/lib/ledger";
+import { AppShell } from "@/components/app-shell";
 
 /** Shorter labels than the enum values; the counter has no room for "Profit Remittance". */
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -185,8 +186,8 @@ export default function EntryPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+    <AppShell active="new">
+      <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -428,7 +429,7 @@ export default function EntryPage() {
       </section>
 
       {/* ----- save ----- */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
+      <div className="sticky bottom-0 mt-auto px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
         <button
           type="button"
           onClick={handleSave}
@@ -447,6 +448,6 @@ export default function EntryPage() {
           )}
         </button>
       </div>
-    </div>
+    </AppShell>
   );
 }

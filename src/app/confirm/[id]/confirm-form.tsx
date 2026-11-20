@@ -30,6 +30,7 @@ import {
   voidTransaction,
   type EntryContext,
 } from "@/lib/ledger";
+import { AppShell } from "@/components/app-shell";
 
 // Shown only if the operator's wallets could not be loaded, so the form is
 // still usable. The server checks the platform against real accounts anyway.
@@ -323,7 +324,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto">
+      <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
           <p className="text-sm text-muted-foreground">Loading transaction…</p>
@@ -334,7 +335,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   if (fetchError) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[390px] mx-auto px-5">
+      <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto px-5">
         <div className="text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
           <p className="text-sm text-red-400">{fetchError}</p>
@@ -349,9 +350,9 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[390px] mx-auto">
+    <AppShell>
       {/* Header */}
-      <header className="px-5 pt-14 pb-4 flex items-center gap-3">
+      <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/"
           className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
@@ -410,8 +411,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           <FieldRow label="App used">
             <Select value={platform} onValueChange={(v) => setPlatform(v ?? "")}>
 
-              <SelectTrigger className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl text-sm">
-                <SelectValue />
+              <SelectTrigger className="bg-white/[0.07] border-white/[0.1] h-11 w-full rounded-xl text-sm">
+                <SelectValue placeholder="Choose the app" />
               </SelectTrigger>
               <SelectContent>
                 {platformOptions.map((p) => (
@@ -425,8 +426,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           <FieldRow label="Transaction type">
             <Select value={txType} onValueChange={(v) => setTxType(v ?? "")}>
 
-              <SelectTrigger className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl text-sm">
-                <SelectValue />
+              <SelectTrigger className="bg-white/[0.07] border-white/[0.1] h-11 w-full rounded-xl text-sm">
+                <SelectValue placeholder="Choose the type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Cash In">Cash In</SelectItem>
@@ -572,6 +573,6 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           </button>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }

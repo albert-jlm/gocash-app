@@ -86,7 +86,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[390px] mx-auto px-5 relative overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[430px] mx-auto px-5 relative overflow-hidden">
       {/* Ambient glow behind logo */}
       <div
         className="absolute top-[15%] left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
