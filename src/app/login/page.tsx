@@ -85,18 +85,21 @@ export default function LoginPage() {
     );
   }
 
+  // Phone: logo fills the top, form sits at the thumb. Wider screens: the two
+  // are one group, centred, because a form pinned to the bottom of a tall
+  // window reads as a stretched phone screen.
   return (
-    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[430px] mx-auto px-5 relative overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[430px] mx-auto px-5 relative overflow-hidden sm:justify-center">
       {/* Ambient glow behind logo */}
       <div
-        className="absolute top-[15%] left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
+        className="absolute top-[15%] sm:top-1/4 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
         style={{
           background: "radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)",
         }}
       />
 
       {/* Logo area */}
-      <div className="flex-1 flex flex-col items-center justify-center pb-6 relative z-10">
+      <div className="flex-1 sm:flex-none flex flex-col items-center justify-center pb-6 sm:pb-10 relative z-10">
         {/* Logo */}
         <div className="relative mb-6">
           <div className="w-[72px] h-[72px] rounded-[22px] bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
@@ -109,12 +112,12 @@ export default function LoginPage() {
 
         <h1 className="text-[26px] font-bold mb-1.5 tracking-tight">GoCash Tracker</h1>
         <p className="text-sm text-muted-foreground text-center max-w-[220px] leading-relaxed">
-          Manage your GCash and MariBank transactions
+          Track your GCash, Maya and MariBank transactions
         </p>
       </div>
 
       {/* Form card */}
-      <div className="relative z-10 pb-16">
+      <div className="relative z-10 pb-16 sm:pb-0">
         <div className="bg-white/[0.04] border border-white/[0.08] rounded-3xl p-5">
           {sent ? (
             <form onSubmit={handleVerifyCode} className="space-y-4">
@@ -212,12 +215,12 @@ export default function LoginPage() {
                     Sending...
                   </>
                 ) : (
-                  "Send sign-in link"
+                  "Send sign-in code"
                 )}
               </button>
 
               <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
-                No password needed — we&apos;ll email you a one-tap link
+                No password needed — we&apos;ll email you a sign-in code
               </p>
             </form>
           )}

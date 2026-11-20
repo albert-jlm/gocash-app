@@ -259,7 +259,7 @@ export default function Dashboard() {
         <div
           ref={walletScrollRef}
           onScroll={handleWalletScroll}
-          className="flex gap-3 px-5 overflow-x-auto pb-2 cursor-grab lg:grid lg:grid-cols-2 xl:grid-cols-4 lg:overflow-visible lg:cursor-default"
+          className="flex gap-3 px-5 scroll-pl-5 overflow-x-auto pb-2 cursor-grab lg:grid lg:grid-cols-2 xl:grid-cols-4 lg:overflow-visible lg:cursor-default"
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {wallets.map((w) => {

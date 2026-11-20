@@ -143,7 +143,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[430px] mx-auto px-5">
+    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[430px] mx-auto px-5 sm:justify-center sm:pb-10">
       {/* Progress dots */}
       <div className="flex items-center justify-center gap-2 pt-14 lg:pt-10 pb-8">
         <span className={`w-2 h-2 rounded-full ${step === 1 ? "bg-emerald-400" : "bg-emerald-400/40"}`} />
@@ -152,7 +152,7 @@ export default function OnboardingPage() {
 
       {step === 1 ? (
         /* ── Step 1: Your details ── */
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 sm:flex-none flex flex-col">
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-2">Welcome!</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -160,7 +160,7 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <div className="space-y-4 flex-1">
+          <div className="space-y-4 flex-1 sm:flex-none sm:mb-8">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Your name
@@ -204,7 +204,7 @@ export default function OnboardingPage() {
         </div>
       ) : (
         /* ── Step 2: Opening balances ── */
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 sm:flex-none flex flex-col">
           <div className="mb-8">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-4">
               <Wallet className="w-6 h-6 text-emerald-400" />
@@ -215,7 +215,7 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <div className="space-y-4 flex-1">
+          <div className="space-y-4 flex-1 sm:flex-none sm:mb-8">
             {[
               { label: "GCash wallet", value: gcashBalance, onChange: setGcashBalance, color: "text-blue-400" },
               { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-green-400" },
