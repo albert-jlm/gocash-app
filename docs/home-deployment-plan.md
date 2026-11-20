@@ -46,11 +46,26 @@ test. Nothing is merged to `main` until `deploy.yml` is retargeted.
 Access (decided 2026-11-18): the app and its backend stay reachable from the
 public internet, not Tailscale-only, so the phones work anywhere.
 
-- [ ] Add the missing schema and table grants to the migrations.
-- [ ] Start the dedicated stack in `~/homelab/gocash/` (secrets, `.env`).
-- [ ] Load the schema, provision the operator, set opening balances.
-- [ ] Point the site at the new stack.
-- [ ] Confirm the backup covers the new database.
+- [x] Add the missing schema and table grants to the migrations.
+- [x] Start the dedicated stack in `~/homelab/gocash/` (secrets, `.env`).
+- [x] Load the schema (2026-11-20). The login account exists.
+- [ ] Add `gocash-api.zether.net` to the Cloudflare tunnel (operator, in the
+      dashboard): Public Hostname -> service `http://traefik:80`.
+- [ ] First sign-in and onboarding: the operator enters the opening balances.
+- [x] Point the site at the new stack. `out/` was rebuilt against
+      `https://gocash-api.zether.net`; it cannot sign in until the hostname
+      above exists.
+- [x] Confirm the backup covers the new database.
+
+### How the home stack is laid out
+
+`~/homelab/gocash/`: `docker-compose.yml` (db, rest, auth, storage, functions
+and an nginx gateway that provides the `/rest/v1`, `/auth/v1`, `/storage/v1`
+and `/functions/v1` prefixes), `.env` (secrets, never committed), `psql.sh`,
+`apply-migrations.sh`. The functions container mounts this repo's
+`supabase/functions` read-only, so the checked-out branch is what runs.
+Migrations are applied by hand with `psql.sh`; there is no tracking table yet.
+The nightly backup dumps the database (`dump_pg gocash gocash-db`).
 
 ## Not now
 
