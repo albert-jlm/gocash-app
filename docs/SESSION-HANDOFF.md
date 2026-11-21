@@ -34,11 +34,13 @@ next.
    access, or the operator runs `~/homelab/gocash/push-scrubbed.sh`. Old
    commits remain reachable on GitHub through pull-request refs until GitHub
    Support purges them.
-2. **The shared Shortcut.** The iCloud link received on 2026-11-21 has the
-   operator's own upload key inside it and no import question, so it must not
-   be given to staff or put in the app. The key should be removed in
-   Settings → Share from phone and a new one made; the Shortcut needs the key
-   moved into a Text action with an import question before re-sharing.
+2. **The shared Shortcut: done 2026-11-21.** The operator re-shared it
+   with the key in a Text action behind an import question
+   (icloud.com/shortcuts/d6bc3ce3cff2400fb999b348dda84f9a). Checked: no key
+   inside, posts the converted image to `share-upload` with
+   `Bearer <Text>`. Settings → Share from phone links to it. The earlier
+   link (a6fda171…) had the operator's key inside; whether that key was
+   removed is for the operator to confirm.
 3. **Opening balances** (Settings → Wallets) and **own numbers**
    (Settings → My numbers & accounts) have to be entered by the operator.
 4. **First real use** of: a transfer, a staff login, the Shortcut end to end.

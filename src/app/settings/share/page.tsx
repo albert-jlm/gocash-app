@@ -80,6 +80,8 @@ function when(iso: string | null): string {
   });
 }
 
+const SHORTCUT_LINK = "https://www.icloud.com/shortcuts/d6bc3ce3cff2400fb999b348dda84f9a";
+
 export default function ShareSettingsPage() {
   const { loading: authLoading } = useAuthGuard();
 
@@ -241,13 +243,27 @@ export default function ShareSettingsPage() {
         {/* ----- 2. the shortcut ----- */}
         <div className="bg-muted/60 rounded-2xl p-4 space-y-4">
           <div>
-            <p className="text-sm font-semibold">2. Build the Shortcut on your iPhone</p>
-            <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-              Once, in Apple&apos;s Shortcuts app. Open this page on the iPhone so
-              you can copy the two values below.
+            <p className="text-sm font-semibold">2. Add the Shortcut on your iPhone</p>
+            <p className="text-sm text-muted-foreground leading-relaxed mt-1">
+              Open this page on the iPhone and tap the button. When it asks,
+              paste the key from step 1.
             </p>
           </div>
 
+          <a
+            href={SHORTCUT_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] flex items-center justify-center"
+          >
+            Add the Shortcut
+          </a>
+
+          <details className="group">
+            <summary className="text-sm text-muted-foreground underline underline-offset-4 cursor-pointer list-none py-2">
+              Build it by hand instead
+            </summary>
+            <div className="space-y-4 pt-3">
           <CopyRow label="URL" value={SHARE_UPLOAD_URL} />
           <CopyRow label="Authorization header value" value={headerValue} secret={newKey !== null} />
 
@@ -305,9 +321,16 @@ export default function ShareSettingsPage() {
               <li><B>&quot;This upload key is not valid any more&quot;</B>: the key was mistyped or removed. Make a new one above and paste it again.</li>
               <li><B>&quot;No image arrived&quot;</B>: Request Body isn&apos;t set to File, or File isn&apos;t Converted Image.</li>
               <li><B>The notification is empty</B>: the key in action 3 isn&apos;t exactly <B>message</B>.</li>
-              <li><B>Send to GoCash isn&apos;t in the Share menu</B>: scroll to the bottom of the menu, tap <B>Edit Actions</B> and add it.</li>
             </ul>
           </div>
+            </div>
+          </details>
+
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            If <B>Send to GoCash</B> isn&apos;t in the Share menu, scroll to the bottom of the menu,
+            tap <B>Edit Actions</B> and add it. If it says the key is not valid, make a new key
+            above, then edit the Shortcut and paste it into the first box.
+          </p>
         </div>
 
         {/* ----- 3. using it ----- */}
@@ -319,7 +342,7 @@ export default function ShareSettingsPage() {
               Tap the preview, tap Share, and choose <span className="text-foreground">Send to GoCash</span>.
               The first time, allow it to connect.
             </li>
-            <li>A notification says what was read. Open GoCash and confirm it under &quot;Waiting for you&quot;.</li>
+            <li>A notification says what was read. Open GoCash and confirm it under &quot;drafts to review&quot;.</li>
           </ol>
           <p className="text-xs text-muted-foreground/70 leading-relaxed pt-1">
             A screenshot is a record, not proof that money arrived. Check the
