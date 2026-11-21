@@ -95,6 +95,14 @@ UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
   the whole account does not exist yet; when built it must be founder-only.
   Any migration that replaces a function must re-GRANT execute afterwards:
   an event trigger revokes it.
+- **Deleting a voided transaction (2026-11-21):** migration
+  `20260928000003_delete_voided.sql` (applied live), function
+  `remove-transaction`, owner or admin only. A voided draft that never
+  touched the ledger is removed outright. One that was saved and then voided
+  cannot be removed, because ledger entries are immutable and reference it:
+  it is set to status `deleted`, hidden from every list, and its customer
+  number, reference number, receipt and raw text are erased. Its two
+  cancelling ledger entries stay.
 - **Cash Out wording (operator's decision):** the app shows only
   "You earn ₱X" and a "Fee is included in the amount" checkbox. It does not
   say how much to give or collect.

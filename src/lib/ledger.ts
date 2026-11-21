@@ -191,6 +191,24 @@ export async function setEarnings(earningsPesos: number, idempotencyKey: string)
   return typeof data.earnings === "number" ? data.earnings : earningsPesos;
 }
 
+export async function removeTransaction(transactionId: string): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/remove-transaction`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ transaction_id: transactionId }),
+    }
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error ?? "Could not delete the transaction");
+}
+
 export interface ProvisionOperatorInput {
   userId: string;
   name: string;

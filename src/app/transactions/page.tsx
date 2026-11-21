@@ -24,6 +24,7 @@ import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { readHistory, writeHistory } from "@/lib/history-cache";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -101,13 +102,11 @@ function groupByDate(rows: TxRow[]): Array<{ label: string; key: string; items: 
 // Component
 // ---------------------------------------------------------------------------
 
-let lastHistory: TxRow[] | null = null;
-
 function TransactionsList() {
   const { operatorId, loading: authLoading } = useAuthGuard();
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
-  const [transactions, setTransactions] = useState<TxRow[]>(lastHistory ?? []);
-  const [dataLoading, setDataLoading] = useState(lastHistory === null);
+  const [transactions, setTransactions] = useState<TxRow[]>(() => readHistory<TxRow>() ?? []);
+  const [dataLoading, setDataLoading] = useState(() => readHistory<TxRow>() === null);
 
   useEffect(() => {
     if (!operatorId) return;
@@ -117,10 +116,11 @@ function TransactionsList() {
         .from("transactions")
         .select("id, transaction_type, platform, transfer_to, account_number, amount, net_profit, created_at, status")
         .eq("operator_id", opId)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false })
         .limit(100);
       if (data) {
-        lastHistory = data;
+        writeHistory(data);
         setTransactions(data);
       }
       setDataLoading(false);

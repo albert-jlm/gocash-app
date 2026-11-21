@@ -73,8 +73,8 @@ const HOW: { title: string; steps: string[] }[] = [
   {
     title: "Let staff record transactions",
     steps: [
-      "Settings → Staff. Add their email.",
-      "They sign in with that email. They can record and view; only you can void, fix balances and change settings.",
+      "Settings → People. Add their email.",
+      "Choose Staff or Admin. Staff record and view. Admins can also void, fix balances and change settings.",
     ],
   },
 ];
@@ -85,7 +85,7 @@ const FAQ: { q: string; a: string }[] = [
   { q: "What is a draft?", a: "A transaction read from a screenshot that nobody has checked yet. It changes no balance and earns nothing until you review and save it." },
   { q: "How is my fee worked out?", a: "By the rules under Settings → Profit settings: the amount times your rate, and never less than your minimum." },
   { q: "What does the Earnings card show?", a: "The fees you have earned and not yet taken out. That money is still inside your drawer and wallets, so their balances keep matching the real ones." },
-  { q: "I saved something wrong. Can I delete it?", a: "You void it. The balances go back to what they were and it stays in History marked as voided. Then record it again correctly. Only the owner can void." },
+  { q: "I saved something wrong. Can I delete it?", a: "Void it first: the balances go back to what they were. Then either tap Enter it again to record it correctly, or Delete for good to take it out of History. Only the owner or an admin can void or delete." },
   { q: "Why can't I just type over a balance?", a: "You can set it to the real figure under Settings → Wallets. The app records the difference as a correction so you can always see why a balance changed." },
   { q: "The app looks like a web page.", a: "Add it to your home screen (see Getting started). Opened from there it runs full screen, without the browser bars." },
   { q: "Can I use it in light or dark mode?", a: "Yes. Settings → Appearance. It follows your phone unless you choose one." },

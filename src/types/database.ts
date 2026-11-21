@@ -28,7 +28,8 @@ export type TransactionStatus =
   | "awaiting_confirm"
   | "confirmed"
   | "voided"
-  | "failed";
+  | "failed"
+  | "deleted";
 
 // Account classes live in the ledger core so the client and the Edge Functions
 // cannot drift apart on them: "platform" | "cash" | "revenue" | "equity".

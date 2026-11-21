@@ -14,6 +14,9 @@ import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
 import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { Sheet } from "@/components/sheet";
+import { dropFromHistory } from "@/lib/history-cache";
+import { removeTransaction } from "@/lib/ledger";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "var(--foreground)", Icon: ArrowDownRight },
@@ -73,6 +76,23 @@ export default function TransactionDetail({
   const [voidReason, setVoidReason] = useState("");
   const [voiding, setVoiding] = useState(false);
   const [voidError, setVoidError] = useState<string | null>(null);
+  const [askDelete, setAskDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!tx || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await removeTransaction(tx.id);
+      dropFromHistory(tx.id);
+      router.replace("/transactions");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Could not delete");
+      setDeleting(false);
+    }
+  }
 
   async function handleVoid() {
     if (!tx || voiding) return;
@@ -315,6 +335,12 @@ export default function TransactionDetail({
           </Link>
         )}
 
+        {isVoided && role !== "staff" && (
+          <button type="button" onClick={() => { setAskDelete(true); setDeleteError(null); }} className="btn btn-outline w-full text-destructive">
+            Delete for good
+          </button>
+        )}
+
         <Link
           href="/transactions"
           className="btn btn-secondary w-full"
@@ -322,6 +348,20 @@ export default function TransactionDetail({
           Back to History
         </Link>
       </div>
+      <Sheet open={askDelete} onClose={() => setAskDelete(false)} title="Delete this for good?">
+        <p className="text-[15px] text-muted-foreground mt-2 mb-5">
+          It disappears from History, and its customer number, reference number and receipt are erased. This cannot be undone. Your balances do not change: it was already voided.
+        </p>
+        {deleteError && <p className="text-[15px] text-destructive mb-3">{deleteError}</p>}
+        <div className="space-y-2.5">
+          <button type="button" onClick={handleDelete} disabled={deleting} className="btn btn-danger w-full">
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+          <button type="button" onClick={() => setAskDelete(false)} className="btn btn-secondary w-full">
+            Keep it
+          </button>
+        </div>
+      </Sheet>
     </AppShell>
   );
 }
