@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Mail, CheckCircle2, KeyRound } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -91,146 +89,72 @@ export default function LoginPage() {
     );
   }
 
-  // Phone: logo fills the top, form sits at the thumb. Wider screens: the two
-  // are one group, centred, because a form pinned to the bottom of a tall
-  // window reads as a stretched phone screen.
+  const field =
+    "w-full h-[54px] rounded-2xl bg-muted px-4 text-base outline-none border border-transparent focus:border-primary";
+  const primary =
+    "font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
+
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[430px] mx-auto px-5 relative overflow-hidden sm:justify-center">
-      {/* Ambient glow behind logo */}
-      <div
-        className="absolute top-[15%] sm:top-1/4 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
-        style={{
-          background: "radial-gradient(circle, transparent 0%, transparent 70%)",
-        }}
-      />
-
-      {/* Logo area */}
-      <div className="flex-1 sm:flex-none flex flex-col items-center justify-center pb-6 sm:pb-10 relative z-10">
-        {/* Logo */}
-        <div className="relative mb-6">
-          <div className="w-[72px] h-[72px] rounded-[22px] bg-primary flex items-center justify-center shadow-lg shadow-none">
-            <span className="text-[28px] font-black text-foreground tracking-tight">G</span>
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-background flex items-center justify-center">
-            <div className="w-3.5 h-3.5 rounded-full bg-primary shadow-sm shadow-none" />
-          </div>
-        </div>
-
-        <h1 className="text-[26px] font-bold mb-1.5 tracking-tight">GoCash Tracker</h1>
-        <p className="text-sm text-muted-foreground text-center max-w-[220px] leading-relaxed">
-          Track your GCash, Maya and MariBank transactions
-        </p>
+    <div className="flex flex-col min-h-dvh bg-background text-foreground w-full max-w-[400px] mx-auto px-6 sm:justify-center">
+      <div className="flex-1 sm:flex-none flex flex-col items-center justify-center pt-[calc(env(safe-area-inset-top)+2rem)] pb-8 sm:pb-10">
+        <img src="/logo.svg" alt="" width={76} height={76} className="rounded-[20px] mb-5 dark:ring-1 dark:ring-input" />
+        <h1 className="text-[30px] font-bold tracking-tight leading-none">gocash</h1>
+        <p className="text-sm text-muted-foreground mt-2">Your shop&apos;s books</p>
       </div>
 
-      {/* Form card */}
-      <div className="relative z-10 pb-16 sm:pb-0">
-        <div className="bg-muted/60 border border-border rounded-3xl p-5">
-          {sent ? (
-            <form onSubmit={handleVerifyCode} className="space-y-4">
-              <div className="flex flex-col items-center gap-3 pb-2">
-                <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center">
-                  <KeyRound className="w-6 h-6 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="font-semibold mb-1">Enter your code</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    We emailed a code to{" "}
-                    <span className="text-foreground font-medium">{email}</span>.
-                    Enter it below to sign in.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Sign-in code
-                </Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="000000"
-                  required
-                  autoFocus
-                  className="bg-muted border-border h-12 rounded-xl text-center text-xl tracking-[0.5em] font-mono focus:border-primary/50 focus:bg-muted transition-colors"
-                />
-              </div>
-
-              {error && (
-                <p className="text-xs text-destructive px-1">{error}</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading || code.length < 6}
-                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-semibold py-3.5 rounded-2xl text-[15px] transition-colors"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  "Verify code"
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setSent(false); setCode(""); setError(null); }}
-                className="w-full text-sm text-muted-foreground text-center py-1"
-              >
-                Use a different email
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleSendLink} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Email address
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70 pointer-events-none" />
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    autoComplete="email"
-                    className="bg-muted border-border h-12 rounded-xl pl-10 text-sm focus:border-primary/50 focus:bg-muted transition-colors"
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <p className="text-xs text-destructive px-1">{error}</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading || !email}
-                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-semibold py-3.5 rounded-2xl text-[15px] transition-colors"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  "Send sign-in code"
-                )}
-              </button>
-
-              <p className="text-xs text-muted-foreground/60 text-center leading-relaxed">
-                No password needed — we&apos;ll email you a sign-in code
-              </p>
-            </form>
-          )}
-        </div>
+      <div className="pb-[max(2rem,env(safe-area-inset-bottom))] sm:pb-0">
+        {sent ? (
+          <form onSubmit={handleVerifyCode} className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              We emailed a code to <span className="text-foreground font-medium">{email}</span>.
+            </p>
+            <label htmlFor="code" className="sr-only">Sign-in code</label>
+            <input
+              id="code"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="000000"
+              required
+              autoFocus
+              autoComplete="one-time-code"
+              className={`${field} amount text-center text-2xl font-semibold tracking-[0.4em]`}
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <button type="submit" disabled={loading || code.length < 6} className={primary}>
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />Checking…</>) : "Sign in"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSent(false); setCode(""); setError(null); }}
+              className="w-full h-11 text-sm text-muted-foreground underline underline-offset-4"
+            >
+              Use a different email
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleSendLink} className="space-y-3">
+            <label htmlFor="email" className="text-[13px] text-muted-foreground">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+              className={field}
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <button type="submit" disabled={loading || !email} className={primary}>
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />Sending…</>) : "Email me a sign-in code"}
+            </button>
+            <p className="text-[13px] text-muted-foreground text-center">No password needed.</p>
+          </form>
+        )}
       </div>
     </div>
   );
