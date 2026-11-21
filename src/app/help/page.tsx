@@ -13,7 +13,7 @@ const HOW: { title: string; steps: string[] }[] = [
     steps: [
       "On Home, tap Cash In or Cash Out.",
       "Pick the wallet, then type the amount on the keypad.",
-      "Check the line under the amount: it says what to give or collect and what you earn.",
+      "The line under the amount shows what you earn. For a Cash Out, tick the box if your fee is already inside the amount the customer sent.",
       "Tap Save. If it was a mistake, the owner can tap Undo on Home straight away.",
     ],
   },

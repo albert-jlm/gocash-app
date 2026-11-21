@@ -558,7 +558,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 </p>
               )}
               <div className="h-px bg-muted" />
-              <EntryEffects postings={preview.postings} dense feeInside={amountIncludesFee} />
+              <EntryEffects postings={preview.postings} dense />
             </div>
           )}
 

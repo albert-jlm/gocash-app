@@ -66,7 +66,7 @@ export default function SettingsPage() {
             { label: "Profit settings",       href: "/settings/rules",         desc: "Your fee on each type",           ownerOnly: true,  Icon: BadgePercent },
             { label: "Platforms",             href: "/settings/platforms",     desc: "Add or archive wallets",          ownerOnly: true,  Icon: LayoutGrid },
             { label: "My numbers & accounts", href: "/settings/my-accounts",   desc: "Your own numbers",                ownerOnly: true,  Icon: Contact },
-            { label: "Staff",                 href: "/settings/staff",         desc: "Who else can record",             ownerOnly: true,  Icon: Users },
+            { label: "People",                href: "/settings/staff",         desc: "Owners and staff",                ownerOnly: true,  Icon: Users },
             { label: "Share from phone",      href: "/settings/share",         desc: "Send screenshots in",             ownerOnly: false, Icon: Share },
             { label: "Notifications",         href: "/settings/notifications", desc: "Telegram, coming soon",           ownerOnly: true,  Icon: Bell },
             { label: "Help",                  href: "/help",                   desc: "How-tos and questions",           ownerOnly: false, Icon: CircleHelp },

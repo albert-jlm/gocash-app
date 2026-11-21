@@ -12,9 +12,10 @@ import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import { resolveMembership, refuseUnlessOwner } from "./_shared/operator.ts";
 
 interface RequestBody {
-  action: "list" | "add" | "remove";
+  action: "list" | "add" | "remove" | "role";
   email?: string;
   member_id?: string;
+  role?: "staff" | "owner";
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -64,7 +65,13 @@ export async function handleManageStaff(req: Request): Promise<Response> {
         console.error("list staff failed:", error.code, error.message);
         return jsonResponse(req, { error: "Could not load staff" }, 500);
       }
-      return jsonResponse(req, { owner_email: user.email ?? null, staff: data ?? [] });
+      const { data: shop } = await admin
+        .from("operators").select("email").eq("id", membership.operatorId).maybeSingle();
+      return jsonResponse(req, {
+        owner_email: shop?.email ?? null,
+        your_email: user.email ?? null,
+        staff: data ?? [],
+      });
     }
 
     if (body.action === "add") {
@@ -110,13 +117,54 @@ export async function handleManageStaff(req: Request): Promise<Response> {
         return jsonResponse(req, { error: "Could not add that person" }, 500);
       }
 
+      const role = body.role === "owner" ? "owner" : "staff";
+      if (role === "owner") {
+        const { error: roleError } = await admin.rpc("set_member_role", {
+          p_operator_id: membership.operatorId, p_member_id: memberId, p_role: "owner",
+        });
+        if (roleError) {
+          console.error("set_member_role failed:", roleError.code, roleError.message);
+          return jsonResponse(req, { error: "Added as staff, but could not make them an owner" }, 500);
+        }
+      }
+
       return jsonResponse(req, {
-        member: { id: memberId, email, role: "staff" },
+        member: { id: memberId, email, role },
         note: "They can now sign in with this email. A code is sent to it each time.",
       });
     }
 
+    if (body.action === "role") {
+      if (typeof body.member_id !== "string" || body.member_id === "") {
+        return jsonResponse(req, { error: "member_id is required" }, 400);
+      }
+      if (body.role !== "staff" && body.role !== "owner") {
+        return jsonResponse(req, { error: 'role must be "staff" or "owner"' }, 400);
+      }
+      const { data: target } = await admin
+        .from("operator_members").select("user_id")
+        .eq("id", body.member_id).eq("operator_id", membership.operatorId).maybeSingle();
+      if (!target) return jsonResponse(req, { error: "Person not found" }, 404);
+      if (target.user_id === user.id) {
+        return jsonResponse(req, { error: "You can't change your own role" }, 400);
+      }
+      const { error } = await admin.rpc("set_member_role", {
+        p_operator_id: membership.operatorId, p_member_id: body.member_id, p_role: body.role,
+      });
+      if (error) {
+        console.error("set_member_role failed:", error.code, error.message);
+        return jsonResponse(req, { error: "Could not change that person's role" }, 500);
+      }
+      return jsonResponse(req, { member_id: body.member_id, role: body.role });
+    }
+
     if (body.action === "remove") {
+      const { data: target } = await admin
+        .from("operator_members").select("user_id")
+        .eq("id", body.member_id ?? "").eq("operator_id", membership.operatorId).maybeSingle();
+      if (target && target.user_id === user.id) {
+        return jsonResponse(req, { error: "You can't remove yourself" }, 400);
+      }
       if (typeof body.member_id !== "string" || body.member_id === "") {
         return jsonResponse(req, { error: "member_id is required" }, 400);
       }
@@ -142,7 +190,7 @@ export async function handleManageStaff(req: Request): Promise<Response> {
       return jsonResponse(req, { removed: body.member_id });
     }
 
-    return jsonResponse(req, { error: 'action must be "list", "add" or "remove"' }, 400);
+    return jsonResponse(req, { error: 'action must be "list", "add", "role" or "remove"' }, 400);
   } catch (err) {
     console.error("Unhandled error in manage-staff:", err);
     return jsonResponse(req, { error: "Internal server error" }, 500);

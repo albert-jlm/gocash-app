@@ -422,6 +422,12 @@ SELECT harness.expect_no_rows('layer1', '1.5b UPDATE policies constrain row owne
     AND position('uid()' IN
           COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
           || COALESCE(pg_get_expr(p.polqual,   p.polrelid), '')) = 0
+    AND position('is_operator_owner(' IN
+          COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
+          || COALESCE(pg_get_expr(p.polqual,   p.polrelid), '')) = 0
+    AND position('is_my_operator(' IN
+          COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
+          || COALESCE(pg_get_expr(p.polqual,   p.polrelid), '')) = 0
   $q$);
 
 -- ---------------------------------------------------------------------------

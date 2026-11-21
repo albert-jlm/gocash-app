@@ -71,10 +71,25 @@ export default function EntryPage() {
     const wanted = new URLSearchParams(window.location.search).get("type");
     if (wanted && (TRANSACTION_TYPES as readonly string[]).includes(wanted)) {
       setTxType(wanted as TransactionType);
+      const params = new URLSearchParams(window.location.search);
+      const given = {
+        platform: params.get("platform"),
+        amount: params.get("amount"),
+        to: params.get("to"),
+        appFee: params.get("appFee"),
+        ref: params.get("ref"),
+        account: params.get("account"),
+      };
+      setPrefill(given);
+      if (given.amount) setAmount(formatAmountInput(given.amount));
+      if (given.ref) setReference(given.ref);
+      if (given.account) setAccountNumber(given.account);
+      if (given.ref || given.account) setShowDetails(true);
     } else {
       router.replace("/new");
     }
   }, [router]);
+  const [prefill, setPrefill] = useState<{ platform: string | null; to: string | null; appFee: string | null } | null>(null);
   const [platform, setPlatform] = useState("");
   const [amount, setAmount] = useState("");
   const [amountIncludesFee, setAmountIncludesFee] = useState(false);
@@ -129,6 +144,17 @@ export default function EntryPage() {
       setPlatform((p) => (p === CASH_ACCOUNT_NAME ? "" : p));
     }
   }, [txType]);
+
+  useEffect(() => {
+    if (!context || !prefill || txType === "") return;
+    const known = [...context.platforms, CASH_ACCOUNT_NAME];
+    if (prefill.platform && known.includes(prefill.platform)) setPlatform(prefill.platform);
+    if (txType === "Wallet Transfer") {
+      if (prefill.to && known.includes(prefill.to)) setTransferTo(prefill.to);
+      if (prefill.appFee) setPlatformFee(prefill.appFee);
+    }
+    setPrefill(null);
+  }, [context, prefill, txType]);
 
   // Blank means no fee. Anything else has to read exactly.
   const platformFeeMinor = useMemo(
@@ -216,7 +242,7 @@ export default function EntryPage() {
     `h-11 px-4 rounded-full text-[15px] font-medium flex-shrink-0 transition-colors ${
       on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
     }`;
-  const summary = preview ? summaryLine(preview.postings, { feeInside: amountIncludesFee }) : null;
+  const summary = preview ? summaryLine(preview.postings) : null;
 
   return (
     <AppShell active="new">

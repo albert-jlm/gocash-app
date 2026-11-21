@@ -14,13 +14,32 @@ import { ArrowLeft, Loader2, AlertCircle, Check, UserPlus, Trash2, Crown, User }
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { addStaff, listStaff, removeStaff, type StaffMember } from "@/lib/ledger";
+import { addStaff, listStaff, removeStaff, setStaffRole, type StaffMember } from "@/lib/ledger";
 
 export default function StaffSettingsPage() {
   const { loading: authLoading } = useAuthGuard({ ownerOnly: true });
 
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
+  const [yourEmail, setYourEmail] = useState<string | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [newRole, setNewRole] = useState<"staff" | "owner">("staff");
+  const [changingId, setChangingId] = useState<string | null>(null);
+
+  async function handleRole(member: StaffMember) {
+    const next = member.role === "owner" ? "staff" : "owner";
+    setChangingId(member.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await setStaffRole(member.id, next);
+      setStaff((prev) => prev.map((m) => (m.id === member.id ? { ...m, role: next } : m)));
+      setNotice(`${member.email} is now ${next === "owner" ? "an owner" : "staff"}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not change that person's role");
+    } finally {
+      setChangingId(null);
+    }
+  }
   const [dataLoading, setDataLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [adding, setAdding] = useState(false);
@@ -33,7 +52,7 @@ export default function StaffSettingsPage() {
     if (authLoading) return;
     let cancelled = false;
     listStaff()
-      .then((r) => { if (!cancelled) { setOwnerEmail(r.ownerEmail); setStaff(r.staff); } })
+      .then((r) => { if (!cancelled) { setOwnerEmail(r.ownerEmail); setYourEmail(r.yourEmail); setStaff(r.staff); } })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load staff"); })
       .finally(() => { if (!cancelled) setDataLoading(false); });
     return () => { cancelled = true; };
@@ -47,7 +66,7 @@ export default function StaffSettingsPage() {
     setError(null);
     setNotice(null);
     try {
-      const member = await addStaff(trimmed);
+      const member = await addStaff(trimmed, newRole);
       setStaff((prev) => [...prev, member]);
       setEmail("");
       setNotice(`${member.email} can now sign in with that email. A code is sent to it each time.`);
@@ -87,11 +106,12 @@ export default function StaffSettingsPage() {
   return (
     <AppShell active="settings">
       <PageHeader
-        title="Staff"
+        title="People"
         back="/settings"
         info={<>
-          <p>Staff can record and view transactions.</p>
-          <p>Only you can void, reconcile, change fees, wallets, staff and your own numbers.</p>
+          <p><b>Staff</b> can record transactions, send screenshots, review drafts, and see balances and history.</p>
+          <p><b>Owners</b> can also void, fix balances, change fees and wallets, edit earnings, and add or remove people.</p>
+          <p>The first owner cannot be removed or changed.</p>
         </>}
       />
 
@@ -115,8 +135,8 @@ export default function StaffSettingsPage() {
               <Crown className="w-4 h-4 text-warning" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-medium truncate">{ownerEmail ?? "You"}</p>
-              <p className="text-[13px] text-muted-foreground">Owner · you</p>
+              <p className="text-[15px] font-medium truncate">{ownerEmail ?? "Owner"}</p>
+              <p className="text-[13px] text-muted-foreground">Owner{ownerEmail && ownerEmail === yourEmail ? " · you" : ""}</p>
             </div>
           </div>
 
@@ -128,9 +148,21 @@ export default function StaffSettingsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-medium truncate">{m.email}</p>
-                  <p className="text-[13px] text-muted-foreground">Staff</p>
+                  <p className="text-[13px] text-muted-foreground">
+                    {m.role === "owner" ? "Owner" : "Staff"}{m.email === yourEmail ? " · you" : ""}
+                  </p>
                 </div>
-                {confirmRemoveId !== m.id && (
+                {confirmRemoveId !== m.id && m.email !== yourEmail && (
+                  <button
+                    type="button"
+                    onClick={() => handleRole(m)}
+                    disabled={changingId === m.id}
+                    className="btn btn-outline btn-sm"
+                  >
+                    {changingId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : m.role === "owner" ? "Make staff" : "Make owner"}
+                  </button>
+                )}
+                {confirmRemoveId !== m.id && m.email !== yourEmail && (
                   <button
                     type="button"
                     onClick={() => setConfirmRemoveId(m.id)}
@@ -182,32 +214,32 @@ export default function StaffSettingsPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="name@example.com"
-            className="w-full rounded-xl bg-muted px-4 py-3 text-[15px]"
+            className="field bg-background"
           />
+          <div role="radiogroup" aria-label="Role" className="grid grid-cols-2 gap-1 rounded-full bg-background p-1">
+            {(["staff", "owner"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={newRole === value}
+                onClick={() => setNewRole(value)}
+                className={`h-11 rounded-full text-[15px] font-medium ${newRole === value ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                {value === "staff" ? "Staff" : "Owner"}
+              </button>
+            ))}
+          </div>
           <button
             type="submit"
             disabled={adding || email.trim() === ""}
             className="btn btn-primary w-full"
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-            Add as staff
+            {newRole === "owner" ? "Add as owner" : "Add as staff"}
           </button>
         </form>
 
-        <div className="rounded-2xl border border-border p-4 space-y-2">
-          <p className="text-[13px] font-semibold">What staff can do</p>
-          <ul className="text-[13px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
-            <li>Record transactions: type them in, send screenshots, confirm drafts.</li>
-            <li>See balances, today&apos;s totals and the history.</li>
-            <li>Discard a draft that was sent by mistake.</li>
-          </ul>
-          <p className="text-[13px] font-semibold pt-1">Only you can</p>
-          <ul className="text-[13px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
-            <li>Void a saved transaction.</li>
-            <li>Correct a balance against a count.</li>
-            <li>Change fees, add or remove wallets, and manage staff.</li>
-          </ul>
-        </div>
       </section>
     </AppShell>
   );

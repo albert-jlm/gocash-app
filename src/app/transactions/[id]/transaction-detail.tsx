@@ -300,7 +300,15 @@ export default function TransactionDetail({
 
         {isVoided && (
           <Link
-            href="/entry"
+            href={`/entry?${new URLSearchParams({
+              type: tx.transaction_type,
+              ...(tx.platform && tx.platform !== "Unknown" ? { platform: tx.platform } : {}),
+              ...(tx.amount > 0 ? { amount: String(tx.amount) } : {}),
+              ...(tx.transfer_to ? { to: tx.transfer_to } : {}),
+              ...(tx.platform_fee > 0 ? { appFee: String(tx.platform_fee) } : {}),
+              ...(tx.reference_number ? { ref: tx.reference_number } : {}),
+              ...(tx.account_number ? { account: tx.account_number } : {}),
+            }).toString()}`}
             className="btn btn-primary w-full"
           >
             Enter it again

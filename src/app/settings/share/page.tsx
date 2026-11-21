@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, AlertCircle, Check, Copy, KeyRound, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { Sheet } from "@/components/sheet";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   createUploadKey, listUploadKeys, revokeUploadKey, SHARE_UPLOAD_URL, type UploadKey,
@@ -92,6 +93,7 @@ export default function ShareSettingsPage() {
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<UploadKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -219,7 +221,7 @@ export default function ShareSettingsPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleRemove(k)}
+                    onClick={() => setRemoving(k)}
                     disabled={removingId === k.id}
                     aria-label={`Remove key ${k.label}`}
                     className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 disabled:opacity-50"
@@ -344,6 +346,27 @@ export default function ShareSettingsPage() {
           </p>
         </div>
       </section>
+      <Sheet open={removing !== null} onClose={() => setRemoving(null)} title={`Remove the key "${removing?.label ?? ""}"?`}>
+        <p className="text-[15px] text-muted-foreground mt-2 mb-5">
+          The phone using this key stops being able to send screenshots straight away. This cannot be undone; you would make a new key.
+        </p>
+        <div className="space-y-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              const target = removing;
+              setRemoving(null);
+              if (target) handleRemove(target);
+            }}
+            className="btn btn-danger w-full"
+          >
+            Remove key
+          </button>
+          <button type="button" onClick={() => setRemoving(null)} className="btn btn-secondary w-full">
+            Keep it
+          </button>
+        </div>
+      </Sheet>
     </AppShell>
   );
 }

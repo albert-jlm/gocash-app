@@ -676,19 +676,22 @@ async function callFunction(name: string, body: Record<string, unknown>) {
 export interface StaffMember {
   id: string;
   email: string;
-  role: "staff";
+  role: "staff" | "owner";
   created_at?: string;
 }
 
-export async function listStaff(): Promise<{ ownerEmail: string | null; staff: StaffMember[] }> {
+export async function listStaff(): Promise<{ ownerEmail: string | null; yourEmail: string | null; staff: StaffMember[] }> {
   const data = await callFunction("manage-staff", { action: "list" });
-  return { ownerEmail: data.owner_email ?? null, staff: data.staff ?? [] };
+  return { ownerEmail: data.owner_email ?? null, yourEmail: data.your_email ?? null, staff: data.staff ?? [] };
 }
 
-/** Creates the person's login if needed and gives it staff access to this shop. */
-export async function addStaff(email: string): Promise<StaffMember> {
-  const data = await callFunction("manage-staff", { action: "add", email });
+export async function addStaff(email: string, role: "staff" | "owner" = "staff"): Promise<StaffMember> {
+  const data = await callFunction("manage-staff", { action: "add", email, role });
   return data.member as StaffMember;
+}
+
+export async function setStaffRole(memberId: string, role: "staff" | "owner"): Promise<void> {
+  await callFunction("manage-staff", { action: "role", member_id: memberId, role });
 }
 
 /** Removes their access, their upload keys and their login. */
