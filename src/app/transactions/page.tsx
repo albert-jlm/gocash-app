@@ -32,13 +32,13 @@ type FilterType = "All" | "Cash In" | "Cash Out" | "Telco Load" | "Bills Payment
 const FILTERS: FilterType[] = ["All", "Cash In", "Cash Out", "Telco Load", "Bills Payment", "Bank Transfer", "Wallet Transfer"];
 
 const TYPE_CONFIG: Record<string, { color: string; bg: string; Icon: React.ElementType }> = {
-  "Cash In":           { color: "#10B981", bg: "rgba(16,185,129,0.12)",  Icon: ArrowDownRight },
-  "Cash Out":          { color: "#EF4444", bg: "rgba(239,68,68,0.12)",   Icon: ArrowUpLeft },
-  "Telco Load":        { color: "#8B5CF6", bg: "rgba(139,92,246,0.12)",  Icon: Phone },
-  "Bills Payment":     { color: "#F59E0B", bg: "rgba(245,158,11,0.12)",  Icon: Zap },
-  "Bank Transfer":     { color: "#3B82F6", bg: "rgba(59,130,246,0.12)",  Icon: Building2 },
-  "Profit Remittance": { color: "#6B7280", bg: "rgba(107,114,128,0.12)", Icon: TrendingDown },
-  "Wallet Transfer":   { color: "#06B6D4", bg: "rgba(6,182,212,0.12)",   Icon: ArrowLeftRight },
+  "Cash In":           { color: "var(--foreground)", bg: "var(--muted)", Icon: ArrowDownRight },
+  "Cash Out":          { color: "var(--foreground)", bg: "var(--muted)", Icon: ArrowUpLeft },
+  "Telco Load":        { color: "var(--foreground)", bg: "var(--muted)", Icon: Phone },
+  "Bills Payment":     { color: "var(--foreground)", bg: "var(--muted)", Icon: Zap },
+  "Bank Transfer":     { color: "var(--foreground)", bg: "var(--muted)", Icon: Building2 },
+  "Profit Remittance": { color: "var(--foreground)", bg: "var(--muted)", Icon: TrendingDown },
+  "Wallet Transfer":   { color: "var(--foreground)", bg: "var(--muted)", Icon: ArrowLeftRight },
 };
 
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ function TransactionsList() {
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -160,8 +160,8 @@ function TransactionsList() {
             className={[
               "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all",
               activeFilter === f
-                ? "bg-emerald-500 text-white shadow-sm shadow-emerald-900/40"
-                : "bg-white/[0.07] text-muted-foreground hover:bg-white/[0.11]",
+                ? "bg-primary text-primary-foreground shadow-sm shadow-none"
+                : "bg-muted text-muted-foreground hover:bg-foreground/10",
             ].join(" ")}
           >
             {f === "All" ? "All" : typeName(f)}
@@ -173,25 +173,25 @@ function TransactionsList() {
       <div className="px-5 pb-32 space-y-5 flex-1">
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-white/[0.05] flex items-center justify-center mb-4">
+            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
               <History className="w-6 h-6 text-muted-foreground/50" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">No transactions yet.</p>
-            <Link href="/entry" className="text-sm text-emerald-400 mt-2 font-medium">
+            <Link href="/entry" className="text-sm text-primary mt-2 font-medium">
               Add your first one →
             </Link>
           </div>
         ) : (
           groups.map((group) => (
             <div key={group.key}>
-              <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">
                 {group.label}
               </h2>
-              <div className="bg-white/[0.04] rounded-2xl overflow-hidden divide-y divide-white/[0.05] border border-white/[0.05]">
+              <div className="bg-muted/60 rounded-2xl overflow-hidden divide-y divide-border border border-border">
                 {group.items.map((tx) => {
                   const cfg = TYPE_CONFIG[tx.transaction_type] ?? {
-                    color: "#6B7280",
-                    bg: "rgba(107,114,128,0.12)",
+                    color: "var(--foreground)",
+                    bg: "var(--muted)",
                     Icon: ArrowDownRight,
                   };
                   const Icon = cfg.Icon;
@@ -202,7 +202,7 @@ function TransactionsList() {
                     <Link
                       key={tx.id}
                       href={isPending ? `/confirm?id=${tx.id}` : `/transactions?id=${tx.id}`}
-                      className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03]"
+                      className="flex items-center gap-3 px-4 py-3.5 active:bg-muted"
                     >
                       {/* Icon */}
                       <div
@@ -217,7 +217,7 @@ function TransactionsList() {
                         <p className="text-sm font-medium truncate">
                           {typeName(tx.transaction_type)}
                         </p>
-                        <p className="text-[11px] text-muted-foreground truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           {tx.transaction_type === "Wallet Transfer"
                             ? `${tx.platform} → ${tx.transfer_to ?? "?"}`
                             : maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
@@ -233,17 +233,17 @@ function TransactionsList() {
                           {/* A draft has earned nothing yet; its fee is worked
                               out when it is confirmed. */}
                           {!isVoided && !isPending && tx.transaction_type !== "Wallet Transfer" && (
-                            <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
+                            <p className="text-xs text-primary font-medium tabular-nums">
                               +₱{tx.net_profit.toFixed(0)}
                             </p>
                           )}
                           {isVoided ? (
-                            <span className="text-[9px] font-bold bg-white/[0.08] text-muted-foreground px-1.5 py-0.5 rounded-full">
+                            <span className="text-xs font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
                               Voided
                             </span>
                           ) : isPending ? (
-                            <span className="flex items-center gap-1 text-[9px] font-bold bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">
-                              <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="flex items-center gap-1 text-xs font-bold bg-warning/20 text-warning px-1.5 py-0.5 rounded-full">
+                              <span className="w-1 h-1 rounded-full bg-warning animate-pulse" />
                               Review
                             </span>
                           ) : (
@@ -278,7 +278,7 @@ export default function TransactionsPage() {
   return (
     <Suspense fallback={
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     }>
       <TransactionsPageInner />

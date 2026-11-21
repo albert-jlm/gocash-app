@@ -54,13 +54,27 @@ UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
   summary and Save lifted above the keyboard (`useKeyboardInset`, not yet
   checked on a real phone); grouped amounts; a disabled Save says what is
   missing.
-- **Phase 2, review screen:** show the receipt image; mark each field read /
-  not found / please check.
-- **Phase 3, legibility and themes:** minimum text size, contrast fixes,
-  signs and icons alongside colour, light theme following the system with a
-  manual switch (about 450 hard-coded dark colours to migrate to tokens).
-- **Phase 4, home and history:** all balances visible without swiping;
-  history status filter, search, day subtotals; drawer count on Home.
+- **Look and feel: approved and applied 2026-11-21.** The operator chose
+  design "Z1": Zether brand colours (navy #1B2E52, ink #0E1626, paper
+  #F5F6F2, electric lime #D4F23A) and type (Instrument Sans for headings and
+  amounts, Hanken Grotesk for body), from `~/zether-website/brand-kit`.
+  Tokens live in `src/app/globals.css`; light and dark both exist, following
+  the phone by default with a switch in Settings (`src/lib/theme.ts`).
+  Hard-coded dark colours were migrated to tokens. Home is rebuilt (total on
+  hand, wallet row, five round actions, drafts row, recent list), `/new`
+  lists every transaction type, and the entry screen has wallet pills and an
+  on-screen keypad (`src/components/amount-keypad.tsx`). Mockup sources are
+  in `~/gocash-mockups/v6`. Lime stays under about 10% of a light screen.
+- **Still in the old layout (tokens only, not redesigned):** the review
+  screen (`confirm-form.tsx`), History, transaction detail, capture, login,
+  onboarding and the Settings sub-pages.
+- **Phase 2, review screen:** rebuild to the mockup (receipt thumbnail, plain
+  rows, only the unread field marked); mark each field read / not found /
+  please check.
+- **Phase 4, home and history:** history status filter, search, day
+  subtotals in the new style; drawer count on Home.
+- Not yet checked on a real phone: the keypad, the theme switch, and
+  `useKeyboardInset`.
 
 Then: the Android share target; GCash samples still missing (load, bills,
 cash-in from bank, any real dark-mode screenshot).

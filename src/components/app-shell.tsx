@@ -16,20 +16,20 @@
  */
 
 import Link from "next/link";
-import { Camera, History, Home, Keyboard, Plus, Settings } from "lucide-react";
+import { Camera, History, Home, Keyboard, ScanLine, Settings } from "lucide-react";
 
 export type NavKey = "home" | "new" | "history" | "settings";
 
-const TABS: { key: NavKey; href: string; label: string; Icon: React.ElementType }[] = [
-  { key: "home",     href: "/",             label: "Home",     Icon: Home },
-  { key: "new",      href: "/entry",        label: "New",      Icon: Plus },
-  { key: "history",  href: "/transactions", label: "History",  Icon: History },
+const TABS: { key: NavKey | "screenshot"; href: string; label: string; Icon: React.ElementType }[] = [
+  { key: "home",       href: "/",             label: "Home",     Icon: Home },
+  { key: "history",    href: "/transactions", label: "History",  Icon: History },
+  { key: "screenshot", href: "/capture",      label: "Scan",     Icon: ScanLine },
   { key: "settings", href: "/settings",     label: "Settings", Icon: Settings },
 ];
 
 const SIDEBAR: { key: NavKey | "screenshot"; href: string; label: string; Icon: React.ElementType }[] = [
   { key: "home",       href: "/",             label: "Home",              Icon: Home },
-  { key: "new",        href: "/entry",        label: "Type a transaction", Icon: Keyboard },
+  { key: "new",        href: "/new",          label: "New transaction",   Icon: Keyboard },
   { key: "screenshot", href: "/capture",      label: "Upload a screenshot", Icon: Camera },
   { key: "history",    href: "/transactions", label: "History",           Icon: History },
   { key: "settings",   href: "/settings",     label: "Settings",          Icon: Settings },
@@ -54,10 +54,9 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col border-r border-white/[0.06] bg-white/[0.02] px-4 py-6">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col border-r border-border bg-muted/60 px-4 py-6">
         <Link href="/" className="px-2 mb-8 block">
-          <p className="text-[11px] font-medium tracking-widest uppercase text-muted-foreground">GoCash</p>
-          <p className="text-lg font-semibold">Tracker</p>
+          <p className="font-heading text-[19px] font-bold tracking-tight">GoCash</p>
         </Link>
         <nav className="flex flex-col gap-1">
           {SIDEBAR.map(({ key, href, label, Icon }) => {
@@ -70,8 +69,8 @@ export function AppShell({
                 className={[
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
                   on
-                    ? "bg-white/[0.08] text-foreground font-medium"
-                    : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+                    ? "bg-muted text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 ].join(" ")}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -98,8 +97,8 @@ export function AppShell({
 
       {/* Phone tab bar */}
       {tabBar && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 pointer-events-none bg-gradient-to-t from-background via-background/95 to-transparent">
-          <nav className="pointer-events-auto mx-auto w-full max-w-[430px] sm:max-w-xl flex items-center justify-around px-5 pb-8 pt-4">
+        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-background border-t border-border pb-[env(safe-area-inset-bottom)]">
+          <nav className="mx-auto w-full max-w-[430px] sm:max-w-xl grid grid-cols-4 h-16">
             {TABS.map(({ key, href, label, Icon }) => {
               const on = key === active;
               return (
@@ -107,10 +106,10 @@ export function AppShell({
                   key={key}
                   href={href}
                   aria-current={on ? "page" : undefined}
-                  className="flex flex-col items-center gap-1 min-w-[48px]"
+                  className="flex flex-col items-center justify-center gap-0.5"
                 >
                   <Icon className={`w-5 h-5 ${on ? "text-foreground" : "text-muted-foreground"}`} />
-                  <span className={`text-[10px] ${on ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                  <span className={`text-xs ${on ? "text-foreground font-semibold" : "text-muted-foreground"}`}>
                     {label}
                   </span>
                 </Link>

@@ -48,9 +48,9 @@ export function describeEffects(postings: readonly Posting[]): Line[] {
 }
 
 const TONE: Record<Line["tone"], string> = {
-  up: "text-emerald-400",
-  down: "text-red-400",
-  earn: "text-emerald-400",
+  up: "text-primary",
+  down: "text-destructive",
+  earn: "text-primary",
   plain: "text-foreground",
 };
 

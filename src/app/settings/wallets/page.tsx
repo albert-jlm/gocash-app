@@ -40,12 +40,12 @@ import { AppShell } from "@/components/app-shell";
 const COLOR_PALETTE = [
   { id: "blue",    gradient: "from-blue-500 via-blue-600 to-blue-700",          accent: "text-blue-400" },
   { id: "purple",  gradient: "from-purple-500 via-purple-600 to-purple-700",    accent: "text-purple-400" },
-  { id: "emerald", gradient: "from-emerald-500 via-emerald-600 to-emerald-700", accent: "text-emerald-400" },
+  { id: "emerald", gradient: "from-emerald-500 via-emerald-600 to-emerald-700", accent: "text-primary" },
   { id: "rose",    gradient: "from-rose-500 via-rose-600 to-rose-700",          accent: "text-rose-400" },
   { id: "orange",  gradient: "from-orange-500 via-orange-600 to-orange-700",    accent: "text-orange-400" },
-  { id: "amber",   gradient: "from-amber-500 via-amber-600 to-amber-700",       accent: "text-amber-400" },
+  { id: "amber",   gradient: "from-amber-500 via-amber-600 to-amber-700",       accent: "text-warning" },
   { id: "cyan",    gradient: "from-cyan-500 via-cyan-600 to-cyan-700",          accent: "text-cyan-400" },
-  { id: "zinc",    gradient: "from-zinc-600 via-zinc-700 to-zinc-800",          accent: "text-zinc-400" },
+  { id: "zinc",    gradient: "from-zinc-600 via-zinc-700 to-zinc-800",          accent: "text-muted-foreground" },
 ] as const;
 
 // Matches the dashboard's wallet cards so one account looks the same everywhere.
@@ -198,7 +198,7 @@ export default function WalletsSettingsPage() {
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -209,7 +209,7 @@ export default function WalletsSettingsPage() {
       <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -222,33 +222,30 @@ export default function WalletsSettingsPage() {
       {/* Account list */}
       <section className="px-5 flex-1 space-y-3 pb-10">
         {notice && (
-          <div className="flex items-start gap-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3">
-            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-emerald-200 leading-relaxed">{notice}</p>
+          <div className="flex items-start gap-2.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3">
+            <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-primary leading-relaxed">{notice}</p>
           </div>
         )}
         {accounts.map((a) => {
-          const color = getColor(a.name);
           const isReconciling = reconcilingId === a.account_id;
           const diff = isReconciling ? differenceMinor(a) : null;
 
           return (
             <div key={a.account_id} className="rounded-2xl overflow-hidden">
               {/* Card header — gradient derived from the account name */}
-              <div className={`relative bg-gradient-to-br ${color.gradient} p-5 overflow-hidden`}>
-                {/* Decorative blur */}
-                <div className="absolute top-0 right-0 w-28 h-28 bg-white/10 rounded-full blur-2xl -translate-y-8 translate-x-8 pointer-events-none" />
+              <div className="relative bg-muted p-5 overflow-hidden">
 
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                      <CreditCard className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 bg-background rounded-full flex items-center justify-center">
+                      <CreditCard className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-white/70 text-xs font-medium">{a.name}</p>
+                      <p className="opacity-75 text-xs font-medium">{a.name}</p>
                       {/* natural_balance, not balance: the sign-corrected figure
                           is the one a human should read. */}
-                      <p className="text-white text-[22px] font-bold tracking-tight tabular-nums leading-tight">
+                      <p className="amount text-[22px] font-semibold tracking-tight leading-tight">
                         {formatPesos(a.natural_balance)}
                       </p>
                     </div>
@@ -257,15 +254,15 @@ export default function WalletsSettingsPage() {
               </div>
 
               {/* Reconciliation */}
-              <div className="bg-white/[0.04] border border-white/[0.05] border-t-0 rounded-b-2xl">
+              <div className="bg-muted/60 border border-border border-t-0 rounded-b-2xl">
                 {isReconciling ? (
                   <div className="p-4 space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         Counted balance
                       </Label>
                       <div className="relative">
-                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none ${color.accent}`}>
+                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-muted-foreground`}>
                           ₱
                         </span>
                         <Input
@@ -274,35 +271,35 @@ export default function WalletsSettingsPage() {
                           value={countedValue}
                           onChange={(e) => setCountedValue(e.target.value)}
                           autoFocus
-                          className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 text-sm tabular-nums"
+                          className="bg-muted border-border h-11 rounded-xl pl-7 text-sm tabular-nums"
                         />
                       </div>
                     </div>
 
                     {/* The count against the books */}
-                    <div className="rounded-xl bg-white/[0.04] px-3.5 py-3 space-y-1.5">
+                    <div className="rounded-xl bg-muted/60 px-3.5 py-3 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-muted-foreground">Book balance</span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">Book balance</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
                           {formatPesos(a.natural_balance)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-muted-foreground">Difference</span>
+                        <span className="text-xs text-muted-foreground">Difference</span>
                         <span
                           className={[
                             "text-[13px] font-semibold tabular-nums",
                             diff === null || diff === 0
                               ? "text-muted-foreground"
                               : diff > 0
-                                ? "text-emerald-400"
-                                : "text-red-400",
+                                ? "text-primary"
+                                : "text-destructive",
                           ].join(" ")}
                         >
                           {diff === null ? "—" : (diff > 0 ? "+" : "") + formatMinorPesos(diff)}
                         </span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground/60 leading-relaxed pt-0.5">
+                      <p className="text-xs text-muted-foreground/60 leading-relaxed pt-0.5">
                         {diff === null || diff === 0
                           ? "Your count matches the ledger — there is nothing to post."
                           : diff > 0
@@ -312,7 +309,7 @@ export default function WalletsSettingsPage() {
                     </div>
 
                     {error && (
-                      <div className="flex items-start gap-2 text-xs text-red-400">
+                      <div className="flex items-start gap-2 text-xs text-destructive">
                         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                         <span className="leading-relaxed">{error}</span>
                       </div>
@@ -322,14 +319,14 @@ export default function WalletsSettingsPage() {
                       <button
                         onClick={() => submitReconcile(a)}
                         disabled={saving || diff === null || diff === 0}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm transition-colors"
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         Post correction
                       </button>
                       <button
                         onClick={cancelReconcile}
-                        className="px-4 py-2.5 bg-white/[0.07] text-muted-foreground font-medium rounded-xl text-sm"
+                        className="px-4 py-2.5 bg-muted text-muted-foreground font-medium rounded-xl text-sm"
                       >
                         Cancel
                       </button>
@@ -338,7 +335,7 @@ export default function WalletsSettingsPage() {
                 ) : (
                   <button
                     onClick={() => startReconcile(a)}
-                    className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm text-muted-foreground hover:bg-white/[0.03] transition-colors"
+                    className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm text-muted-foreground hover:bg-muted transition-colors"
                   >
                     <Scale className="w-3.5 h-3.5 flex-shrink-0" />
                     Reconcile against a count →
@@ -349,7 +346,7 @@ export default function WalletsSettingsPage() {
           );
         })}
 
-        <p className="text-[11px] text-muted-foreground/50 text-center pt-4 leading-relaxed">
+        <p className="text-xs text-muted-foreground/50 text-center pt-4 leading-relaxed">
           Balances are worked out from your transactions, so they cannot be typed over.
           When a count disagrees with the ledger, post the difference here — it stays on
           the record, so you can always see why a balance is what it is.

@@ -137,7 +137,7 @@ export default function OnboardingPage() {
   if (checkingSession) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -146,8 +146,8 @@ export default function OnboardingPage() {
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[430px] mx-auto px-5 sm:justify-center sm:pb-10">
       {/* Progress dots */}
       <div className="flex items-center justify-center gap-2 pt-14 lg:pt-10 pb-8">
-        <span className={`w-2 h-2 rounded-full ${step === 1 ? "bg-emerald-400" : "bg-emerald-400/40"}`} />
-        <span className={`w-2 h-2 rounded-full ${step === 2 ? "bg-emerald-400" : "bg-white/20"}`} />
+        <span className={`w-2 h-2 rounded-full ${step === 1 ? "bg-primary" : "bg-primary/40"}`} />
+        <span className={`w-2 h-2 rounded-full ${step === 2 ? "bg-primary" : "bg-foreground/10"}`} />
       </div>
 
       {step === 1 ? (
@@ -162,7 +162,7 @@ export default function OnboardingPage() {
 
           <div className="space-y-4 flex-1 sm:flex-none sm:mb-8">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Your name
               </Label>
               <Input
@@ -170,12 +170,12 @@ export default function OnboardingPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Maria Santos"
                 autoFocus
-                className="bg-white/[0.07] border-white/[0.1] h-12 rounded-xl text-sm"
+                className="bg-muted border-border h-12 rounded-xl text-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Phone number{" "}
                 <span className="normal-case tracking-normal font-normal text-muted-foreground/60">
                   (optional)
@@ -186,7 +186,7 @@ export default function OnboardingPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="09XX XXX XXXX"
-                className="bg-white/[0.07] border-white/[0.1] h-12 rounded-xl text-sm"
+                className="bg-muted border-border h-12 rounded-xl text-sm"
               />
             </div>
           </div>
@@ -195,7 +195,7 @@ export default function OnboardingPage() {
             <button
               onClick={() => setStep(2)}
               disabled={!name.trim()}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-500 disabled:opacity-50 text-white font-semibold py-4 rounded-2xl text-[15px]"
+              className="w-full flex items-center justify-center gap-2 bg-primary disabled:opacity-50 text-primary-foreground font-semibold py-4 rounded-2xl text-[15px]"
             >
               Next
               <ChevronRight className="w-5 h-5" />
@@ -206,8 +206,8 @@ export default function OnboardingPage() {
         /* ── Step 2: Opening balances ── */
         <div className="flex-1 sm:flex-none flex flex-col">
           <div className="mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-4">
-              <Wallet className="w-6 h-6 text-emerald-400" />
+            <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center mb-4">
+              <Wallet className="w-6 h-6 text-primary" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Your current balances</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -217,13 +217,13 @@ export default function OnboardingPage() {
 
           <div className="space-y-4 flex-1 sm:flex-none sm:mb-8">
             {[
-              { label: "GCash wallet", value: gcashBalance, onChange: setGcashBalance, color: "text-blue-400" },
-              { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-green-400" },
-              { label: "MariBank wallet", value: maribankBalance, onChange: setMaribankBalance, color: "text-purple-400" },
-              { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-emerald-400" },
+              { label: "GCash wallet", value: gcashBalance, onChange: setGcashBalance, color: "text-foreground" },
+              { label: "Maya wallet", value: mayaBalance, onChange: setMayaBalance, color: "text-foreground" },
+              { label: "MariBank wallet", value: maribankBalance, onChange: setMaribankBalance, color: "text-foreground" },
+              { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-primary" },
             ].map(({ label, value, onChange, color }) => (
               <div key={label} className="space-y-1.5">
-                <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   {label}
                 </Label>
                 <div className="relative">
@@ -236,26 +236,26 @@ export default function OnboardingPage() {
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder="0.00"
-                    className="bg-white/[0.07] border-white/[0.1] h-12 rounded-xl pl-7 text-sm tabular-nums"
+                    className="bg-muted border-border h-12 rounded-xl pl-7 text-sm tabular-nums"
                   />
                 </div>
               </div>
             ))}
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
+            <p className="text-xs text-muted-foreground leading-relaxed pt-1">
               Not sure? Enter 0 for now and set it in Settings → Wallets.
             </p>
           </div>
 
           {error && (
-            <p className="text-xs text-red-400 px-1 pb-2">{error}</p>
+            <p className="text-xs text-destructive px-1 pb-2">{error}</p>
           )}
 
           <div className="py-8 space-y-3">
             <button
               onClick={handleFinish}
               disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-500 disabled:opacity-60 text-white font-semibold py-4 rounded-2xl text-[15px]"
+              className="w-full flex items-center justify-center gap-2 bg-primary disabled:opacity-60 text-primary-foreground font-semibold py-4 rounded-2xl text-[15px]"
             >
               {saving ? (
                 <>

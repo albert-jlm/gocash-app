@@ -69,7 +69,7 @@ export function CashOutFeeChoice({
 
   return (
     <div className="space-y-2 pt-1" role="radiogroup" aria-label="Is your fee already inside this amount?">
-      <p className="text-[11px] text-muted-foreground">Is your fee already inside this amount?</p>
+      <p className="text-xs text-muted-foreground">Is your fee already inside this amount?</p>
       {rows.map((row) => {
         const selected = value === row.includes;
         return (
@@ -80,19 +80,19 @@ export function CashOutFeeChoice({
             aria-checked={selected}
             onClick={() => onChange(row.includes)}
             className={`w-full flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-              selected ? "border-emerald-500/50 bg-emerald-500/[0.08]" : "border-white/[0.08] bg-white/[0.04]"
+              selected ? "border-primary/50 bg-primary/[0.08]" : "border-border bg-muted/60"
             }`}
           >
             <span
               className={`w-4 h-4 rounded-full flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                selected ? "bg-emerald-500" : "bg-white/[0.12]"
+                selected ? "bg-primary" : "bg-foreground/10"
               }`}
             >
-              {selected && <Check className="w-3 h-3 text-black" />}
+              {selected && <Check className="w-3 h-3 text-primary-foreground" />}
             </span>
             <span className="min-w-0">
               <span className="block text-xs font-medium">{row.title}</span>
-              <span className="block text-[11px] text-muted-foreground">{row.detail}</span>
+              <span className="block text-xs text-muted-foreground">{row.detail}</span>
             </span>
           </button>
         );

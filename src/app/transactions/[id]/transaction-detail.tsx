@@ -15,13 +15,13 @@ import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
-  "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
-  "Cash Out":          { color: "#EF4444", Icon: ArrowUpLeft },
-  "Telco Load":        { color: "#8B5CF6", Icon: Phone },
-  "Bills Payment":     { color: "#F59E0B", Icon: Zap },
-  "Bank Transfer":     { color: "#3B82F6", Icon: Building2 },
-  "Profit Remittance": { color: "#6B7280", Icon: TrendingDown },
-  "Wallet Transfer":   { color: "#06B6D4", Icon: ArrowLeftRight },
+  "Cash In":           { color: "var(--foreground)", Icon: ArrowDownRight },
+  "Cash Out":          { color: "var(--foreground)", Icon: ArrowUpLeft },
+  "Telco Load":        { color: "var(--foreground)", Icon: Phone },
+  "Bills Payment":     { color: "var(--foreground)", Icon: Zap },
+  "Bank Transfer":     { color: "var(--foreground)", Icon: Building2 },
+  "Profit Remittance": { color: "var(--foreground)", Icon: TrendingDown },
+  "Wallet Transfer":   { color: "var(--foreground)", Icon: ArrowLeftRight },
 };
 
 interface TxDetail {
@@ -44,7 +44,7 @@ interface TxDetail {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
       <p className="text-sm">{value}</p>
     </div>
   );
@@ -119,7 +119,7 @@ export default function TransactionDetail({
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -128,15 +128,15 @@ export default function TransactionDetail({
     return (
       <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto px-5">
         <div className="text-center space-y-3">
-          <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
-          <p className="text-sm text-red-400">{fetchError ?? "Transaction not found"}</p>
-          <Link href="/transactions" className="text-sm text-blue-400 block">Back to history</Link>
+          <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+          <p className="text-sm text-destructive">{fetchError ?? "Transaction not found"}</p>
+          <Link href="/transactions" className="text-sm text-primary block">Back to history</Link>
         </div>
       </div>
     );
   }
 
-  const cfg = TYPE_CONFIG[tx.transaction_type] ?? { color: "#6B7280", Icon: ArrowDownRight };
+  const cfg = TYPE_CONFIG[tx.transaction_type] ?? { color: "var(--foreground)", Icon: ArrowDownRight };
   const Icon = cfg.Icon;
   const isVoided = tx.status === "voided";
   const isTransfer = tx.transaction_type === "Wallet Transfer";
@@ -150,7 +150,7 @@ export default function TransactionDetail({
       <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/transactions"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -164,9 +164,9 @@ export default function TransactionDetail({
 
       {duplicate && (
         <section className="px-5 mb-4">
-          <div className="flex items-start gap-2.5 bg-amber-500/[0.10] border border-amber-500/20 rounded-2xl px-4 py-3">
-            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-200 leading-relaxed">
+          <div className="flex items-start gap-2.5 bg-warning/[0.10] border border-warning/20 rounded-2xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-warning leading-relaxed">
               This receipt was already recorded, so nothing new was added. This is
               the transaction it matches.
             </p>
@@ -175,10 +175,10 @@ export default function TransactionDetail({
       )}
 
       <section className="px-5 mb-5">
-        <div className="bg-white/[0.05] rounded-2xl p-5 flex items-center gap-4">
+        <div className="bg-muted/60 rounded-2xl p-5 flex items-center gap-4">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: cfg.color + "20" }}
+            style={{ backgroundColor: "var(--muted)" }}
           >
             <Icon className="w-6 h-6" style={{ color: cfg.color }} />
           </div>
@@ -193,18 +193,18 @@ export default function TransactionDetail({
               ₱{tx.amount.toLocaleString("en-PH")}
             </p>
             {isVoided ? (
-              <p className="text-xs font-semibold text-amber-400">Voided</p>
+              <p className="text-xs font-semibold text-warning">Voided</p>
             ) : isTransfer ? (
               <p className="text-xs text-muted-foreground">own money, nothing earned</p>
             ) : (
-              <p className="text-sm text-emerald-400 font-semibold tabular-nums">+₱{tx.net_profit.toFixed(2)}</p>
+              <p className="text-sm text-primary font-semibold tabular-nums">+₱{tx.net_profit.toFixed(2)}</p>
             )}
           </div>
         </div>
       </section>
 
       <section className="px-5 flex-1">
-        <div className="bg-white/[0.05] rounded-2xl p-4 space-y-4">
+        <div className="bg-muted/60 rounded-2xl p-4 space-y-4">
           {isTransfer && (
             <>
               <Field label="From" value={tx.platform === "Cash" ? "Cash drawer" : tx.platform} />
@@ -257,7 +257,7 @@ export default function TransactionDetail({
           <button
             type="button"
             onClick={() => { setAskVoid(true); setVoidError(null); }}
-            className="w-full flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 font-semibold py-3.5 rounded-2xl text-sm"
+            className="w-full flex items-center justify-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive font-semibold py-3.5 rounded-2xl text-sm"
           >
             <Undo2 className="w-4 h-4" />
             Void this transaction
@@ -265,7 +265,7 @@ export default function TransactionDetail({
         )}
 
         {tx.status === "confirmed" && role === "owner" && askVoid && (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 space-y-3">
+          <div className="rounded-2xl border border-destructive/20 bg-destructive/[0.06] p-4 space-y-3">
             <p className="text-sm font-semibold">Void this transaction?</p>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Your balances go back to what they were before it. It stays in your
@@ -278,15 +278,15 @@ export default function TransactionDetail({
               onChange={(e) => setVoidReason(e.target.value)}
               placeholder="Reason (optional), e.g. wrong amount"
               maxLength={120}
-              className="w-full rounded-xl bg-white/[0.07] px-3 py-2.5 text-sm"
+              className="w-full rounded-xl bg-muted px-3 py-2.5 text-sm"
             />
-            {voidError && <p className="text-xs text-red-400">{voidError}</p>}
+            {voidError && <p className="text-xs text-destructive">{voidError}</p>}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setAskVoid(false)}
                 disabled={voiding}
-                className="bg-white/[0.07] text-muted-foreground font-medium py-3 rounded-xl text-sm disabled:opacity-50"
+                className="bg-muted text-muted-foreground font-medium py-3 rounded-xl text-sm disabled:opacity-50"
               >
                 Keep it
               </button>
@@ -294,7 +294,7 @@ export default function TransactionDetail({
                 type="button"
                 onClick={handleVoid}
                 disabled={voiding}
-                className="flex items-center justify-center gap-2 bg-red-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50"
+                className="flex items-center justify-center gap-2 bg-destructive text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50"
               >
                 {voiding ? <><Loader2 className="w-4 h-4 animate-spin" /> Voiding…</> : "Yes, void it"}
               </button>
@@ -311,7 +311,7 @@ export default function TransactionDetail({
         {isVoided && (
           <Link
             href="/entry"
-            className="w-full flex items-center justify-center bg-emerald-500 text-white font-semibold py-3.5 rounded-2xl text-sm"
+            className="w-full flex items-center justify-center bg-primary text-primary-foreground font-semibold py-3.5 rounded-2xl text-sm"
           >
             Enter it again
           </Link>
@@ -319,7 +319,7 @@ export default function TransactionDetail({
 
         <Link
           href="/transactions"
-          className="w-full flex items-center justify-center bg-white/[0.07] text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"
+          className="w-full flex items-center justify-center bg-muted text-muted-foreground font-medium py-3.5 rounded-2xl text-sm"
         >
           Back to History
         </Link>

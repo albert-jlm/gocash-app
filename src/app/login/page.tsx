@@ -85,8 +85,8 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <div className="flex min-h-screen bg-[#0a0a0a] items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+      <div className="flex min-h-screen bg-background items-center justify-center">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -95,12 +95,12 @@ export default function LoginPage() {
   // are one group, centred, because a form pinned to the bottom of a tall
   // window reads as a stretched phone screen.
   return (
-    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-foreground max-w-[430px] mx-auto px-5 relative overflow-hidden sm:justify-center">
+    <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[430px] mx-auto px-5 relative overflow-hidden sm:justify-center">
       {/* Ambient glow behind logo */}
       <div
         className="absolute top-[15%] sm:top-1/4 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none"
         style={{
-          background: "radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)",
+          background: "radial-gradient(circle, transparent 0%, transparent 70%)",
         }}
       />
 
@@ -108,11 +108,11 @@ export default function LoginPage() {
       <div className="flex-1 sm:flex-none flex flex-col items-center justify-center pb-6 sm:pb-10 relative z-10">
         {/* Logo */}
         <div className="relative mb-6">
-          <div className="w-[72px] h-[72px] rounded-[22px] bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
-            <span className="text-[28px] font-black text-white tracking-tight">G</span>
+          <div className="w-[72px] h-[72px] rounded-[22px] bg-primary flex items-center justify-center shadow-lg shadow-none">
+            <span className="text-[28px] font-black text-foreground tracking-tight">G</span>
           </div>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#0a0a0a] flex items-center justify-center">
-            <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-background flex items-center justify-center">
+            <div className="w-3.5 h-3.5 rounded-full bg-primary shadow-sm shadow-none" />
           </div>
         </div>
 
@@ -124,12 +124,12 @@ export default function LoginPage() {
 
       {/* Form card */}
       <div className="relative z-10 pb-16 sm:pb-0">
-        <div className="bg-white/[0.04] border border-white/[0.08] rounded-3xl p-5">
+        <div className="bg-muted/60 border border-border rounded-3xl p-5">
           {sent ? (
             <form onSubmit={handleVerifyCode} className="space-y-4">
               <div className="flex flex-col items-center gap-3 pb-2">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                  <KeyRound className="w-6 h-6 text-emerald-400" />
+                <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center">
+                  <KeyRound className="w-6 h-6 text-primary" />
                 </div>
                 <div className="text-center">
                   <p className="font-semibold mb-1">Enter your code</p>
@@ -142,7 +142,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Sign-in code
                 </Label>
                 <Input
@@ -155,18 +155,18 @@ export default function LoginPage() {
                   placeholder="000000"
                   required
                   autoFocus
-                  className="bg-white/[0.06] border-white/[0.1] h-12 rounded-xl text-center text-xl tracking-[0.5em] font-mono focus:border-emerald-500/50 focus:bg-white/[0.08] transition-colors"
+                  className="bg-muted border-border h-12 rounded-xl text-center text-xl tracking-[0.5em] font-mono focus:border-primary/50 focus:bg-muted transition-colors"
                 />
               </div>
 
               {error && (
-                <p className="text-xs text-red-400 px-1">{error}</p>
+                <p className="text-xs text-destructive px-1">{error}</p>
               )}
 
               <button
                 type="submit"
                 disabled={loading || code.length < 6}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-2xl text-[15px] transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-semibold py-3.5 rounded-2xl text-[15px] transition-colors"
               >
                 {loading ? (
                   <>
@@ -189,7 +189,7 @@ export default function LoginPage() {
           ) : (
             <form onSubmit={handleSendLink} className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Email address
                 </Label>
                 <div className="relative">
@@ -201,19 +201,19 @@ export default function LoginPage() {
                     placeholder="you@example.com"
                     required
                     autoComplete="email"
-                    className="bg-white/[0.06] border-white/[0.1] h-12 rounded-xl pl-10 text-sm focus:border-emerald-500/50 focus:bg-white/[0.08] transition-colors"
+                    className="bg-muted border-border h-12 rounded-xl pl-10 text-sm focus:border-primary/50 focus:bg-muted transition-colors"
                   />
                 </div>
               </div>
 
               {error && (
-                <p className="text-xs text-red-400 px-1">{error}</p>
+                <p className="text-xs text-destructive px-1">{error}</p>
               )}
 
               <button
                 type="submit"
                 disabled={loading || !email}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-2xl text-[15px] transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground font-semibold py-3.5 rounded-2xl text-[15px] transition-colors"
               >
                 {loading ? (
                   <>
@@ -225,7 +225,7 @@ export default function LoginPage() {
                 )}
               </button>
 
-              <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
+              <p className="text-xs text-muted-foreground/60 text-center leading-relaxed">
                 No password needed — we&apos;ll email you a sign-in code
               </p>
             </form>

@@ -72,7 +72,7 @@ async function mock(page) {
   const browser = await chromium.launch({ executablePath: CHROME });
   const shots = (process.argv[4] || '/,/transactions,/entry,/settings,/settings/wallets,/confirm?id=t2,/confirm?id=t1,/transactions?id=t3,/capture,/settings/platforms,/settings/rules').split(',');
   for (const [label, vw, vh] of [['phone', 390, 844], ['desktop', 1440, 900], ['tablet', 820, 1100]]) {
-    const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1, colorScheme: process.env.PREVIEW_SCHEME === 'dark' ? 'dark' : 'light' });
     await ctx.addInitScript(s => { localStorage.setItem('sb-gocash-api-auth-token', JSON.stringify(s)); }, session);
     const page = await ctx.newPage();
     const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 160)); });

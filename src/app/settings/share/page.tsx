@@ -31,11 +31,11 @@ function CopyRow({ label, value, secret = false }: { label: string; value: strin
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
       <div className="flex items-stretch gap-2">
         <code
-          className={`flex-1 min-w-0 rounded-xl bg-black/40 border border-white/[0.08] px-3 py-2.5 text-[11px] break-all select-all ${
-            secret ? "text-amber-200" : "text-foreground"
+          className={`flex-1 min-w-0 rounded-xl bg-black/40 border border-border px-3 py-2.5 text-xs break-all select-all ${
+            secret ? "text-warning" : "text-foreground"
           }`}
         >
           {value}
@@ -44,9 +44,9 @@ function CopyRow({ label, value, secret = false }: { label: string; value: strin
           type="button"
           onClick={copy}
           aria-label={`Copy ${label}`}
-          className="px-3 rounded-xl bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="px-3 rounded-xl bg-muted flex items-center justify-center flex-shrink-0"
         >
-          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+          {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
         </button>
       </div>
     </div>
@@ -63,7 +63,7 @@ function Step({ n, title, children }: { n: string; title: string; children: Reac
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold flex items-baseline gap-2">
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] flex-shrink-0">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex-shrink-0">
           {n}
         </span>
         {title}
@@ -134,7 +134,7 @@ export default function ShareSettingsPage() {
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -146,7 +146,7 @@ export default function ShareSettingsPage() {
       <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -158,17 +158,17 @@ export default function ShareSettingsPage() {
 
       <section className="px-5 flex-1 space-y-4 pb-10">
         {error && (
-          <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300 leading-relaxed">{error}</p>
+          <div className="flex items-start gap-2.5 bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-destructive leading-relaxed">{error}</p>
           </div>
         )}
 
         {/* ----- 1. the key ----- */}
-        <div className="bg-white/[0.05] rounded-2xl p-4 space-y-3">
+        <div className="bg-muted/60 rounded-2xl p-4 space-y-3">
           <div>
             <p className="text-sm font-semibold">1. Make a key for this phone</p>
-            <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1">
               The key lets the phone send screenshots in as drafts. It cannot see
               balances or save anything: a draft counts for nothing until someone
               confirms it in the app.
@@ -176,8 +176,8 @@ export default function ShareSettingsPage() {
           </div>
 
           {newKey ? (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3 space-y-3">
-              <p className="text-[11px] text-amber-200 leading-relaxed">
+            <div className="rounded-xl border border-warning/25 bg-warning/[0.07] p-3 space-y-3">
+              <p className="text-xs text-warning leading-relaxed">
                 Copy this now. It is shown only once. If you lose it, remove it
                 below and make another.
               </p>
@@ -185,7 +185,7 @@ export default function ShareSettingsPage() {
               <button
                 type="button"
                 onClick={() => setNewKey(null)}
-                className="text-[11px] text-muted-foreground underline"
+                className="text-xs text-muted-foreground underline"
               >
                 I&apos;ve copied it. Hide the key
               </button>
@@ -198,12 +198,12 @@ export default function ShareSettingsPage() {
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="Name it, e.g. Shop iPhone"
                 maxLength={60}
-                className="flex-1 min-w-0 rounded-xl bg-white/[0.07] px-3 py-2.5 text-sm"
+                className="flex-1 min-w-0 rounded-xl bg-muted px-3 py-2.5 text-sm"
               />
               <button
                 type="submit"
                 disabled={creating}
-                className="flex items-center gap-2 bg-emerald-500 text-white font-semibold px-4 rounded-xl text-sm disabled:opacity-50 flex-shrink-0"
+                className="flex items-center gap-2 bg-primary text-primary-foreground font-semibold px-4 rounded-xl text-sm disabled:opacity-50 flex-shrink-0"
               >
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
                 Make key
@@ -212,12 +212,12 @@ export default function ShareSettingsPage() {
           )}
 
           {keys.length > 0 && (
-            <div className="rounded-xl bg-black/20 divide-y divide-white/[0.06]">
+            <div className="rounded-xl bg-black/20 divide-y divide-border">
               {keys.map((k) => (
                 <div key={k.id} className="flex items-center gap-3 px-3 py-2.5">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate">{k.label}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {k.key_prefix}… · {when(k.last_used_at)}
                     </p>
                   </div>
@@ -226,7 +226,7 @@ export default function ShareSettingsPage() {
                     onClick={() => handleRemove(k)}
                     disabled={removingId === k.id}
                     aria-label={`Remove key ${k.label}`}
-                    className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+                    className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0 disabled:opacity-50"
                   >
                     {removingId === k.id
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -239,10 +239,10 @@ export default function ShareSettingsPage() {
         </div>
 
         {/* ----- 2. the shortcut ----- */}
-        <div className="bg-white/[0.05] rounded-2xl p-4 space-y-4">
+        <div className="bg-muted/60 rounded-2xl p-4 space-y-4">
           <div>
             <p className="text-sm font-semibold">2. Build the Shortcut on your iPhone</p>
-            <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1">
               Once, in Apple&apos;s Shortcuts app. Open this page on the iPhone so
               you can copy the two values below.
             </p>
@@ -251,7 +251,7 @@ export default function ShareSettingsPage() {
           <CopyRow label="URL" value={SHARE_UPLOAD_URL} />
           <CopyRow label="Authorization header value" value={headerValue} secret={newKey !== null} />
 
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             You add four actions, in this order. To add one, tap the search bar
             at the bottom of the Shortcuts editor, type its name and tap it.
             The wording below is from recent iOS versions and may differ slightly on yours.
@@ -300,7 +300,7 @@ export default function ShareSettingsPage() {
 
           <div className="rounded-xl bg-black/20 p-3 space-y-1.5">
             <p className="text-xs font-semibold">If it doesn&apos;t work</p>
-            <ul className="text-[11px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
+            <ul className="text-xs text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
               <li><B>&quot;The upload key is missing&quot;</B>: the header key isn&apos;t exactly Authorization, or the value doesn&apos;t start with Bearer and a space.</li>
               <li><B>&quot;This upload key is not valid any more&quot;</B>: the key was mistyped or removed. Make a new one above and paste it again.</li>
               <li><B>&quot;No image arrived&quot;</B>: Request Body isn&apos;t set to File, or File isn&apos;t Converted Image.</li>
@@ -311,7 +311,7 @@ export default function ShareSettingsPage() {
         </div>
 
         {/* ----- 3. using it ----- */}
-        <div className="rounded-2xl border border-white/[0.06] p-4 space-y-2">
+        <div className="rounded-2xl border border-border p-4 space-y-2">
           <p className="text-sm font-semibold">3. Use it</p>
           <ol className="text-xs text-muted-foreground leading-relaxed list-decimal pl-4 space-y-1.5">
             <li>Take the screenshot in GCash, Maya or your bank app.</li>
@@ -321,7 +321,7 @@ export default function ShareSettingsPage() {
             </li>
             <li>A notification says what was read. Open GoCash and confirm it under &quot;Waiting for you&quot;.</li>
           </ol>
-          <p className="text-[11px] text-muted-foreground/70 leading-relaxed pt-1">
+          <p className="text-xs text-muted-foreground/70 leading-relaxed pt-1">
             A screenshot is a record, not proof that money arrived. Check the
             wallet itself before handing over cash.
           </p>

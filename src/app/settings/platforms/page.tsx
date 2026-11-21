@@ -167,7 +167,7 @@ export default function PlatformsSettingsPage() {
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -181,7 +181,7 @@ export default function PlatformsSettingsPage() {
       <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -194,9 +194,9 @@ export default function PlatformsSettingsPage() {
       <section className="px-5 flex-1 space-y-3 pb-10">
         {/* Success banner */}
         {successMsg && (
-          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
-            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <p className="text-sm text-emerald-400 font-medium">{successMsg}</p>
+          <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-4 py-2.5">
+            <Check className="w-4 h-4 text-primary flex-shrink-0" />
+            <p className="text-sm text-primary font-medium">{successMsg}</p>
           </div>
         )}
 
@@ -208,15 +208,15 @@ export default function PlatformsSettingsPage() {
           return (
             <div
               key={a.id}
-              className="flex items-center gap-3 bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3.5"
+              className="flex items-center gap-3 bg-muted/60 border border-border rounded-2xl px-4 py-3.5"
             >
-              <div className="w-9 h-9 rounded-xl bg-white/[0.08] flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
                 <CreditCard className="w-4 h-4 text-muted-foreground" />
               </div>
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold">{a.name}</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {isBuiltIn ? "Built-in" : "Custom platform"}
                 </p>
               </div>
@@ -226,12 +226,12 @@ export default function PlatformsSettingsPage() {
                   onClick={() => deactivatePlatform(a)}
                   disabled={isDeactivating}
                   title="Deactivate — past transactions are kept"
-                  className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                  className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center hover:bg-warning/20 transition-colors disabled:opacity-50"
                 >
                   {isDeactivating ? (
-                    <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 text-warning animate-spin" />
                   ) : (
-                    <Archive className="w-3.5 h-3.5 text-amber-400" />
+                    <Archive className="w-3.5 h-3.5 text-warning" />
                   )}
                 </button>
               )}
@@ -241,22 +241,22 @@ export default function PlatformsSettingsPage() {
 
         {/* Cash account — always shown, cannot be deactivated */}
         {cashAccount && (
-          <div className="flex items-center gap-3 bg-white/[0.04] border border-white/[0.06] rounded-2xl px-4 py-3.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <CreditCard className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center gap-3 bg-muted/60 border border-border rounded-2xl px-4 py-3.5">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <CreditCard className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">Cash</p>
-              <p className="text-[11px] text-muted-foreground">Physical cash register</p>
+              <p className="text-xs text-muted-foreground">Physical cash register</p>
             </div>
           </div>
         )}
 
         {/* Add Platform */}
         {showAdd ? (
-          <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+          <div className="bg-muted/60 border border-border rounded-2xl p-4 space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Platform name
               </Label>
               <Input
@@ -264,7 +264,7 @@ export default function PlatformsSettingsPage() {
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="e.g. Maya, PayMaya"
                 autoFocus
-                className="bg-white/[0.07] border-white/[0.1] h-10 rounded-xl text-sm"
+                className="bg-muted border-border h-10 rounded-xl text-sm"
               />
             </div>
 
@@ -275,13 +275,13 @@ export default function PlatformsSettingsPage() {
               in Settings → Wallets, where a count against an empty ledger posts
               exactly that.
             */}
-            <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+            <p className="text-xs text-muted-foreground/60 leading-relaxed">
               New platforms start at ₱0.00. Set the opening balance in
               Settings → Wallets by reconciling against what you have counted.
             </p>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-red-400">
+              <div className="flex items-center gap-2 text-xs text-destructive">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                 {error}
               </div>
@@ -291,7 +291,7 @@ export default function PlatformsSettingsPage() {
               <button
                 onClick={addPlatform}
                 disabled={adding}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm transition-colors"
               >
                 {adding ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -302,7 +302,7 @@ export default function PlatformsSettingsPage() {
               </button>
               <button
                 onClick={() => { setShowAdd(false); setError(null); setNewName(""); }}
-                className="px-4 py-2.5 bg-white/[0.07] text-muted-foreground font-medium rounded-xl text-sm"
+                className="px-4 py-2.5 bg-muted text-muted-foreground font-medium rounded-xl text-sm"
               >
                 Cancel
               </button>
@@ -311,14 +311,14 @@ export default function PlatformsSettingsPage() {
         ) : (
           <button
             onClick={() => { setShowAdd(true); setError(null); }}
-            className="w-full flex items-center justify-center gap-2 bg-white/[0.04] border border-dashed border-white/[0.1] rounded-2xl py-3.5 text-sm text-muted-foreground hover:bg-white/[0.06] transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-muted/60 border border-dashed border-border rounded-2xl py-3.5 text-sm text-muted-foreground hover:bg-muted transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add a new platform
           </button>
         )}
 
-        <p className="text-[11px] text-muted-foreground/50 text-center pt-4 leading-relaxed">
+        <p className="text-xs text-muted-foreground/50 text-center pt-4 leading-relaxed">
           Each platform gets its own account and profit rules.
           Platforms are deactivated rather than deleted, so past transactions keep
           their history. Built-in platforms (GCash, MariBank) stay put.

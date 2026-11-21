@@ -76,7 +76,7 @@ export default function StaffSettingsPage() {
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -86,7 +86,7 @@ export default function StaffSettingsPage() {
       <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -98,45 +98,45 @@ export default function StaffSettingsPage() {
 
       <section className="px-5 flex-1 space-y-4 pb-10">
         {error && (
-          <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300 leading-relaxed">{error}</p>
+          <div className="flex items-start gap-2.5 bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-destructive leading-relaxed">{error}</p>
           </div>
         )}
         {notice && (
-          <div className="flex items-start gap-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3">
-            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-emerald-200 leading-relaxed">{notice}</p>
+          <div className="flex items-start gap-2.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3">
+            <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-primary leading-relaxed">{notice}</p>
           </div>
         )}
 
-        <div className="bg-white/[0.05] rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
+        <div className="bg-muted/60 rounded-2xl overflow-hidden divide-y divide-border">
           <div className="flex items-center gap-3 px-4 py-3.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-              <Crown className="w-4 h-4 text-amber-300" />
+            <div className="w-9 h-9 rounded-xl bg-warning/15 flex items-center justify-center flex-shrink-0">
+              <Crown className="w-4 h-4 text-warning" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{ownerEmail ?? "You"}</p>
-              <p className="text-[11px] text-muted-foreground">Owner · you</p>
+              <p className="text-xs text-muted-foreground">Owner · you</p>
             </div>
           </div>
 
           {staff.map((m) => (
             <div key={m.id} className="px-4 py-3.5">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/[0.07] flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
                   <User className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{m.email}</p>
-                  <p className="text-[11px] text-muted-foreground">Staff</p>
+                  <p className="text-xs text-muted-foreground">Staff</p>
                 </div>
                 {confirmRemoveId !== m.id && (
                   <button
                     type="button"
                     onClick={() => setConfirmRemoveId(m.id)}
                     aria-label={`Remove ${m.email}`}
-                    className="w-9 h-9 rounded-xl bg-white/[0.05] flex items-center justify-center flex-shrink-0"
+                    className="w-9 h-9 rounded-xl bg-muted/60 flex items-center justify-center flex-shrink-0"
                   >
                     <Trash2 className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -151,7 +151,7 @@ export default function StaffSettingsPage() {
                     type="button"
                     onClick={() => setConfirmRemoveId(null)}
                     disabled={removingId === m.id}
-                    className="px-3 py-2 rounded-xl bg-white/[0.07] text-xs font-medium"
+                    className="px-3 py-2 rounded-xl bg-muted text-xs font-medium"
                   >
                     Keep
                   </button>
@@ -159,7 +159,7 @@ export default function StaffSettingsPage() {
                     type="button"
                     onClick={() => handleRemove(m)}
                     disabled={removingId === m.id}
-                    className="px-3 py-2 rounded-xl bg-red-500 text-white text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                    className="px-3 py-2 rounded-xl bg-destructive text-white text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
                   >
                     {removingId === m.id && <Loader2 className="w-3 h-3 animate-spin" />}
                     Remove
@@ -170,8 +170,8 @@ export default function StaffSettingsPage() {
           ))}
         </div>
 
-        <form onSubmit={handleAdd} className="bg-white/[0.05] rounded-2xl p-4 space-y-3">
-          <label htmlFor="staff-email" className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <form onSubmit={handleAdd} className="bg-muted/60 rounded-2xl p-4 space-y-3">
+          <label htmlFor="staff-email" className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Add someone by email
           </label>
           <input
@@ -183,27 +183,27 @@ export default function StaffSettingsPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="name@example.com"
-            className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm"
+            className="w-full rounded-xl bg-muted px-4 py-3 text-sm"
           />
           <button
             type="submit"
             disabled={adding || email.trim() === ""}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-500 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-40"
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 rounded-xl text-sm disabled:opacity-40"
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
             Add as staff
           </button>
         </form>
 
-        <div className="rounded-2xl border border-white/[0.06] p-4 space-y-2">
+        <div className="rounded-2xl border border-border p-4 space-y-2">
           <p className="text-xs font-semibold">What staff can do</p>
-          <ul className="text-[11px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
+          <ul className="text-xs text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
             <li>Record transactions: type them in, send screenshots, confirm drafts.</li>
             <li>See balances, today&apos;s totals and the history.</li>
             <li>Discard a draft that was sent by mistake.</li>
           </ul>
           <p className="text-xs font-semibold pt-1">Only you can</p>
-          <ul className="text-[11px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
+          <ul className="text-xs text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
             <li>Void a saved transaction.</li>
             <li>Correct a balance against a count.</li>
             <li>Change fees, add or remove wallets, and manage staff.</li>

@@ -24,21 +24,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowLeft, Check, ChevronDown, Loader2, AlertCircle, Camera,
-} from "lucide-react";
+import { ChevronDown, ChevronLeft, Loader2, AlertCircle } from "lucide-react";
 import { CASH_ACCOUNT_NAME, TRANSACTION_TYPES, type TransactionType } from "@core/types.ts";
 import { parsePesosInput } from "@core/money.ts";
 import {
   createAndConfirmTransaction,
   loadEntryContext,
   previewEntry,
-  formatPesos,
   type EntryContext,
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
-import { EntryEffects } from "@/components/entry-effects";
-import { TYPE_HINT, formatAmountInput, typeName } from "@/lib/display";
+import { describeEffects } from "@/components/entry-effects";
+import { AmountKeypad } from "@/components/amount-keypad";
+import { formatAmountInput, typeName } from "@/lib/display";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { CashOutFeeChoice } from "@/components/cash-out-fee-choice";
 
@@ -73,8 +71,10 @@ export default function EntryPage() {
     const wanted = new URLSearchParams(window.location.search).get("type");
     if (wanted && (TRANSACTION_TYPES as readonly string[]).includes(wanted)) {
       setTxType(wanted as TransactionType);
+    } else {
+      router.replace("/new");
     }
-  }, []);
+  }, [router]);
   const [platform, setPlatform] = useState("");
   const [amount, setAmount] = useState("");
   const [amountIncludesFee, setAmountIncludesFee] = useState(false);
@@ -209,300 +209,207 @@ export default function EntryPage() {
     );
   }
 
+  const walletLabel = (p: string) => (p === CASH_ACCOUNT_NAME ? "Cash drawer" : p);
+  const pill = (on: boolean) =>
+    `h-11 px-4 rounded-full text-sm font-medium flex-shrink-0 transition-colors ${
+      on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+    }`;
+  const effects = preview ? describeEffects(preview.postings) : [];
+
   return (
     <AppShell active="new">
-      <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
+      <header className="px-6 pt-12 lg:pt-10 pb-4 grid grid-cols-[44px_1fr_44px] items-center">
+        <Link href="/new" aria-label="Back" className="w-11 h-11 -ml-2.5 grid place-items-center">
+          <ChevronLeft className="w-[22px] h-[22px]" />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-base font-semibold">New transaction</h1>
-          <p className="text-xs text-muted-foreground">Type it in — no receipt needed</p>
-        </div>
-        <Link
-          href="/capture"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
-          title="Use a receipt screenshot instead"
-        >
-          <Camera className="w-4 h-4 text-muted-foreground" />
-        </Link>
+        <h1 className="text-[17px] font-semibold text-center">{txType === "" ? "New transaction" : typeName(txType)}</h1>
       </header>
 
       {loadError && (
-        <div className="mx-5 mb-4 rounded-xl bg-red-500/10 border border-red-500/20 p-3 flex gap-2.5">
-          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-red-300">{loadError}</p>
+        <div className="mx-6 mb-4 rounded-2xl bg-destructive/10 p-3 flex gap-2.5">
+          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive">{loadError}</p>
         </div>
       )}
 
       {context && context.platforms.length === 0 && (
-        <div className="mx-5 mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 flex gap-2.5">
-          <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-200">
-            You have no wallets set up yet. Add one in{" "}
-            <Link href="/settings/platforms" className="underline">Settings → Platforms</Link>{" "}
-            before recording a transaction.
+        <div className="mx-6 mb-4 rounded-2xl bg-muted p-3 flex gap-2.5">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <p className="text-sm">
+            No wallets set up yet. Add one in{" "}
+            <Link href="/settings/platforms" className="underline underline-offset-4">Settings → Platforms</Link>.
           </p>
         </div>
       )}
 
-      <section className="px-5 flex-1 space-y-5 pb-32">
-        {/* ----- type ----- */}
-        <div className="space-y-2">
-          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            What happened
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {TRANSACTION_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTxType(t)}
-                aria-pressed={txType === t}
-                className={`rounded-xl px-2 py-3.5 text-sm font-medium transition-colors ${
-                  txType === t
-                    ? "bg-emerald-500 text-black"
-                    : "bg-white/[0.07] text-muted-foreground"
-                }`}
+      {txType !== "" && (
+        <section className="px-6 flex-1 pb-6 lg:max-w-md lg:mx-auto lg:w-full">
+          {needsPlatform && (
+            <div>
+              {isTransfer && <p className="text-[13px] text-muted-foreground mb-2">From</p>}
+              <div
+                role="radiogroup"
+                aria-label={isTransfer ? "From" : "Wallet"}
+                className="overflow-x-auto -mx-6 px-6"
+                style={{ scrollbarWidth: "none" }}
               >
-                {typeName(t)}
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-muted-foreground leading-relaxed pt-0.5">
-            {txType === "" ? "Tap what just happened at the counter." : TYPE_HINT[txType]}
-          </p>
-        </div>
+                <div className={`flex gap-2 w-max ${isTransfer ? "" : "mx-auto"}`}>
+                  {sources.map((p) => (
+                    <button key={p} type="button" role="radio" aria-checked={platform === p} onClick={() => setPlatform(p)} className={pill(platform === p)}>
+                      {walletLabel(p)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-        {txType !== "" && (<>
-        {/* ----- platform ----- */}
-        {needsPlatform && (
-          <div className="space-y-2">
-            <label htmlFor="platform" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              {isTransfer ? "From" : "Which wallet"}
-            </label>
-            {/* A native select, not a styled listbox: on a phone this opens the
-                OS picker, which is faster one-handed and needs no scroll
-                trapping. */}
-            <select
-              id="platform"
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-              className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm appearance-none"
-            >
-              <option value="">Choose a wallet…</option>
-              {sources.map((p) => (
-                <option key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</option>
-              ))}
-            </select>
-          </div>
-        )}
+          {isTransfer && (
+            <div className="mt-4">
+              <p className="text-[13px] text-muted-foreground mb-2">To</p>
+              <div role="radiogroup" aria-label="To" className="flex gap-2 overflow-x-auto -mx-6 px-6" style={{ scrollbarWidth: "none" }}>
+                {sources.filter((p) => p !== platform).map((p) => (
+                  <button key={p} type="button" role="radio" aria-checked={transferTo === p} onClick={() => setTransferTo(p)} className={pill(transferTo === p)}>
+                    {walletLabel(p)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-        {/* ----- destination (transfer only) ----- */}
-        {isTransfer && (
-          <div className="space-y-2">
-            <label htmlFor="transfer-to" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              To
-            </label>
-            <select
-              id="transfer-to"
-              value={transferTo}
-              onChange={(e) => setTransferTo(e.target.value)}
-              className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm appearance-none"
-            >
-              <option value="">Choose where it went…</option>
-              {sources.filter((p) => p !== platform).map((p) => (
-                <option key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* ----- amount ----- */}
-        <div className="space-y-2">
-          <label htmlFor="amount" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Amount
-          </label>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-muted-foreground">
-              ₱
-            </span>
+          <label htmlFor="amount" className="sr-only">Amount</label>
+          <div className="amount mt-7 flex items-start justify-center font-semibold leading-none">
+            <span className="text-[28px] font-medium text-muted-foreground mt-1.5 mr-1">₱</span>
             <input
               id="amount"
-              // `decimal`, not `numeric`: it gives a keypad with a decimal
-              // separator, and amounts with centavos do occur on bills.
               inputMode="decimal"
               autoComplete="off"
-              placeholder="0.00"
+              placeholder="0"
               value={amount}
               onChange={(e) => setAmount(formatAmountInput(e.target.value))}
-              className="w-full rounded-xl bg-white/[0.07] pl-11 pr-4 py-4 text-3xl font-semibold tabular-nums"
+              size={Math.max(1, amount.length)}
+              className="amount bg-transparent text-[58px] font-semibold tracking-tight text-center outline-none placeholder:text-input max-w-full"
+              style={{ width: `${Math.max(1, amount.length) * 0.62}em` }}
             />
           </div>
 
-          {isTransfer && (
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              The amount that arrived at the other end.
+          <p className="mt-3 text-sm text-center text-muted-foreground min-h-5" aria-live="polite">
+            {effects.length > 0
+              ? effects.map((line, i) => (
+                  <span key={i}>
+                    {i > 0 && " · "}
+                    {line.label} <span className="text-foreground font-semibold tabular-nums">{line.value}</span>
+                  </span>
+                ))
+              : isTransfer ? "The amount that arrived at the other end" : null}
+          </p>
+
+          {preview && !preview.rule && !isTransfer && (
+            <p className="mt-2 text-sm text-center text-warning">
+              No fee is set for this yet, so it earns nothing.{" "}
+              <Link href="/settings/rules" className="underline underline-offset-4">Set one</Link>
             </p>
           )}
 
           {txType === "Cash Out" && context && (
-            <CashOutFeeChoice
-              amountPesos={amountPesos}
-              platform={platform}
-              rules={context.rules}
-              value={amountIncludesFee}
-              onChange={setAmountIncludesFee}
-            />
-          )}
-        </div>
-
-        {/* ----- platform fee (transfer only) ----- */}
-        {isTransfer && (
-          <div className="space-y-2">
-            <label htmlFor="platform-fee" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Fee the app charged you <span className="normal-case tracking-normal">(if any)</span>
-            </label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
-              <input
-                id="platform-fee"
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder="0.00"
-                value={platformFee}
-                onChange={(e) => setPlatformFee(e.target.value)}
-                className="w-full rounded-xl bg-white/[0.07] pl-9 pr-4 py-3 text-sm tabular-nums"
+            <div className="mt-3">
+              <CashOutFeeChoice
+                amountPesos={amountPesos}
+                platform={platform}
+                rules={context.rules}
+                value={amountIncludesFee}
+                onChange={setAmountIncludesFee}
               />
             </div>
-            {platformFeeMinor === null ? (
-              <p className="text-[11px] text-red-400">This isn&apos;t a readable amount. Use digits like 15 or 15.00.</p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                For example the ₱10 or ₱15 InstaPay fee. It is recorded as a cost
-                and does not come out of your earnings.
-              </p>
-            )}
-          </div>
-        )}
+          )}
 
-        {/* ----- live preview ----- */}
-        {preview && (
-          <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-3">
-            {isTransfer && (
-              <p className="text-xs text-muted-foreground">
-                Your own money, moved. Nothing is earned on this.
-              </p>
-            )}
+          <AmountKeypad value={amount} onChange={setAmount} className="mt-6 lg:hidden" />
 
-            {!preview.rule && !isTransfer && (
-              <p className="text-[11px] text-amber-300 leading-relaxed">
-                No fee rule covers {txType}
-                {needsPlatform && ` on ${platform}`} yet, so this earns nothing.
-                Set one in <Link href="/settings/rules" className="underline">Settings → Fees</Link>.
-              </p>
-            )}
-
-
-            <div className="space-y-1.5">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                What this changes
-              </span>
-              <EntryEffects postings={preview.postings} />
-            </div>
-          </div>
-        )}
-
-        {/* ----- optional details ----- */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowDetails((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground"
-          >
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${showDetails ? "rotate-180" : ""}`}
-            />
-            Reference number, customer number
-          </button>
-
-          {showDetails && (
-            <div className="space-y-3 pt-3">
-              <div className="space-y-1.5">
-                <label htmlFor="reference" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Reference number
-                </label>
+          {isTransfer && (
+            <div className="mt-6">
+              <label htmlFor="platform-fee" className="text-[13px] text-muted-foreground">
+                Fee the app charged you, if any
+              </label>
+              <div className="relative mt-2">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
                 <input
-                  id="reference"
-                  // Text, not number: references have leading zeros, and a
-                  // number input silently drops them.
-                  type="text"
-                  inputMode="numeric"
+                  id="platform-fee"
+                  inputMode="decimal"
                   autoComplete="off"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm tabular-nums"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Optional, but it is what stops the same transaction being recorded twice.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label htmlFor="account" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Customer number
-                </label>
-                <input
-                  id="account"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm tabular-nums"
+                  placeholder="0.00"
+                  value={platformFee}
+                  onChange={(e) => setPlatformFee(e.target.value)}
+                  className="w-full h-12 rounded-2xl bg-muted pl-9 pr-4 text-base tabular-nums"
                 />
               </div>
+              {platformFeeMinor === null && (
+                <p className="text-sm text-destructive mt-1.5">Use digits like 15 or 15.00.</p>
+              )}
             </div>
           )}
-        </div>
 
-        {saveError && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 flex gap-2.5">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300 leading-relaxed">{saveError}</p>
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => setShowDetails((v) => !v)}
+              aria-expanded={showDetails}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground h-11 mx-auto"
+            >
+              Reference and customer number
+              <ChevronDown className={`w-4 h-4 transition-transform ${showDetails ? "rotate-180" : ""}`} />
+            </button>
+
+            {showDetails && (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label htmlFor="reference" className="text-[13px] text-muted-foreground">Reference number</label>
+                  <input
+                    id="reference"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    className="w-full h-12 mt-1.5 rounded-2xl bg-muted px-4 text-base tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="account" className="text-[13px] text-muted-foreground">Customer number</label>
+                  <input
+                    id="account"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    className="w-full h-12 mt-1.5 rounded-2xl bg-muted px-4 text-base tabular-nums"
+                  />
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        </>)}
-      </section>
 
-      {/* ----- save -----
-          The bar carries a one-line summary as well as the button, and is
-          lifted above the on-screen keyboard: the fuller breakdown further up
-          is usually hidden behind one or the other while an amount is typed. */}
+          {saveError && (
+            <div className="mt-3 rounded-2xl bg-destructive/10 p-3 flex gap-2.5">
+              <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-destructive">{saveError}</p>
+            </div>
+          )}
+        </section>
+      )}
+
       <div
-        className="sticky bottom-0 mt-auto px-5 pt-3 bg-background border-t border-white/[0.06]"
+        className="sticky bottom-0 mt-auto px-6 pt-3 bg-background lg:max-w-md lg:mx-auto lg:w-full"
         style={{
           bottom: keyboardInset,
           paddingBottom: keyboardInset > 0 ? 12 : "max(1.5rem, env(safe-area-inset-bottom))",
         }}
       >
-        {preview && txType !== "" && (
-          <p className="text-sm text-center pb-2.5 tabular-nums" aria-live="polite">
-            <span className="font-medium">{typeName(txType)}</span>
-            <span className="text-muted-foreground"> · </span>
-            {isTransfer
-              ? <span className="text-muted-foreground">{platform} → {transferTo === CASH_ACCOUNT_NAME ? "Cash drawer" : transferTo}</span>
-              : <span className="text-emerald-400 font-medium">you earn {formatPesos(preview.feePesos)}</span>}
-          </p>
-        )}
         <button
           type="button"
           onClick={handleSave}
           disabled={!canSave}
-          className="w-full rounded-xl bg-emerald-500 text-black font-semibold py-4 text-base disabled:bg-white/[0.08] disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
             <>
@@ -512,7 +419,7 @@ export default function EntryPage() {
           ) : missing ? (
             missing
           ) : (
-            `Record ${formatPesos(amountPesos)}`
+            "Save"
           )}
         </button>
       </div>

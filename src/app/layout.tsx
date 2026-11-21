@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Hanken_Grotesk, Instrument_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const body = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-body" });
+const display = Instrument_Sans({ subsets: ["latin"], variable: "--font-display" });
+
+const THEME_BOOT = `(function(){try{var t=localStorage.getItem("gocash-theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: "GoCash Tracker",
@@ -15,7 +18,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "GoCash",
   },
   other: {
@@ -29,10 +32,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("font-sans dark", geist.variable)}>
+    <html lang="en" className={cn("font-sans", body.variable, display.variable)} suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#0a0a0a" />
+        <meta name="theme-color" content="#f5f6f2" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0e1626" media="(prefers-color-scheme: dark)" />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body className="bg-[var(--color-background)] text-[var(--color-foreground)] antialiased">
         {children}

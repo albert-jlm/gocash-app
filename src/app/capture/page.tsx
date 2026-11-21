@@ -220,7 +220,7 @@ export default function CapturePage() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 60% 40% at 50% 45%, rgba(16,185,129,0.09) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse 60% 40% at 50% 45%, transparent 0%, transparent 70%)",
         }}
       />
 
@@ -228,7 +228,7 @@ export default function CapturePage() {
       <header className="relative z-10 px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -242,7 +242,7 @@ export default function CapturePage() {
             was nowhere for them to go. */}
         <Link
           href="/entry"
-          className="text-[11px] text-muted-foreground underline flex-shrink-0"
+          className="text-xs text-muted-foreground underline flex-shrink-0"
         >
           Type it instead
         </Link>
@@ -256,14 +256,14 @@ export default function CapturePage() {
           className={[
             "w-full aspect-square rounded-3xl flex flex-col items-center justify-center mb-6 transition-all duration-200",
             isDragging
-              ? "bg-emerald-500/10 ring-2 ring-emerald-500"
-              : "bg-white/[0.04] ring-1 ring-white/[0.07]",
+              ? "bg-primary/10 ring-2 ring-primary"
+              : "bg-muted/60 ring-1 ring-border",
           ].join(" ")}
         >
-          <div className="rounded-full bg-white/[0.08] p-8 mb-5">
-            <Camera className="w-16 h-16 text-zinc-400" />
+          <div className="rounded-full bg-muted p-8 mb-5">
+            <Camera className="w-16 h-16 text-muted-foreground" />
           </div>
-          <h2 className="text-[17px] font-semibold text-white mb-1.5">
+          <h2 className="text-[17px] font-semibold text-foreground mb-1.5">
             {isDragging ? "Drop it here" : "Capture Screenshot"}
           </h2>
           <p className="text-sm text-muted-foreground text-center max-w-[200px] leading-relaxed">
@@ -274,18 +274,18 @@ export default function CapturePage() {
 
           {/* AI badge */}
           {!isDragging && (
-            <div className="flex items-center gap-1.5 mt-5 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
-              <Sparkles className="w-3 h-3 text-emerald-400" />
-              <span className="text-[11px] text-emerald-400 font-medium">AI-powered extraction</span>
+            <div className="flex items-center gap-1.5 mt-5 bg-primary/10 border border-primary/20 rounded-full px-3 py-1.5">
+              <Sparkles className="w-3 h-3 text-primary" />
+              <span className="text-xs text-primary font-medium">AI-powered extraction</span>
             </div>
           )}
         </div>
 
         {/* Error */}
         {error && (
-          <div className="w-full flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 mb-4">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="w-full flex items-start gap-2.5 bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 mb-4">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 
@@ -293,14 +293,14 @@ export default function CapturePage() {
         <div className="w-full space-y-3">
           <button
             onClick={openGallery}
-            className="h-14 w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold rounded-2xl text-[15px] transition-colors"
+            className="h-14 w-full flex items-center justify-center gap-2.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground font-semibold rounded-2xl text-[15px] transition-colors"
           >
             <ImageIcon className="w-5 h-5" />
             Pick from Gallery
           </button>
           <button
             onClick={openCamera}
-            className="h-14 w-full flex items-center justify-center gap-2.5 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 border border-white/[0.08] text-white font-medium rounded-2xl text-[15px] transition-colors"
+            className="h-14 w-full flex items-center justify-center gap-2.5 bg-muted hover:bg-muted active:bg-zinc-900 border border-border text-foreground font-medium rounded-2xl text-[15px] transition-colors"
           >
             <Camera className="w-5 h-5" />
             Take a Photo
@@ -320,8 +320,8 @@ export default function CapturePage() {
       {/* Processing Overlay — full viewport, fully opaque */}
       {processing && (
         <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-50">
-          <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.07] flex items-center justify-center mb-6">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+          <div className="w-[72px] h-[72px] rounded-2xl bg-muted flex items-center justify-center mb-6">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
           <p className="text-base font-semibold mb-1.5">Reading your screenshot…</p>
           <p className="text-sm text-muted-foreground">This usually takes a few seconds</p>

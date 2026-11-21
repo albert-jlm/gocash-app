@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Loader2, Settings, ArrowDownRight, ArrowUpLeft, Phone,
-  Building2, Home, Plus, History, ChevronRight, Zap, TrendingDown,
-  CreditCard, Camera, Keyboard, AlertCircle, Check,
-  ArrowLeftRight,
+  Loader2, ArrowDown, ArrowUp, Smartphone, ReceiptText, Ellipsis,
+  ChevronRight, ChevronDown, AlertCircle, Check,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
@@ -15,28 +13,15 @@ import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
 import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
+const ACTIONS: { label: string; href: string; Icon: React.ElementType }[] = [
+  { label: "Cash In",  href: "/entry?type=Cash%20In",       Icon: ArrowDown },
+  { label: "Cash Out", href: "/entry?type=Cash%20Out",      Icon: ArrowUp },
+  { label: "Load",     href: "/entry?type=Telco%20Load",    Icon: Smartphone },
+  { label: "Bills",    href: "/entry?type=Bills%20Payment", Icon: ReceiptText },
+  { label: "More",     href: "/new",                        Icon: Ellipsis },
+];
 
-// Tailwind gradient classes + glow colour for each wallet
-const WALLET_STYLES: Record<string, { gradient: string; glow: string }> = {
-  GCash:    { gradient: "from-blue-500 via-blue-600 to-blue-700",     glow: "rgba(59,130,246,0.30)" },
-  MariBank: { gradient: "from-purple-500 via-purple-600 to-purple-700", glow: "rgba(139,92,246,0.30)" },
-  Maya:     { gradient: "from-green-500 via-green-600 to-green-700",   glow: "rgba(34,197,94,0.30)" },
-  Cash:     { gradient: "from-emerald-500 via-emerald-600 to-emerald-700", glow: "rgba(16,185,129,0.30)" },
-};
-const DEFAULT_WALLET_STYLE = { gradient: "from-zinc-600 via-zinc-700 to-zinc-800", glow: "transparent" };
-
-const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
-  "Cash In":           { color: "#10B981", Icon: ArrowDownRight },
-  "Cash Out":          { color: "#EF4444", Icon: ArrowUpLeft },
-  "Telco Load":        { color: "#8B5CF6", Icon: Phone },
-  "Bills Payment":     { color: "#F59E0B", Icon: Zap },
-  "Bank Transfer":     { color: "#3B82F6", Icon: Building2 },
-  "Profit Remittance": { color: "#6B7280", Icon: TrendingDown },
-  "Wallet Transfer":   { color: "#06B6D4", Icon: ArrowLeftRight },
-};
+const WALLET_STEP = 160;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,30 +66,18 @@ interface TxRow {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatBalance(n: number): string {
-  return "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function pesos(n: number): string {
+  const whole = Number.isInteger(n);
+  return "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
 
-function formatAmount(n: number): string {
-  if (n >= 1000) return "₱" + (n / 1000).toFixed(1) + "k";
-  return "₱" + n.toLocaleString("en-PH");
-}
-
-function maskNumber(num: string | null): string {
-  if (!num) return "—";
-  const d = num.replace(/\D/g, "");
-  return d.length >= 8 ? d.slice(0, 4) + "•••" + d.slice(-4) : num;
+function splitAmount(n: number): [string, string] {
+  const [whole, cents] = n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split(".");
+  return [whole, cents];
 }
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
-}
-
-function getTimeOfDay(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 17) return "afternoon";
-  return "evening";
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +105,7 @@ export default function Dashboard() {
   // Wallet scroll snap — progress dot tracking
   const walletScrollRef = useRef<HTMLDivElement>(null);
   const [activeWallet, setActiveWallet] = useState(0);
+  const [showDrafts, setShowDrafts] = useState(false);
 
   // Mouse drag-to-scroll for wallet cards (desktop UX from 21st.dev component)
   const dragState = useRef({ isDragging: false, startX: 0, scrollLeft: 0 });
@@ -163,8 +137,7 @@ export default function Dashboard() {
   const handleWalletScroll = useCallback(() => {
     const el = walletScrollRef.current;
     if (!el) return;
-    // Card width (280) + gap (12) = 292
-    setActiveWallet(Math.round(el.scrollLeft / 292));
+    setActiveWallet(Math.round(el.scrollLeft / WALLET_STEP));
   }, []);
 
   useEffect(() => {
@@ -282,92 +255,81 @@ export default function Dashboard() {
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
 
+  const ordered = [...wallets].sort((x, y) => Number(y.kind === "cash") - Number(x.kind === "cash"));
+  const [totalWhole, totalCents] = splitAmount(wallets.reduce((sum, w) => sum + w.natural_balance, 0));
+
   return (
     <AppShell active="home" tabBar wide>
-      {/* Header */}
-      <header className="px-5 pt-14 lg:pt-10 pb-5 flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-medium tracking-widest uppercase text-muted-foreground">
-            Good {getTimeOfDay()}
-          </p>
-          <h1 className="text-xl font-semibold mt-0.5">GoCash Tracker</h1>
-        </div>
-        <Link
-          href="/settings"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center lg:hidden"
-        >
-          <Settings className="w-4 h-4 text-muted-foreground" />
-        </Link>
+      <header className="px-6 pt-12 lg:pt-10 pb-6">
+        <p className="font-heading text-[19px] font-bold tracking-tight">GoCash</p>
       </header>
 
-      {/* Wallet Cards — horizontal snap scroll (21st.dev design) */}
-      <section className="mb-4">
+      <section className="px-6">
+        <p className="text-[13px] text-muted-foreground">Total on hand</p>
+        <p className="amount text-[46px] font-semibold leading-[1.05] tracking-tight">
+          <span className="text-2xl font-medium text-muted-foreground align-[13px] mr-0.5">₱</span>
+          {totalWhole}
+          <span className="text-2xl text-muted-foreground">.{totalCents}</span>
+        </p>
+      </section>
+
+      <section className="mt-5">
         <div
           ref={walletScrollRef}
           onScroll={handleWalletScroll}
-          className="flex gap-3 px-5 scroll-pl-5 overflow-x-auto pb-2 cursor-grab lg:grid lg:grid-cols-2 xl:grid-cols-4 lg:overflow-visible lg:cursor-default"
+          className="flex gap-2.5 px-6 scroll-pl-6 overflow-x-auto cursor-grab lg:grid lg:grid-cols-4 lg:overflow-visible lg:cursor-default"
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
-          {wallets.map((w) => {
-            const style = WALLET_STYLES[w.name] ?? DEFAULT_WALLET_STYLE;
+          {ordered.map((w) => {
+            const cash = w.kind === "cash";
             return (
-              <div key={w.account_id} className="flex-shrink-0 w-[280px] lg:w-auto" style={{ scrollSnapAlign: "start" }}>
-                <div
-                  className={`relative h-[160px] rounded-3xl bg-gradient-to-br ${style.gradient} p-6 flex flex-col justify-between overflow-hidden`}
-                  style={{ boxShadow: `0 12px 40px -12px ${style.glow}` }}
-                >
-                  {/* Decorative blur blobs — from 21st.dev component */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-8 translate-x-8 pointer-events-none" />
-                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl translate-y-8 -translate-x-8 pointer-events-none" />
-
-                  {/* Top row: icon badge + name */}
-                  <div className="relative z-10 flex items-center gap-2.5">
-                    <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center flex-shrink-0">
-                      <CreditCard className="w-4 h-4 text-white" />
-                    </div>
-                    <p className="text-white/80 text-sm font-medium">{w.name}</p>
-                  </div>
-
-                  {/* Balance */}
-                  <div className="relative z-10">
-                    <p className="text-[11px] text-white/50 font-medium mb-0.5 uppercase tracking-widest">Balance</p>
-                    <p className="text-white text-[28px] font-bold tracking-tight tabular-nums leading-none">
-                      {formatBalance(w.natural_balance)}
-                    </p>
-                  </div>
-                </div>
+              <div
+                key={w.account_id}
+                className={`flex-shrink-0 w-[150px] lg:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between ${
+                  cash ? "bg-primary text-primary-foreground" : "bg-muted"
+                }`}
+                style={{ scrollSnapAlign: "start" }}
+              >
+                <p className={`text-[13px] ${cash ? "opacity-75" : "text-muted-foreground"}`}>
+                  {cash ? "Cash drawer" : w.name}
+                </p>
+                <p className="amount text-xl font-semibold">{pesos(w.natural_balance)}</p>
               </div>
             );
           })}
         </div>
-
-        {/* Progress dots */}
-        {wallets.length > 1 && (
-          <div className="flex justify-center gap-1.5 mt-3 lg:hidden">
-            {wallets.map((_, i) => (
-              <div
+        {ordered.length > 2 && (
+          <div className="flex justify-center gap-[5px] mt-2.5 lg:hidden" aria-hidden>
+            {ordered.map((_, i) => (
+              <span
                 key={i}
-                className="rounded-full transition-all duration-300"
-                style={{
-                  width: i === activeWallet ? 16 : 6,
-                  height: 6,
-                  backgroundColor: i === activeWallet ? "rgb(52,211,153)" : "rgba(255,255,255,0.2)",
-                }}
+                className={`h-[5px] rounded-full transition-all ${i === activeWallet ? "w-3.5 bg-foreground" : "w-[5px] bg-input"}`}
               />
             ))}
           </div>
         )}
       </section>
 
+      <nav aria-label="New transaction" className="grid grid-cols-5 px-6 mt-5 lg:max-w-md">
+        {ACTIONS.map(({ label, href, Icon }) => (
+          <Link key={label} href={href} className="flex flex-col items-center gap-1.5 text-xs font-medium">
+            <span className="w-[50px] h-[50px] rounded-full bg-action text-action-foreground grid place-items-center">
+              <Icon className="w-[22px] h-[22px]" strokeWidth={1.9} />
+            </span>
+            {label}
+          </Link>
+        ))}
+      </nav>
+
       {justSaved && (
-        <section className="px-5 mb-4" role="status">
-          <div className="flex items-center gap-3 bg-emerald-500/[0.12] border border-emerald-500/25 rounded-2xl px-4 py-3">
-            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <section className="px-6 mt-5" role="status">
+          <div className="flex items-center gap-3 bg-muted rounded-2xl px-4 py-3">
+            <Check className="w-4 h-4 flex-shrink-0" />
             <p className="text-sm flex-1 min-w-0">
               <span className="font-medium">Saved</span>
               <span className="text-muted-foreground">
@@ -379,215 +341,123 @@ export default function Dashboard() {
                 type="button"
                 onClick={handleUndo}
                 disabled={undoing}
-                className="text-sm font-semibold text-emerald-300 px-2 py-1 -my-1 disabled:opacity-50 flex-shrink-0"
+                className="text-sm font-semibold underline underline-offset-4 px-2 py-2 -my-2 disabled:opacity-50 flex-shrink-0"
               >
                 {undoing ? "Undoing…" : "Undo"}
               </button>
             ) : (
-              <Link href={`/transactions?id=${justSaved.id}`} className="text-sm text-emerald-300 flex-shrink-0">View</Link>
+              <Link href={`/transactions?id=${justSaved.id}`} className="text-sm font-semibold underline underline-offset-4 flex-shrink-0">View</Link>
             )}
           </div>
-          {undoError && <p className="text-xs text-red-400 mt-1.5 px-1">{undoError}</p>}
+          {undoError && <p className="text-xs text-destructive mt-1.5 px-1">{undoError}</p>}
         </section>
       )}
 
       {loadError && (
-        <section className="px-5 mb-4">
+        <section className="px-6 mt-5">
           <button
             type="button"
             onClick={() => setReloadTick((n) => n + 1)}
-            className="w-full flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3 text-left"
+            className="w-full flex items-center gap-3 bg-destructive/10 rounded-2xl px-4 py-3 text-left"
           >
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-            <p className="text-xs text-red-300 flex-1">
-              Couldn&apos;t load everything. What you see may be out of date. Tap to try again.
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+            <p className="text-sm text-destructive flex-1">
+              Couldn&apos;t load everything. Tap to try again.
             </p>
           </button>
         </section>
       )}
 
-      {/* On a phone these four sections are one column, in the order given
-          by `order-*`. On a desktop the two wrappers become side-by-side
-          columns: actions and today on the left, drafts and recent on the
-          right. */}
-      <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-2 lg:items-start lg:mt-2">
-      <div className="contents lg:block">
-      {/* Start a transaction. The two things done most often get the big
-          tiles and open the form with the type already chosen, so there is no
-          default to forget to change. */}
-      <section className="order-1 px-5 mb-5 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <Link
-            href="/entry?type=Cash%20In"
-            className="flex flex-col items-start gap-1 rounded-2xl bg-emerald-500 text-black px-4 py-4"
-          >
-            <ArrowDownRight className="w-5 h-5" />
-            <span className="text-base font-semibold">Cash In</span>
-            <span className="text-xs opacity-80 leading-snug">They give cash, you send e-money</span>
-          </Link>
-          <Link
-            href="/entry?type=Cash%20Out"
-            className="flex flex-col items-start gap-1 rounded-2xl bg-white/[0.09] border border-white/[0.1] px-4 py-4"
-          >
-            <ArrowUpLeft className="w-5 h-5" />
-            <span className="text-base font-semibold">Cash Out</span>
-            <span className="text-xs text-muted-foreground leading-snug">They send e-money, you give cash</span>
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Link
-            href="/entry"
-            className="flex items-center justify-center gap-2 bg-white/[0.07] border border-white/[0.08] font-medium py-3 rounded-2xl text-sm"
-          >
-            <Keyboard className="w-4 h-4" />
-            Something else
-          </Link>
-          <Link
-            href="/capture"
-            className="flex items-center justify-center gap-2 bg-white/[0.07] border border-white/[0.08] font-medium py-3 rounded-2xl text-sm"
-          >
-            <Camera className="w-4 h-4" />
-            Screenshot
-          </Link>
-        </div>
-      </section>
-
-      {/* Today's Summary */}
-      <section className="order-3 px-5 mb-5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-          Today
-        </h2>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
-            <p className="text-lg font-bold tabular-nums">{todayStats.count}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Transactions</p>
-          </div>
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px]">
-            <p className="text-lg font-bold tabular-nums">{formatAmount(todayStats.total)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Total Amount</p>
-          </div>
-          <div className="bg-white/[0.05] rounded-xl p-3 flex flex-col items-center justify-center text-center min-h-[72px] border border-emerald-500/10">
-            <p className="text-lg font-bold text-emerald-400 tabular-nums">
-              ₱{todayStats.earnings.toFixed(0)}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Earnings</p>
-          </div>
-        </div>
-      </section>
-
-      </div>
-      <div className="contents lg:block">
-      {/* Waiting for you — drafts that are not counted until confirmed.
-          Shared screenshots land here: the share shortcut uploads and this is
-          where the operator picks them up. */}
-      {pendingCount > 0 && (
-        <section className="order-2 px-5 mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-              Waiting for you · {pendingCount}
-            </h2>
-            {pendingCount > pending.length && (
-              <Link href="/transactions" className="text-[11px] text-amber-300 font-medium">
-                See all
-              </Link>
+      <div className="lg:grid lg:grid-cols-2 lg:gap-x-6 lg:items-start">
+        {pendingCount > 0 && (
+          <section className="px-6 mt-5">
+            <button
+              type="button"
+              onClick={() => setShowDrafts((v) => !v)}
+              aria-expanded={showDrafts}
+              className="w-full flex items-center gap-2.5 bg-muted rounded-2xl pl-4 pr-3.5 h-12 text-sm font-medium text-left"
+            >
+              <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+              <span className="flex-1">
+                {pendingCount} {pendingCount === 1 ? "draft" : "drafts"} to review
+              </span>
+              {showDrafts
+                ? <ChevronDown className="w-[18px] h-[18px] opacity-60" />
+                : <ChevronRight className="w-[18px] h-[18px] opacity-60" />}
+            </button>
+            {showDrafts && (
+              <div className="mt-1">
+                {pending.map((d) => (
+                  <Link
+                    key={d.id}
+                    href={`/confirm?id=${d.id}`}
+                    className="flex items-center justify-between gap-3 py-3 border-b border-border"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-medium truncate">{typeName(d.transaction_type)}</p>
+                      <p className="text-[13px] text-muted-foreground">
+                        {d.platform !== "Unknown" ? `${d.platform} · ` : ""}{formatTime(d.created_at)}
+                      </p>
+                    </div>
+                    <p className="amount text-[15px] font-semibold">
+                      {d.amount > 0 ? d.amount.toLocaleString("en-PH") : "Amount?"}
+                    </p>
+                  </Link>
+                ))}
+                {pendingCount > pending.length && (
+                  <Link href="/transactions" className="block py-3 text-sm font-medium underline underline-offset-4">
+                    See all {pendingCount}
+                  </Link>
+                )}
+              </div>
             )}
-          </div>
-          <div className="bg-amber-500/[0.07] rounded-2xl overflow-hidden divide-y divide-amber-500/10 border border-amber-500/20">
-            {pending.map((d) => {
-              const known = d.transaction_type !== "Unknown";
-              return (
-                <Link
-                  key={d.id}
-                  href={`/confirm?id=${d.id}`}
-                  className="flex items-center gap-3 px-4 py-3 active:bg-white/[0.03]"
-                >
-                  <span className="relative flex h-2 w-2 flex-shrink-0">
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {typeName(d.transaction_type)}
-                      {d.platform !== "Unknown" && <span className="text-muted-foreground"> · {d.platform}</span>}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {formatTime(d.created_at)} · not counted yet
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {d.amount > 0 ? "₱" + d.amount.toLocaleString("en-PH") : "Amount?"}
-                  </p>
-                  <ChevronRight className="w-4 h-4 text-amber-400/50 flex-shrink-0" />
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
+          </section>
+        )}
 
-      {/* Recent Transactions */}
-      <section className="order-4 px-5 mb-24">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Recent
-          </h2>
-          <Link href="/transactions" className="text-[11px] text-emerald-400 font-medium">
-            See all
-          </Link>
-        </div>
-
-        {recentTx.length === 0 ? (
-          <div className="bg-white/[0.04] rounded-2xl px-4 py-10 text-center border border-white/[0.05]">
-            <p className="text-sm text-muted-foreground">No transactions yet.</p>
-            <p className="text-xs text-muted-foreground/50 mt-1">
-              Use the buttons above to add your first one.
-            </p>
+        <section className="px-6 mt-5 mb-28">
+          <div className="flex items-center justify-between text-[13px]">
+            <Link href="/transactions" className="text-muted-foreground flex items-center gap-0.5">
+              Recent <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+            <span className="bg-spark text-spark-foreground font-medium rounded-[5px] px-1.5 py-px">
+              {pesos(todayStats.earnings)} earned today
+            </span>
           </div>
-        ) : (
-          <div className="bg-white/[0.04] rounded-2xl overflow-hidden divide-y divide-white/[0.05] border border-white/[0.05]">
-            {recentTx.map((tx) => {
-              const cfg = TYPE_CONFIG[tx.transaction_type] ?? { color: "#6B7280", Icon: ArrowDownRight };
-              const Icon = cfg.Icon;
+
+          {recentTx.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8">Nothing recorded yet.</p>
+          ) : (
+            recentTx.map((tx) => {
+              const voided = tx.status === "voided";
+              const transfer = tx.transaction_type === "Wallet Transfer";
               return (
                 <Link
                   key={tx.id}
                   href={`/transactions?id=${tx.id}`}
-                  className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03]"
+                  className="flex items-center justify-between gap-3 py-3 border-b border-border last:border-b-0"
                 >
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: cfg.color + "18" }}
-                  >
-                    <Icon className="w-4 h-4" style={{ color: cfg.color }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{typeName(tx.transaction_type)}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {tx.transaction_type === "Wallet Transfer"
-                        ? `${tx.platform} → ${tx.transfer_to ?? "?"}`
-                        : maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
+                  <div className="min-w-0">
+                    <p className={`text-[15px] font-medium ${voided ? "line-through text-muted-foreground" : ""}`}>
+                      {typeName(tx.transaction_type)}
+                    </p>
+                    <p className="text-[13px] text-muted-foreground truncate">
+                      {transfer ? `${tx.platform} → ${tx.transfer_to ?? "?"}` : tx.platform} · {formatTime(tx.created_at)}
+                      {voided ? " · voided" : ""}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-semibold tabular-nums ${tx.status === "voided" ? "line-through text-muted-foreground" : ""}`}>
-                      ₱{tx.amount.toLocaleString("en-PH")}
-                    </p>
-                    {tx.status === "voided" ? (
-                      <p className="text-[11px] text-amber-400 font-medium">Voided</p>
-                    ) : tx.transaction_type === "Wallet Transfer" ? (
-                      <p className="text-[11px] text-muted-foreground">own money</p>
-                    ) : (
-                      <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
-                        +₱{tx.net_profit.toFixed(0)}
-                      </p>
+                  <p className={`amount text-[15px] font-semibold flex items-center gap-1.5 ${voided ? "line-through text-muted-foreground" : ""}`}>
+                    {tx.amount.toLocaleString("en-PH")}
+                    {!voided && !transfer && (
+                      <span className="bg-spark text-spark-foreground text-[13px] font-medium rounded-[5px] px-1.5 py-px">
+                        +{tx.net_profit.toFixed(0)}
+                      </span>
                     )}
-                  </div>
+                  </p>
                 </Link>
               );
-            })}
-          </div>
-        )}
-      </section>
-      </div>
+            })
+          )}
+        </section>
       </div>
     </AppShell>
   );

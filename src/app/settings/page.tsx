@@ -1,16 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Home, Plus, History, Settings, LogOut } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
+import { readTheme, saveTheme, type ThemeChoice } from "@/lib/theme";
 
 export default function SettingsPage() {
   const { session, role, loading } = useAuthGuard();
   const [signingOut, setSigningOut] = useState(false);
+  const [theme, setTheme] = useState<ThemeChoice>("system");
+
+  useEffect(() => {
+    setTheme(readTheme());
+  }, []);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -22,7 +28,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -32,7 +38,7 @@ export default function SettingsPage() {
       <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/"
-          className="w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center flex-shrink-0"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-muted-foreground" />
         </Link>
@@ -40,7 +46,29 @@ export default function SettingsPage() {
       </header>
 
       <section className="px-5 flex-1">
-        <div className="bg-white/[0.05] rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
+        <div className="mb-4">
+          <p className="text-sm font-medium mb-2">Appearance</p>
+          <div role="radiogroup" aria-label="Appearance" className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
+            {([["system", "Match phone"], ["light", "Light"], ["dark", "Dark"]] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={theme === value}
+                onClick={() => {
+                  setTheme(value);
+                  saveTheme(value);
+                }}
+                className={`h-11 rounded-full text-sm font-medium transition-colors ${
+                  theme === value ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="bg-muted/60 rounded-2xl overflow-hidden divide-y divide-border">
           {[
             // Balances are derived from the ledger now, so this screen reconciles
             // against a count instead of letting one be typed over.
@@ -65,7 +93,7 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        <div className="mt-4 bg-white/[0.05] rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
+        <div className="mt-4 bg-muted/60 rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground">
               Signed in as {role === "staff" ? "staff" : "owner"}
@@ -76,14 +104,14 @@ export default function SettingsPage() {
             type="button"
             onClick={handleSignOut}
             disabled={signingOut}
-            className="flex items-center gap-2 bg-white/[0.07] text-sm font-medium px-3.5 py-2.5 rounded-xl flex-shrink-0 disabled:opacity-50"
+            className="flex items-center gap-2 bg-muted text-sm font-medium px-3.5 py-2.5 rounded-xl flex-shrink-0 disabled:opacity-50"
           >
             {signingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
             Sign out
           </button>
         </div>
 
-        <p className="text-[11px] text-muted-foreground/50 text-center mt-6">
+        <p className="text-xs text-muted-foreground/50 text-center mt-6">
           GoCash Tracker · v0.1
         </p>
       </section>

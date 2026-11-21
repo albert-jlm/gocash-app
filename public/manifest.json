@@ -4,8 +4,8 @@
   "description": "Manage your GCash and MariBank transactions",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#10B981",
+  "background_color": "#f5f6f2",
+  "theme_color": "#1b2e52",
   "orientation": "portrait",
   "icons": [
     {
