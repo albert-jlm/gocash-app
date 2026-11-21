@@ -9,12 +9,15 @@ const display = Instrument_Sans({ subsets: ["latin"], variable: "--font-display"
 const THEME_BOOT = `(function(){try{var t=localStorage.getItem("gocash-theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
 export const metadata: Metadata = {
-  title: "GoCash Tracker",
-  description: "Manage your GCash and MariBank transactions",
+  title: "GoCash",
+  description: "Cash-in and cash-out books for the shop",
   manifest: "/manifest.json",
   icons: {
-    icon: "/favicon.svg",
-    apple: "/icon-192.png",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   appleWebApp: {
     capable: true,

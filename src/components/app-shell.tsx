@@ -55,7 +55,8 @@ export function AppShell({
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col border-r border-border bg-muted/60 px-4 py-6">
-        <Link href="/" className="px-2 mb-8 block">
+        <Link href="/" className="px-2 mb-8 flex items-center gap-2.5">
+          <img src="/logo.svg" alt="" width={28} height={28} className="rounded-lg" />
           <p className="font-heading text-[19px] font-bold tracking-tight">GoCash</p>
         </Link>
         <nav className="flex flex-col gap-1">

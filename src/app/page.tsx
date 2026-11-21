@@ -283,11 +283,7 @@ export default function Dashboard() {
 
   return (
     <AppShell active="home" tabBar wide>
-      <header className="px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-6">
-        <p className="font-heading text-[19px] font-bold tracking-tight">GoCash</p>
-      </header>
-
-      <section className="px-6">
+      <section className="px-6 pt-[calc(env(safe-area-inset-top)+1.75rem)] lg:pt-10">
         <p className="text-[13px] text-muted-foreground">Total on hand</p>
         <p className="amount text-[46px] font-semibold leading-[1.05] tracking-tight">
           <span className="text-2xl font-medium text-muted-foreground align-[13px] mr-0.5">₱</span>
