@@ -261,6 +261,10 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
     } else if (d.startsWith("sentgcashto")) {
       answer.layout = "gcash.details.to-bank";
       answer.transaction_type = "Bank Transfer";
+    } else if (d.startsWith("paymentto") && sign === "-") {
+      // Paid a merchant or biller from the wallet.
+      answer.layout = "gcash.details.payment";
+      answer.transaction_type = "Bills Payment";
     } else if (d.startsWith("receivedgcashfrom")) {
       // A bank deposit into the wallet: the customer paid e-money, takes cash.
       answer.layout = "gcash.details.from-bank";
@@ -319,7 +323,10 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
   const mayaMark = rows.some((r) => /^maya[!l]?$/i.test(r.text.trim())) || has("paidwithmaya");
   if (mayaMark && has("referenceid")) {
     answer.platform = "Maya";
-    const money = rows.map((r) => r.text).find((t) => /^[+\-−–]?\s*[P₱]\s?[\d,]+\.\d{2}$/.test(t.trim()));
+    // Cell by cell, not row by row: on a transfer from a bank the amount
+    // shares its row with the InstaPay mark.
+    const money = rows.flatMap((r) => r.cells)
+      .find((t) => /^[+\-−–]?\s*[P₱]\s?[\d,]+\.\d{2}$/.test(t.trim()));
 
     if (has("sentmoneyto")) {
       answer.layout = "maya.details.sent";

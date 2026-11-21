@@ -129,6 +129,17 @@ describe("GCash", () => {
     expect(a).toMatchObject({ layout: "gcash.details.from-bank", transaction_type: "Cash Out", amount: 1020 });
   });
 
+  it("transaction details for a payment to a merchant", () => {
+    const a = readReceipt(screen([
+      ["Transaction Details"], ["Payment to Example Merchant"],
+      ["Amount", "-300.00"], ["Date & Time", "Nov16,20264:26PM"],
+      ["Reference Number", "091850450"],
+    ]));
+    expect(a).toMatchObject({
+      layout: "gcash.details.payment", platform: "GCash", transaction_type: "Bills Payment", amount: 300,
+    });
+  });
+
   it("an online payment is read as a bill payment", () => {
     const a = readReceipt(screen([
       ["Pay Online"], ["EXAMPLE MERCHANT"], ["Paidand linkedviaGCash"],
@@ -166,6 +177,19 @@ describe("Maya", () => {
     expect(a).toMatchObject({
       platform: "Maya", transaction_type: "Cash Out", amount: 200,
       transaction_date: "2026-03-09T20:47:00+08:00",
+    });
+  });
+
+  it("received from a bank: the amount shares its row with the InstaPay mark", () => {
+    const a = readReceipt(screen([
+      ["Received money from", "X"], ["P2,000.00", "instaFay"], ["EXAMPLE SENDER"],
+      ["Completed", "Nov 18,2026,05:27 pm"],
+      ["Account type", "Example Bank, Inc."], ["Account number", "00000000000"],
+      ["Reference ID", "9503F408F2DB"], ["Trace No", "351705"], ["maya"],
+    ]));
+    expect(a).toMatchObject({
+      layout: "maya.details.received", platform: "Maya", transaction_type: "Cash Out",
+      amount: 2000, reference_number: "9503F408F2DB",
     });
   });
 
