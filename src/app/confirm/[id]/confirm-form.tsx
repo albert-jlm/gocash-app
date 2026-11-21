@@ -9,6 +9,7 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
+import { EntryEffects } from "@/components/entry-effects";
 import { parsePesosInput, toMinor } from "@core/money.ts";
 import { CASH_ACCOUNT_NAME, isTransactionType } from "@core/types.ts";
 import {
@@ -36,12 +38,6 @@ import { AppShell } from "@/components/app-shell";
 // still usable. The server checks the platform against real accounts anyway.
 const FALLBACK_PLATFORMS = ["GCash", "MariBank", "Maya"];
 
-const ACCOUNT_LABEL: Record<string, string> = {
-  cash: "Drawer cash",
-  revenue: "Your earnings",
-  equity: "Owner's equity",
-  expense: "Transfer costs",
-};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -563,15 +559,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
               on the server when Save is tapped. */}
           {preview && (
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-3 space-y-2">
-              {isTransfer ? (
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                What saving this does
+              </p>
+              {isTransfer && (
                 <p className="text-xs text-muted-foreground">Your own money, moved. Nothing is earned on this.</p>
-              ) : (
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">Your earnings</span>
-                  <span className="text-base font-semibold text-emerald-400 tabular-nums">
-                    {formatPesos(preview.feePesos)}
-                  </span>
-                </div>
               )}
               {!preview.rule && !isTransfer && (
                 <p className="text-[11px] text-amber-300 leading-relaxed">
@@ -580,21 +572,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 </p>
               )}
               <div className="h-px bg-white/[0.06]" />
-              {preview.postings.map((p, i) => {
-                const label =
-                  p.account.kind === "platform"
-                    ? p.account.platform
-                    : ACCOUNT_LABEL[p.account.kind] ?? p.account.kind;
-                const pesos = p.amount / 100;
-                return (
-                  <div key={i} className="flex items-baseline justify-between text-xs">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className={`tabular-nums font-medium ${pesos > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      {pesos > 0 ? "+" : "−"}{formatPesos(Math.abs(pesos))}
-                    </span>
-                  </div>
-                );
-              })}
+              <EntryEffects postings={preview.postings} dense />
             </div>
           )}
 
@@ -650,9 +628,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             type="button"
             onClick={handleDiscard}
             disabled={saving || discarding}
-            className="w-full text-center text-xs text-muted-foreground py-3 disabled:opacity-50"
+            className="mt-2.5 w-full flex items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-500/[0.08] text-red-300 font-medium py-3.5 text-sm active:bg-red-500/[0.15] disabled:opacity-50 transition-colors"
           >
-            {discarding ? "Discarding…" : "Not a real transaction? Discard this draft"}
+            {discarding
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Discarding…</>
+              : <><Trash2 className="w-4 h-4" /> Discard this draft</>}
           </button>
         )}
       </div>

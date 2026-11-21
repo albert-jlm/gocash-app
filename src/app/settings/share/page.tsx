@@ -53,6 +53,26 @@ function CopyRow({ label, value, secret = false }: { label: string; value: strin
   );
 }
 
+/** A word the reader has to find on the screen and tap or type. */
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="text-foreground font-medium">{children}</span>;
+}
+
+/** One stage of building the Shortcut: a lettered heading and its taps. */
+function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold flex items-baseline gap-2">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] flex-shrink-0">
+          {n}
+        </span>
+        {title}
+      </p>
+      <ol className="text-xs text-muted-foreground leading-relaxed list-decimal pl-9 space-y-1.5">{children}</ol>
+    </div>
+  );
+}
+
 function when(iso: string | null): string {
   if (!iso) return "never used";
   return "last used " + new Date(iso).toLocaleString("en-PH", {
@@ -231,44 +251,63 @@ export default function ShareSettingsPage() {
           <CopyRow label="URL" value={SHARE_UPLOAD_URL} />
           <CopyRow label="Authorization header value" value={headerValue} secret={newKey !== null} />
 
-          <ol className="text-xs text-muted-foreground leading-relaxed list-decimal pl-4 space-y-2.5">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            You add four actions, in this order. To add one, tap the search bar
+            at the bottom of the Shortcuts editor, type its name and tap it.
+            The wording below is from recent iOS versions and may differ slightly on yours.
+          </p>
+
+          <Step n="A" title="Create it and put it in the Share menu">
+            <li>Open the <B>Shortcuts</B> app. Tap <B>+</B> at the top right.</li>
+            <li>Tap the name at the top (<B>New Shortcut</B>), choose <B>Rename</B>, and type <B>Send to GoCash</B>.</li>
+            <li>Tap the <B>ⓘ</B> button at the bottom. Switch on <B>Show in Share Sheet</B>. Tap <B>Done</B>.</li>
             <li>
-              Open <span className="text-foreground">Shortcuts</span>, tap <span className="text-foreground">+</span>,
-              and name it <span className="text-foreground">Send to GoCash</span>.
+              A line now appears at the top: &quot;Receive <B>Any</B> input from <B>Share Sheet</B>&quot;.
+              Tap <B>Any</B>, tap <B>Clear</B>, then tick only <B>Images</B>. Tap <B>Done</B>.
             </li>
+          </Step>
+
+          <Step n="B" title="Action 1: Convert Image">
+            <li>Search for <B>Convert Image</B> and tap it.</li>
+            <li>It should read &quot;Convert <B>Shortcut Input</B> to <B>JPEG</B>&quot;. If it says another format, tap it and pick JPEG.</li>
+          </Step>
+
+          <Step n="C" title="Action 2: Get Contents of URL (this sends the screenshot)">
+            <li>Search for <B>Get Contents of URL</B> and tap it.</li>
+            <li>Tap the faded word <B>URL</B> in the action and paste the URL from above.</li>
+            <li>Tap the small <B>arrow (›)</B> on the right of the action to show more options.</li>
+            <li>Tap <B>Method</B> and choose <B>POST</B>.</li>
             <li>
-              Tap the <span className="text-foreground">ⓘ</span> at the bottom and turn on{" "}
-              <span className="text-foreground">Show in Share Sheet</span>. Back in the editor, tap the
-              &quot;Receive&quot; line at the top and leave only <span className="text-foreground">Images</span> ticked.
+              Under <B>Headers</B>, tap <B>Add new header</B>. In <B>Key</B> type <B>Authorization</B>.
+              In <B>Text</B> paste the header value from above. It must be the word Bearer, one space, then your key.
             </li>
-            <li>
-              Add the action <span className="text-foreground">Convert Image</span>. Set it to convert{" "}
-              <span className="text-foreground">Shortcut Input</span> to <span className="text-foreground">JPEG</span>.
-            </li>
-            <li>
-              Add the action <span className="text-foreground">Get Contents of URL</span>. Paste the URL above.
-              Tap the arrow to show more, then set:
-              <ul className="list-disc pl-4 mt-1.5 space-y-1">
-                <li>Method: <span className="text-foreground">POST</span></li>
-                <li>
-                  Headers: add one. Key <span className="text-foreground">Authorization</span>, value the
-                  header value above (the word Bearer, a space, then your key).
-                </li>
-                <li>
-                  Request Body: <span className="text-foreground">File</span>, and choose{" "}
-                  <span className="text-foreground">Converted Image</span>.
-                </li>
-              </ul>
-            </li>
-            <li>
-              Add <span className="text-foreground">Get Dictionary Value</span>: get the value for{" "}
-              <span className="text-foreground">message</span> in <span className="text-foreground">Contents of URL</span>.
-            </li>
-            <li>
-              Add <span className="text-foreground">Show Notification</span> and set its text to{" "}
-              <span className="text-foreground">Dictionary Value</span>. Tap Done.
-            </li>
-          </ol>
+            <li>Tap <B>Request Body</B> and choose <B>File</B>.</li>
+            <li>Tap <B>File</B> (the field that appears) and choose <B>Converted Image</B>.</li>
+          </Step>
+
+          <Step n="D" title="Action 3: Get Dictionary Value (this reads the reply)">
+            <li>Search for <B>Get Dictionary Value</B> and tap it.</li>
+            <li>It should read &quot;Get <B>Value</B> for <B>Key</B> in <B>Contents of URL</B>&quot;.</li>
+            <li>Tap <B>Key</B> and type <B>message</B>, in small letters.</li>
+          </Step>
+
+          <Step n="E" title="Action 4: Show Notification">
+            <li>Search for <B>Show Notification</B> and tap it.</li>
+            <li>Tap the text <B>Hello World</B> and delete it.</li>
+            <li>In the row of suggestions above the keyboard, tap <B>Dictionary Value</B>.</li>
+            <li>Tap <B>Done</B> at the top right. The Shortcut is finished.</li>
+          </Step>
+
+          <div className="rounded-xl bg-black/20 p-3 space-y-1.5">
+            <p className="text-xs font-semibold">If it doesn&apos;t work</p>
+            <ul className="text-[11px] text-muted-foreground leading-relaxed list-disc pl-4 space-y-1">
+              <li><B>&quot;The upload key is missing&quot;</B>: the header key isn&apos;t exactly Authorization, or the value doesn&apos;t start with Bearer and a space.</li>
+              <li><B>&quot;This upload key is not valid any more&quot;</B>: the key was mistyped or removed. Make a new one above and paste it again.</li>
+              <li><B>&quot;No image arrived&quot;</B>: Request Body isn&apos;t set to File, or File isn&apos;t Converted Image.</li>
+              <li><B>The notification is empty</B>: the key in action 3 isn&apos;t exactly <B>message</B>.</li>
+              <li><B>Send to GoCash isn&apos;t in the Share menu</B>: scroll to the bottom of the menu, tap <B>Edit Actions</B> and add it.</li>
+            </ul>
+          </div>
         </div>
 
         {/* ----- 3. using it ----- */}

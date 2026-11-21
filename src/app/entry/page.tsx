@@ -37,6 +37,7 @@ import {
   type EntryContext,
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
+import { EntryEffects } from "@/components/entry-effects";
 
 /** Shorter labels than the enum values; the counter has no room for "Profit Remittance". */
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -66,12 +67,6 @@ const TYPE_HINT: Record<TransactionType, string> = {
   "Wallet Transfer": "You move your own money between wallets or the drawer. No customer, nothing earned.",
 };
 
-const ACCOUNT_LABEL: Record<string, string> = {
-  cash: "Drawer cash",
-  revenue: "Your earnings",
-  equity: "Owner's equity",
-  expense: "Transfer costs",
-};
 
 export default function EntryPage() {
   const router = useRouter();
@@ -408,17 +403,10 @@ export default function EntryPage() {
         {/* ----- live preview ----- */}
         {preview && (
           <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-3">
-            {isTransfer ? (
+            {isTransfer && (
               <p className="text-xs text-muted-foreground">
                 Your own money, moved. Nothing is earned on this.
               </p>
-            ) : (
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-muted-foreground">Your fee</span>
-                <span className="text-lg font-semibold text-emerald-400 tabular-nums">
-                  {formatPesos(preview.feePesos)}
-                </span>
-              </div>
             )}
 
             {!preview.rule && !isTransfer && (
@@ -435,25 +423,7 @@ export default function EntryPage() {
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 What this changes
               </span>
-              {preview.postings.map((p, i) => {
-                const label =
-                  p.account.kind === "platform"
-                    ? p.account.platform
-                    : ACCOUNT_LABEL[p.account.kind] ?? p.account.kind;
-                const pesos = p.amount / 100;
-                return (
-                  <div key={i} className="flex items-baseline justify-between text-sm">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span
-                      className={`tabular-nums font-medium ${
-                        pesos > 0 ? "text-emerald-400" : "text-red-400"
-                      }`}
-                    >
-                      {pesos > 0 ? "+" : "−"}{formatPesos(Math.abs(pesos))}
-                    </span>
-                  </div>
-                );
-              })}
+              <EntryEffects postings={preview.postings} />
             </div>
           </div>
         )}
