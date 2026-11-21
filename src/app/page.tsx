@@ -9,7 +9,10 @@ import {
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
 import { supabase } from "@/lib/supabase/client";
-import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
+import { newIdempotencyKey, setEarnings, voidTransaction } from "@/lib/ledger";
+import { parsePesosInput } from "@core/money.ts";
+import { formatAmountInput } from "@/lib/display";
+import { Sheet } from "@/components/sheet";
 import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 
@@ -116,6 +119,17 @@ export default function Dashboard() {
   const walletScrollRef = useRef<HTMLDivElement>(null);
   const [activeWallet, setActiveWallet] = useState(0);
   const [showDrafts, setShowDrafts] = useState(false);
+  const [earningsOpen, setEarningsOpen] = useState(false);
+  const [earningsEditing, setEarningsEditing] = useState(false);
+  const [earningsInput, setEarningsInput] = useState("");
+  const [earningsSaving, setEarningsSaving] = useState(false);
+  const [earningsError, setEarningsError] = useState<string | null>(null);
+  const earningsKey = useRef<string>(newIdempotencyKey("earnings"));
+  const closeEarnings = useCallback(() => {
+    setEarningsOpen(false);
+    setEarningsEditing(false);
+    setEarningsError(null);
+  }, []);
 
   // Mouse drag-to-scroll for wallet cards (desktop UX from 21st.dev component)
   const dragState = useRef({ isDragging: false, startX: 0, scrollLeft: 0 });
@@ -292,6 +306,27 @@ export default function Dashboard() {
     }
   }
 
+  async function saveEarnings() {
+    const minor = parsePesosInput(earningsInput);
+    if (minor === null || minor < 0) {
+      setEarningsError("Enter an amount like 1,250 or 1,250.50");
+      return;
+    }
+    setEarningsSaving(true);
+    setEarningsError(null);
+    try {
+      const saved = await setEarnings(minor / 100, earningsKey.current);
+      earningsKey.current = newIdempotencyKey("earnings");
+      setEarningsHeld(saved);
+      if (lastHome) lastHome = { ...lastHome, earnings: saved };
+      closeEarnings();
+    } catch (err) {
+      setEarningsError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setEarningsSaving(false);
+    }
+  }
+
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
@@ -337,14 +372,19 @@ export default function Dashboard() {
                 <p className="amount text-xl font-semibold">{pesos(w.natural_balance)}</p>
               </div>
               {index === 0 && earningsHeld !== null && (
-            <Link
-              href={role === "owner" ? "/entry?type=Profit%20Remittance" : "/transactions"}
-              className="flex-shrink-0 w-[150px] sm:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between bg-spark text-spark-foreground dark:border dark:border-primary/60"
+            <button
+              type="button"
+              disabled={role !== "owner"}
+              onClick={() => {
+                setEarningsInput(formatAmountInput(String(earningsHeld)));
+                setEarningsOpen(true);
+              }}
+              className="flex-shrink-0 w-[150px] sm:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between text-left bg-spark text-spark-foreground dark:border dark:border-primary/60"
               style={{ scrollSnapAlign: "start" }}
             >
               <p className="text-[13px] opacity-75">Earnings</p>
               <p className="amount text-xl font-semibold">{pesos(earningsHeld)}</p>
-            </Link>
+            </button>
           )}
               </Fragment>
             );
@@ -506,6 +546,56 @@ export default function Dashboard() {
           )}
         </section>
       </div>
+      <Sheet open={earningsOpen} onClose={closeEarnings} title="Earnings">
+        <p className="amount text-[34px] font-semibold tracking-tight">{pesos(earningsHeld ?? 0)}</p>
+        <p className="text-sm text-muted-foreground mb-5">Fees earned and not yet taken out.</p>
+
+        {earningsEditing ? (
+          <>
+            <label htmlFor="earnings-amount" className="text-[13px] text-muted-foreground">Correct amount</label>
+            <div className="relative mt-1.5">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
+              <input
+                id="earnings-amount"
+                inputMode="decimal"
+                autoComplete="off"
+                autoFocus
+                value={earningsInput}
+                onChange={(e) => setEarningsInput(formatAmountInput(e.target.value))}
+                className="amount w-full h-[54px] rounded-2xl bg-muted pl-9 pr-4 text-xl font-semibold"
+              />
+            </div>
+            <p className="text-[13px] text-muted-foreground mt-2">
+              The change is kept on record. Drawer and wallet balances do not move.
+            </p>
+            {earningsError && <p className="text-sm text-destructive mt-2">{earningsError}</p>}
+            <button
+              type="button"
+              onClick={saveEarnings}
+              disabled={earningsSaving}
+              className="font-heading mt-4 w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] disabled:opacity-60"
+            >
+              {earningsSaving ? "Saving…" : "Save"}
+            </button>
+          </>
+        ) : (
+          <div className="space-y-2.5">
+            <Link
+              href="/entry?type=Profit%20Remittance"
+              className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] flex items-center justify-center"
+            >
+              Take out profit
+            </Link>
+            <button
+              type="button"
+              onClick={() => setEarningsEditing(true)}
+              className="font-heading w-full h-[54px] rounded-full bg-muted font-semibold text-[17px]"
+            >
+              Edit amount
+            </button>
+          </div>
+        )}
+      </Sheet>
     </AppShell>
   );
 }

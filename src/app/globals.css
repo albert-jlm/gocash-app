@@ -147,6 +147,7 @@
   html {
     @apply font-sans;
     color-scheme: light;
+    background-color: var(--background);
   }
   html.dark {
     color-scheme: dark;
@@ -169,8 +170,11 @@
     opacity: 0.7;
     transform: scale(0.98);
   }
-  input, select, textarea {
-    font-size: max(16px, 1em);
+  .sheet-fade {
+    animation: sheet-fade 160ms ease-out;
+  }
+  .sheet-rise {
+    animation: sheet-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .app-scroll {
     scrollbar-width: none;
@@ -213,5 +217,24 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@media (pointer: coarse) {
+  input, select, textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
   }
 }

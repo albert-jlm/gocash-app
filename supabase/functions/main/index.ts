@@ -14,6 +14,7 @@ import { handleCreateTransaction } from "./_create_transaction.ts";
 import { handleConfirmTransaction } from "./_confirm_transaction.ts";
 import { handleVoidTransaction } from "./_void_transaction.ts";
 import { handleReconcileAccount } from "./_reconcile_account.ts";
+import { handleAdjustEarnings } from "./_adjust_earnings.ts";
 import { handleProvisionOperator } from "./_provision_operator.ts";
 import { handleManagePlatform } from "./_manage_platform.ts";
 import { handleManageStaff } from "./_manage_staff.ts";
@@ -45,6 +46,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   // balance with no trace — with a derived ledger that write is not merely
   // untracked, it is impossible.
   "reconcile-account": handleReconcileAccount,
+  "adjust-earnings": handleAdjustEarnings,
   // Signup. gocash.provision_operator is service-role only because p_user_id
   // is caller-supplied; this route is what turns a verified JWT into that call.
   "provision-operator": handleProvisionOperator,

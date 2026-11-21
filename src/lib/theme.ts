@@ -13,6 +13,7 @@ export function applyTheme(choice: ThemeChoice) {
     choice === "dark" ||
     (choice === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", dark);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0e1626" : "#f5f6f2");
 }
 
 export function saveTheme(choice: ThemeChoice) {

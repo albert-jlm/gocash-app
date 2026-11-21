@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const body = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-body" });
 const display = Instrument_Sans({ subsets: ["latin"], variable: "--font-display" });
 
-const THEME_BOOT = `(function(){try{var t=localStorage.getItem("gocash-theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
+const THEME_BOOT = `(function(){try{var m=matchMedia("(prefers-color-scheme: dark)");var a=function(){var t=localStorage.getItem("gocash-theme")||"system";var d=t==="dark"||(t==="system"&&m.matches);document.documentElement.classList.toggle("dark",d);var c=document.querySelector('meta[name="theme-color"]');if(c)c.setAttribute("content",d?"#0e1626":"#f5f6f2");};a();m.addEventListener("change",a);}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: "GoCash",
@@ -37,9 +37,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("font-sans", body.variable, display.variable)} suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#f5f6f2" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#0e1626" media="(prefers-color-scheme: dark)" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#f5f6f2" />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body className="bg-[var(--color-background)] text-[var(--color-foreground)] antialiased">

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { addPlatform as addPlatformAccount, retirePlatform } from "@/lib/ledger";
+import { Sheet } from "@/components/sheet";
 import { AppShell } from "@/components/app-shell";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ export default function PlatformsSettingsPage() {
 
   // Deactivate
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<PlatformAccount | null>(null);
 
   // Feedback
   const [error, setError] = useState<string | null>(null);
@@ -223,9 +225,9 @@ export default function PlatformsSettingsPage() {
 
               {!isBuiltIn && (
                 <button
-                  onClick={() => deactivatePlatform(a)}
+                  onClick={() => setArchiving(a)}
                   disabled={isDeactivating}
-                  title="Deactivate — past transactions are kept"
+                  aria-label={`Archive ${a.name}`}
                   className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center hover:bg-warning/20 transition-colors disabled:opacity-50"
                 >
                   {isDeactivating ? (
@@ -324,6 +326,33 @@ export default function PlatformsSettingsPage() {
           their history. Built-in platforms (GCash, MariBank) stay put.
         </p>
       </section>
+      <Sheet open={archiving !== null} onClose={() => setArchiving(null)} title={`Archive ${archiving?.name ?? "wallet"}?`}>
+        <ul className="text-sm text-muted-foreground space-y-1.5 mt-2 mb-5 list-disc pl-5">
+          <li>It disappears from Home and from new transactions.</li>
+          <li>Its past transactions stay in History.</li>
+          <li>A wallet that still holds money cannot be archived. Move the money out first.</li>
+        </ul>
+        <div className="space-y-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              const target = archiving;
+              setArchiving(null);
+              if (target) deactivatePlatform(target);
+            }}
+            className="font-heading w-full h-[54px] rounded-full bg-destructive text-white dark:text-background font-semibold text-[17px]"
+          >
+            Archive
+          </button>
+          <button
+            type="button"
+            onClick={() => setArchiving(null)}
+            className="font-heading w-full h-[54px] rounded-full bg-muted font-semibold text-[17px]"
+          >
+            Keep it
+          </button>
+        </div>
+      </Sheet>
     </AppShell>
   );
 }

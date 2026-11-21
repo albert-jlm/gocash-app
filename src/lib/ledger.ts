@@ -171,6 +171,26 @@ export async function postReconciliation(
   };
 }
 
+export async function setEarnings(earningsPesos: number, idempotencyKey: string): Promise<number> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/adjust-earnings`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ earnings_pesos: earningsPesos, idempotency_key: idempotencyKey }),
+    }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error ?? "Could not save the earnings figure");
+  return typeof data.earnings === "number" ? data.earnings : earningsPesos;
+}
+
 export interface ProvisionOperatorInput {
   userId: string;
   name: string;
