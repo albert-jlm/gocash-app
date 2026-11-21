@@ -141,7 +141,7 @@ function TransactionsList() {
   return (
     <AppShell active="history" tabBar wide>
       {/* Header */}
-      <header className="px-5 pt-14 lg:pt-10 pb-3">
+      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-3">
         <h1 className="text-xl font-semibold">My Transactions</h1>
         <p className="text-[12px] text-muted-foreground mt-0.5">
           {transactions.length} total · {transactions.filter(t => t.status === "awaiting_confirm").length} to review
@@ -170,7 +170,7 @@ function TransactionsList() {
       </div>
 
       {/* Transaction Groups */}
-      <div className="px-5 pb-32 space-y-5 flex-1">
+      <div className="px-5 pb-8 space-y-5 flex-1">
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  ArrowLeft,
+  ScanLine,
   ImageIcon,
   Camera,
   Home,
@@ -13,7 +13,6 @@ import {
   Settings,
   Loader2,
   AlertCircle,
-  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { Capacitor } from "@capacitor/core";
@@ -216,95 +215,48 @@ export default function CapturePage() {
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* Ambient radial glow */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: "radial-gradient(ellipse 60% 40% at 50% 45%, transparent 0%, transparent 70%)",
-        }}
-      />
-
-      {/* Header */}
-      <header className="relative z-10 px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-base font-semibold">From a receipt</h1>
-          <p className="text-xs text-muted-foreground">Read off a screenshot</p>
-        </div>
-        {/* An escape hatch, not a nicety. When the receipt is cropped, the share
-            sheet is missing, or the extraction comes back wrong, the operator
-            still has to record the transaction — and before /entry existed there
-            was nowhere for them to go. */}
-        <Link
-          href="/entry"
-          className="text-xs text-muted-foreground underline flex-shrink-0"
-        >
-          Type it instead
-        </Link>
+      <header className="px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4">
+        <h1 className="text-[17px] font-semibold text-center">Scan a receipt</h1>
       </header>
 
-      {/* Main Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 pb-36">
-
-        {/* Hero card — camera icon centred, drag-active glow */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-8">
         <div
           className={[
-            "w-full aspect-square rounded-3xl flex flex-col items-center justify-center mb-6 transition-all duration-200",
-            isDragging
-              ? "bg-primary/10 ring-2 ring-primary"
-              : "bg-muted/60 ring-1 ring-border",
+            "w-full max-w-sm aspect-[4/3] rounded-[20px] flex flex-col items-center justify-center mb-6 transition-colors",
+            isDragging ? "bg-primary/10 ring-2 ring-primary" : "bg-muted",
           ].join(" ")}
         >
-          <div className="rounded-full bg-muted p-8 mb-5">
-            <Camera className="w-16 h-16 text-muted-foreground" />
-          </div>
-          <h2 className="text-[17px] font-semibold text-foreground mb-1.5">
-            {isDragging ? "Drop it here" : "Capture Screenshot"}
-          </h2>
-          <p className="text-sm text-muted-foreground text-center max-w-[200px] leading-relaxed">
-            {isDragging
-              ? "Release to process the image"
-              : "Any payment receipt — we'll extract the details"}
-          </p>
-
-          {/* AI badge */}
-          {!isDragging && (
-            <div className="flex items-center gap-1.5 mt-5 bg-primary/10 border border-primary/20 rounded-full px-3 py-1.5">
-              <Sparkles className="w-3 h-3 text-primary" />
-              <span className="text-xs text-primary font-medium">AI-powered extraction</span>
-            </div>
-          )}
+          <ScanLine className="w-12 h-12 mb-4" strokeWidth={1.6} />
+          <p className="text-[15px] font-medium">{isDragging ? "Drop it here" : "Choose a receipt screenshot"}</p>
+          <p className="text-[13px] text-muted-foreground mt-1">You review it before it counts</p>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="w-full flex items-start gap-2.5 bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3 mb-4">
+          <div className="w-full max-w-sm flex items-start gap-2.5 bg-destructive/10 rounded-2xl px-4 py-3 mb-4">
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 
-        {/* Buttons — h-14 rounded-2xl from 21st.dev */}
-        <div className="w-full space-y-3">
+        <div className="w-full max-w-sm space-y-2.5">
           <button
             onClick={openGallery}
-            className="h-14 w-full flex items-center justify-center gap-2.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground font-semibold rounded-2xl text-[15px] transition-colors"
+            className="font-heading h-[54px] w-full flex items-center justify-center gap-2.5 bg-primary text-primary-foreground font-semibold rounded-full text-[17px]"
           >
             <ImageIcon className="w-5 h-5" />
-            Pick from Gallery
+            Pick from gallery
           </button>
           <button
             onClick={openCamera}
-            className="h-14 w-full flex items-center justify-center gap-2.5 bg-muted hover:bg-muted active:bg-zinc-900 border border-border text-foreground font-medium rounded-2xl text-[15px] transition-colors"
+            className="font-heading h-[54px] w-full flex items-center justify-center gap-2.5 bg-muted font-semibold rounded-full text-[17px]"
           >
             <Camera className="w-5 h-5" />
-            Take a Photo
+            Take a photo
           </button>
+          <Link href="/new" className="block text-center text-sm text-muted-foreground underline underline-offset-4 py-3">
+            Type it in
+          </Link>
         </div>
 
         {/* Hidden single file input */}

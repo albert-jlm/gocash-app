@@ -52,7 +52,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col border-r border-border bg-muted/60 px-4 py-6">
         <Link href="/" className="px-2 mb-8 block">
@@ -81,24 +81,22 @@ export function AppShell({
         </nav>
       </aside>
 
-      {/* Content */}
-      <div className="lg:pl-60">
+      <main className="app-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain lg:pl-60">
         <div
           className={[
-            "relative flex flex-col min-h-screen w-full mx-auto",
-            "max-w-[430px] sm:max-w-xl",
+            "app-enter relative flex flex-col min-h-full w-full mx-auto",
+            "max-w-[480px] sm:max-w-2xl",
             wide ? "lg:max-w-5xl" : "lg:max-w-2xl",
             className,
           ].join(" ")}
         >
           {children}
         </div>
-      </div>
+      </main>
 
-      {/* Phone tab bar */}
       {tabBar && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-background border-t border-border pb-[env(safe-area-inset-bottom)]">
-          <nav className="mx-auto w-full max-w-[430px] sm:max-w-xl grid grid-cols-4 h-16">
+        <div className="lg:hidden flex-shrink-0 bg-background border-t border-border pb-[env(safe-area-inset-bottom)]">
+          <nav className="mx-auto w-full max-w-[480px] sm:max-w-2xl grid grid-cols-4 h-16">
             {TABS.map(({ key, href, label, Icon }) => {
               const on = key === active;
               return (

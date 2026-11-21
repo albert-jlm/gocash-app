@@ -84,13 +84,21 @@ function formatTime(iso: string): string {
 // Component
 // ---------------------------------------------------------------------------
 
+let lastHome: {
+  wallets: AccountBalance[];
+  pendingCount: number;
+  pending: PendingRow[];
+  todayStats: { count: number; total: number; earnings: number };
+  recentTx: TxRow[];
+} | null = null;
+
 export default function Dashboard() {
   const { operatorId, role, loading: authLoading } = useAuthGuard();
   useShareIntent();
 
-  const [wallets, setWallets] = useState<AccountBalance[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [pending, setPending] = useState<PendingRow[]>([]);
+  const [wallets, setWallets] = useState<AccountBalance[]>(lastHome?.wallets ?? []);
+  const [pendingCount, setPendingCount] = useState(lastHome?.pendingCount ?? 0);
+  const [pending, setPending] = useState<PendingRow[]>(lastHome?.pending ?? []);
   const [loadError, setLoadError] = useState(false);
   // "Saved · Undo": the transaction just recorded, for a few seconds.
   const [justSaved, setJustSaved] = useState<TxRow | null>(null);
@@ -98,9 +106,9 @@ export default function Dashboard() {
   const [undoError, setUndoError] = useState<string | null>(null);
   const undoKey = useRef<string>(newIdempotencyKey("undo"));
   const [reloadTick, setReloadTick] = useState(0);
-  const [todayStats, setTodayStats] = useState({ count: 0, total: 0, earnings: 0 });
-  const [recentTx, setRecentTx] = useState<TxRow[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [todayStats, setTodayStats] = useState(lastHome?.todayStats ?? { count: 0, total: 0, earnings: 0 });
+  const [recentTx, setRecentTx] = useState<TxRow[]>(lastHome?.recentTx ?? []);
+  const [dataLoading, setDataLoading] = useState(lastHome === null);
 
   // Wallet scroll snap — progress dot tracking
   const walletScrollRef = useRef<HTMLDivElement>(null);
@@ -145,7 +153,6 @@ export default function Dashboard() {
     const opId = operatorId; // narrow to string for async closure
 
     async function fetchData() {
-      setDataLoading(true);
 
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -196,19 +203,30 @@ export default function Dashboard() {
         setLoadError(true);
       }
 
+      const today = todayTxRes.data
+        ? {
+            count: todayTxRes.data.length,
+            total: todayTxRes.data.reduce((sum, t) => sum + t.amount, 0),
+            earnings: todayTxRes.data.reduce((sum, t) => sum + t.net_profit, 0),
+          }
+        : null;
+      const count = pendingRes.count ?? pendingRes.data?.length ?? 0;
+
       if (walletsRes.data) setWallets(walletsRes.data);
-      setPendingCount(pendingRes.count ?? pendingRes.data?.length ?? 0);
+      setPendingCount(count);
       if (pendingRes.data) setPending(pendingRes.data);
-
-      if (todayTxRes.data) {
-        setTodayStats({
-          count: todayTxRes.data.length,
-          total: todayTxRes.data.reduce((s, t) => s + t.amount, 0),
-          earnings: todayTxRes.data.reduce((s, t) => s + t.net_profit, 0),
-        });
-      }
-
+      if (today) setTodayStats(today);
       if (recentRes.data) setRecentTx(recentRes.data);
+
+      if (walletsRes.data && pendingRes.data && today && recentRes.data) {
+        lastHome = {
+          wallets: walletsRes.data,
+          pendingCount: count,
+          pending: pendingRes.data,
+          todayStats: today,
+          recentTx: recentRes.data,
+        };
+      }
       setDataLoading(false);
     }
 
@@ -265,7 +283,7 @@ export default function Dashboard() {
 
   return (
     <AppShell active="home" tabBar wide>
-      <header className="px-6 pt-12 lg:pt-10 pb-6">
+      <header className="px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-6">
         <p className="font-heading text-[19px] font-bold tracking-tight">GoCash</p>
       </header>
 
@@ -282,7 +300,7 @@ export default function Dashboard() {
         <div
           ref={walletScrollRef}
           onScroll={handleWalletScroll}
-          className="flex gap-2.5 px-6 scroll-pl-6 overflow-x-auto cursor-grab lg:grid lg:grid-cols-4 lg:overflow-visible lg:cursor-default"
+          className="flex gap-2.5 px-6 scroll-pl-6 overflow-x-auto cursor-grab sm:grid sm:grid-cols-4 sm:overflow-visible sm:cursor-default"
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {ordered.map((w) => {
@@ -290,7 +308,7 @@ export default function Dashboard() {
             return (
               <div
                 key={w.account_id}
-                className={`flex-shrink-0 w-[150px] lg:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between ${
+                className={`flex-shrink-0 w-[150px] sm:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between ${
                   cash ? "bg-primary text-primary-foreground" : "bg-muted"
                 }`}
                 style={{ scrollSnapAlign: "start" }}
@@ -304,7 +322,7 @@ export default function Dashboard() {
           })}
         </div>
         {ordered.length > 2 && (
-          <div className="flex justify-center gap-[5px] mt-2.5 lg:hidden" aria-hidden>
+          <div className="flex justify-center gap-[5px] mt-2.5 sm:hidden" aria-hidden>
             {ordered.map((_, i) => (
               <span
                 key={i}
@@ -315,7 +333,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      <nav aria-label="New transaction" className="grid grid-cols-5 px-6 mt-5 lg:max-w-md">
+      <nav aria-label="New transaction" className="grid grid-cols-5 px-6 mt-5 sm:max-w-md">
         {ACTIONS.map(({ label, href, Icon }) => (
           <Link key={label} href={href} className="flex flex-col items-center gap-1.5 text-xs font-medium">
             <span className="w-[50px] h-[50px] rounded-full bg-action text-action-foreground grid place-items-center">
@@ -414,7 +432,7 @@ export default function Dashboard() {
           </section>
         )}
 
-        <section className="px-6 mt-5 mb-28">
+        <section className="px-6 mt-5 pb-8">
           <div className="flex items-center justify-between text-[13px]">
             <Link href="/transactions" className="text-muted-foreground flex items-center gap-0.5">
               Recent <ChevronRight className="w-3.5 h-3.5" />

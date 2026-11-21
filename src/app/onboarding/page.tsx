@@ -145,7 +145,7 @@ export default function OnboardingPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground max-w-[430px] mx-auto px-5 sm:justify-center sm:pb-10">
       {/* Progress dots */}
-      <div className="flex items-center justify-center gap-2 pt-14 lg:pt-10 pb-8">
+      <div className="flex items-center justify-center gap-2 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-8">
         <span className={`w-2 h-2 rounded-full ${step === 1 ? "bg-primary" : "bg-primary/40"}`} />
         <span className={`w-2 h-2 rounded-full ${step === 2 ? "bg-primary" : "bg-foreground/10"}`} />
       </div>

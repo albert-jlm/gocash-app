@@ -218,7 +218,7 @@ export default function EntryPage() {
 
   return (
     <AppShell active="new">
-      <header className="px-6 pt-12 lg:pt-10 pb-4 grid grid-cols-[44px_1fr_44px] items-center">
+      <header className="px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 grid grid-cols-[44px_1fr_44px] items-center">
         <Link href="/new" aria-label="Back" className="w-11 h-11 -ml-2.5 grid place-items-center">
           <ChevronLeft className="w-[22px] h-[22px]" />
         </Link>

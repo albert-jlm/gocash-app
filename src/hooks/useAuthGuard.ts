@@ -25,13 +25,16 @@ interface AppSession {
  * - Session but no shop (owns none, staff of none) → redirects to /onboarding
  * - Otherwise → returns session, operatorId and the login's role in that shop
  */
+let remembered: { session: Session; operatorId: string; role: Role } | null = null;
+
 export function useAuthGuard(opts: { ownerOnly?: boolean } = {}): AppSession {
   const ownerOnly = opts.ownerOnly === true;
   const router = useRouter();
-  const [session, setSession] = useState<Session | null>(null);
-  const [operatorId, setOperatorId] = useState<string | null>(null);
-  const [role, setRole] = useState<Role | null>(null);
-  const [loading, setLoading] = useState(true);
+  const known = remembered && (!ownerOnly || remembered.role === "owner") ? remembered : null;
+  const [session, setSession] = useState<Session | null>(known?.session ?? null);
+  const [operatorId, setOperatorId] = useState<string | null>(known?.operatorId ?? null);
+  const [role, setRole] = useState<Role | null>(known?.role ?? null);
+  const [loading, setLoading] = useState(known === null);
 
   useEffect(() => {
     async function init() {
@@ -40,6 +43,7 @@ export function useAuthGuard(opts: { ownerOnly?: boolean } = {}): AppSession {
       } = await supabase.auth.getSession();
 
       if (!s) {
+        remembered = null;
         router.replace("/login");
         return;
       }
@@ -77,6 +81,7 @@ export function useAuthGuard(opts: { ownerOnly?: boolean } = {}): AppSession {
         return;
       }
 
+      remembered = { session: s, operatorId: op.id, role: op.role };
       setOperatorId(op.id);
       setRole(op.role);
       setLoading(false);
@@ -89,6 +94,7 @@ export function useAuthGuard(opts: { ownerOnly?: boolean } = {}): AppSession {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "SIGNED_OUT" || !s) {
+        remembered = null;
         router.replace("/login");
       }
     });

@@ -2,11 +2,12 @@
   "name": "GoCash Tracker",
   "short_name": "GoCash",
   "description": "Manage your GCash and MariBank transactions",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f5f6f2",
   "theme_color": "#1b2e52",
-  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192.png",

@@ -83,7 +83,7 @@ export default function StaffSettingsPage() {
 
   return (
     <AppShell active="settings">
-      <header className="px-5 pt-14 lg:pt-10 pb-4 flex items-center gap-3">
+      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
         <Link
           href="/settings"
           className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
