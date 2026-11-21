@@ -38,6 +38,7 @@ import {
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
 import { EntryEffects } from "@/components/entry-effects";
+import { CashOutFeeChoice } from "@/components/cash-out-fee-choice";
 
 /** Shorter labels than the enum values; the counter has no room for "Profit Remittance". */
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -348,26 +349,14 @@ export default function EntryPage() {
             </p>
           )}
 
-          {txType === "Cash Out" && (
-            <button
-              type="button"
-              onClick={() => setAmountIncludesFee((v) => !v)}
-              className="flex items-start gap-2.5 w-full text-left pt-1"
-            >
-              <span
-                className={`w-4 h-4 rounded flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                  amountIncludesFee ? "bg-emerald-500" : "bg-white/[0.12]"
-                }`}
-              >
-                {amountIncludesFee && <Check className="w-3 h-3 text-black" />}
-              </span>
-              <span className="text-[11px] text-muted-foreground leading-relaxed">
-                This amount already includes my fee
-                {/* Never inferred. The old code guessed, and because the gross of
-                    any whole peso divides cleanly at 2%, every amount divisible
-                    by 51 tripped the guess and was charged about a peso short. */}
-              </span>
-            </button>
+          {txType === "Cash Out" && context && (
+            <CashOutFeeChoice
+              amountPesos={amountPesos}
+              platform={platform}
+              rules={context.rules}
+              value={amountIncludesFee}
+              onChange={setAmountIncludesFee}
+            />
           )}
         </div>
 
@@ -417,7 +406,6 @@ export default function EntryPage() {
               </p>
             )}
 
-            <div className="h-px bg-white/[0.06]" />
 
             <div className="space-y-1.5">
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground">

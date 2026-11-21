@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
 import { EntryEffects } from "@/components/entry-effects";
+import { CashOutFeeChoice } from "@/components/cash-out-fee-choice";
 import { parsePesosInput, toMinor } from "@core/money.ts";
 import { CASH_ACCOUNT_NAME, isTransactionType } from "@core/types.ts";
 import {
@@ -515,23 +516,14 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
               </p>
             )}
 
-            {txType === "Cash Out" && (
-              <button
-                type="button"
-                onClick={() => setAmountIncludesFee((v) => !v)}
-                className="flex items-start gap-2.5 w-full text-left pt-1"
-              >
-                <span
-                  className={`w-4 h-4 rounded flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                    amountIncludesFee ? "bg-emerald-500" : "bg-white/[0.12]"
-                  }`}
-                >
-                  {amountIncludesFee && <Check className="w-3 h-3 text-black" />}
-                </span>
-                <span className="text-[11px] text-muted-foreground leading-relaxed">
-                  This amount already includes my fee
-                </span>
-              </button>
+            {txType === "Cash Out" && context && amountValid && (
+              <CashOutFeeChoice
+                amountPesos={(amountMinor as number) / 100}
+                platform={platform}
+                rules={context.rules}
+                value={amountIncludesFee}
+                onChange={setAmountIncludesFee}
+              />
             )}
           </FieldRow>
 
