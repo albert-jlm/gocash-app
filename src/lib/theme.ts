@@ -16,7 +16,17 @@ export function applyTheme(choice: ThemeChoice) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0e1626" : "#f5f6f2");
 }
 
+const listeners = new Set<() => void>();
+
+export function subscribeTheme(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export function saveTheme(choice: ThemeChoice) {
   window.localStorage.setItem(KEY, choice);
   applyTheme(choice);
+  listeners.forEach((listener) => listener());
 }

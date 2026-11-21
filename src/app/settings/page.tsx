@@ -1,23 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowLeft, Home, Plus, History, Settings, LogOut } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import {
+  BadgePercent, Bell, ChevronRight, CircleHelp, Contact, LayoutGrid, LogOut, Moon, Share, Smartphone, Sun, Users, Wallet,
+} from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
-import { readTheme, saveTheme, type ThemeChoice } from "@/lib/theme";
+import { readTheme, saveTheme, subscribeTheme, type ThemeChoice } from "@/lib/theme";
 
 export default function SettingsPage() {
   const { session, role, loading } = useAuthGuard();
   const [signingOut, setSigningOut] = useState(false);
-  const [theme, setTheme] = useState<ThemeChoice>("system");
-
-  useEffect(() => {
-    setTheme(readTheme());
-  }, []);
+  const theme = useSyncExternalStore<ThemeChoice>(subscribeTheme, readTheme, () => "system");
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -40,54 +38,52 @@ export default function SettingsPage() {
 
       <section className="px-5 flex-1">
         <div className="mb-4">
-          <p className="text-[15px] font-medium mb-2">Appearance</p>
+          <p className="label">Appearance</p>
           <div role="radiogroup" aria-label="Appearance" className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
-            {([["system", "Match phone"], ["light", "Light"], ["dark", "Dark"]] as const).map(([value, label]) => (
+            {([["system", "Phone", Smartphone], ["light", "Light", Sun], ["dark", "Dark", Moon]] as const).map(([value, label, Icon]) => (
               <button
                 key={value}
                 type="button"
                 role="radio"
                 aria-checked={theme === value}
-                onClick={() => {
-                  setTheme(value);
-                  saveTheme(value);
-                }}
-                className={`h-11 rounded-full text-[15px] font-medium transition-colors ${
+                aria-label={value === "system" ? "Match the phone" : label}
+                onClick={() => saveTheme(value)}
+                className={`h-11 rounded-full text-[15px] font-medium flex items-center justify-center gap-2 transition-colors ${
                   theme === value ? "bg-primary text-primary-foreground" : "text-muted-foreground"
                 }`}
               >
+                <Icon className="w-[18px] h-[18px]" strokeWidth={1.9} />
                 {label}
               </button>
             ))}
           </div>
         </div>
-        <div className="bg-muted rounded-2xl overflow-hidden divide-y divide-border">
+        <div className="card overflow-hidden divide-y divide-border">
           {[
-            // Balances are derived from the ledger now, so this screen reconciles
-            // against a count instead of letting one be typed over.
-            { label: "Wallets",          href: "/settings/wallets",       desc: "Set real balances and low-balance alerts", ownerOnly: true },
-            { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated", ownerOnly: true },
-            { label: "Platforms",        href: "/settings/platforms",     desc: "Add or remove wallets", ownerOnly: true },
-            { label: "My numbers & accounts", href: "/settings/my-accounts", desc: "So moving your own money isn't counted as a customer", ownerOnly: true },
-            { label: "Staff",            href: "/settings/staff",         desc: "Who else can record transactions", ownerOnly: true },
-            { label: "Share from phone", href: "/settings/share",         desc: "Send screenshots from the share sheet", ownerOnly: false },
-            { label: "Notifications",    href: "/settings/notifications", desc: "Telegram alerts (coming soon)", ownerOnly: true },
-            { label: "Help",             href: "/help",                   desc: "How to do things, and common questions", ownerOnly: false },
-          // Staff see only what they can use. The server refuses the rest
-          // regardless of what is shown here.
+            { label: "Wallets",               href: "/settings/wallets",       desc: "Balances and low-balance alerts", ownerOnly: true,  Icon: Wallet },
+            { label: "Profit settings",       href: "/settings/rules",         desc: "Your fee on each type",           ownerOnly: true,  Icon: BadgePercent },
+            { label: "Platforms",             href: "/settings/platforms",     desc: "Add or archive wallets",          ownerOnly: true,  Icon: LayoutGrid },
+            { label: "My numbers & accounts", href: "/settings/my-accounts",   desc: "Your own numbers",                ownerOnly: true,  Icon: Contact },
+            { label: "Staff",                 href: "/settings/staff",         desc: "Who else can record",             ownerOnly: true,  Icon: Users },
+            { label: "Share from phone",      href: "/settings/share",         desc: "Send screenshots in",             ownerOnly: false, Icon: Share },
+            { label: "Notifications",         href: "/settings/notifications", desc: "Telegram, coming soon",           ownerOnly: true,  Icon: Bell },
+            { label: "Help",                  href: "/help",                   desc: "How-tos and questions",           ownerOnly: false, Icon: CircleHelp },
           ].filter((item) => role === "owner" || !item.ownerOnly)
-           .map(({ label, href, desc }) => (
-            <Link key={href} href={href} className="flex items-center justify-between px-4 py-4">
-              <div>
-                <p className="text-[15px] font-medium">{label}</p>
-                <p className="text-[13px] text-muted-foreground mt-0.5">{desc}</p>
-              </div>
-              <span className="text-muted-foreground/40 text-lg">›</span>
+           .map(({ label, href, desc, Icon }) => (
+            <Link key={href} href={href} className="flex items-center gap-3.5 px-4 py-3.5">
+              <span className="w-10 h-10 rounded-full bg-background grid place-items-center flex-shrink-0">
+                <Icon className="w-5 h-5" strokeWidth={1.9} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-medium">{label}</span>
+                <span className="block text-[13px] text-muted-foreground">{desc}</span>
+              </span>
+              <ChevronRight className="w-[18px] h-[18px] text-muted-foreground flex-shrink-0" />
             </Link>
           ))}
         </div>
 
-        <div className="mt-4 bg-muted rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
+        <div className="mt-4 card px-4 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[13px] text-muted-foreground">
               Signed in as {role === "staff" ? "staff" : "owner"}
@@ -106,7 +102,7 @@ export default function SettingsPage() {
         </div>
 
         <p className="text-[13px] text-muted-foreground/50 text-center mt-6">
-          GoCash Tracker · v0.1
+          GoCash · v0.1
         </p>
       </section>
     </AppShell>
