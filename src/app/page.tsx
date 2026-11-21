@@ -5,12 +5,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, Settings, ArrowDownRight, ArrowUpLeft, Phone,
   Building2, Home, Plus, History, ChevronRight, Zap, TrendingDown,
-  CreditCard, Camera, Keyboard, AlertCircle,
+  CreditCard, Camera, Keyboard, AlertCircle, Check,
   ArrowLeftRight,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
 import { supabase } from "@/lib/supabase/client";
+import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
+import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 
 // ---------------------------------------------------------------------------
@@ -110,13 +112,18 @@ function getTimeOfDay(): string {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const { operatorId, loading: authLoading } = useAuthGuard();
+  const { operatorId, role, loading: authLoading } = useAuthGuard();
   useShareIntent();
 
   const [wallets, setWallets] = useState<AccountBalance[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [pending, setPending] = useState<PendingRow[]>([]);
   const [loadError, setLoadError] = useState(false);
+  // "Saved · Undo": the transaction just recorded, for a few seconds.
+  const [justSaved, setJustSaved] = useState<TxRow | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  const undoKey = useRef<string>(newIdempotencyKey("undo"));
   const [reloadTick, setReloadTick] = useState(0);
   const [todayStats, setTodayStats] = useState({ count: 0, total: 0, earnings: 0 });
   const [recentTx, setRecentTx] = useState<TxRow[]>([]);
@@ -235,6 +242,43 @@ export default function Dashboard() {
     fetchData();
   }, [operatorId, reloadTick]);
 
+  // Arriving from a save (/?saved=<id>): show what was saved, with a way back.
+  // A wrong tap at the counter is noticed in the first seconds or not at all,
+  // so the undo is offered then, in reach, instead of buried in History.
+  useEffect(() => {
+    if (!operatorId) return;
+    const id = new URLSearchParams(window.location.search).get("saved");
+    if (!id) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    supabase
+      .from("transactions")
+      .select("id, transaction_type, platform, transfer_to, account_number, amount, net_profit, created_at, status")
+      .eq("id", id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data || data.status !== "confirmed") return;
+        setJustSaved(data as TxRow);
+        timer = setTimeout(() => setJustSaved(null), 12000);
+      });
+    return () => { if (timer) clearTimeout(timer); };
+  }, [operatorId]);
+
+  async function handleUndo() {
+    if (!justSaved || undoing) return;
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      await voidTransaction({ transactionId: justSaved.id, idempotencyKey: undoKey.current, reason: "Undone right after saving" });
+      setJustSaved(null);
+      setReloadTick((n) => n + 1);
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : "Could not undo");
+    } finally {
+      setUndoing(false);
+    }
+  }
+
   if (authLoading || dataLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
@@ -320,6 +364,33 @@ export default function Dashboard() {
         )}
       </section>
 
+      {justSaved && (
+        <section className="px-5 mb-4" role="status">
+          <div className="flex items-center gap-3 bg-emerald-500/[0.12] border border-emerald-500/25 rounded-2xl px-4 py-3">
+            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <p className="text-sm flex-1 min-w-0">
+              <span className="font-medium">Saved</span>
+              <span className="text-muted-foreground">
+                {" · "}{typeName(justSaved.transaction_type)} ₱{justSaved.amount.toLocaleString("en-PH")}
+              </span>
+            </p>
+            {role === "owner" ? (
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={undoing}
+                className="text-sm font-semibold text-emerald-300 px-2 py-1 -my-1 disabled:opacity-50 flex-shrink-0"
+              >
+                {undoing ? "Undoing…" : "Undo"}
+              </button>
+            ) : (
+              <Link href={`/transactions?id=${justSaved.id}`} className="text-sm text-emerald-300 flex-shrink-0">View</Link>
+            )}
+          </div>
+          {undoError && <p className="text-xs text-red-400 mt-1.5 px-1">{undoError}</p>}
+        </section>
+      )}
+
       {loadError && (
         <section className="px-5 mb-4">
           <button
@@ -341,22 +412,44 @@ export default function Dashboard() {
           right. */}
       <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-x-2 lg:items-start lg:mt-2">
       <div className="contents lg:block">
-      {/* Quick actions */}
-      <section className="order-1 px-5 mb-5 grid grid-cols-2 gap-2">
-        <Link
-          href="/entry"
-          className="flex items-center justify-center gap-2 bg-emerald-500 text-white font-semibold py-3 rounded-2xl text-sm"
-        >
-          <Keyboard className="w-4 h-4" />
-          Type it in
-        </Link>
-        <Link
-          href="/capture"
-          className="flex items-center justify-center gap-2 bg-white/[0.07] border border-white/[0.08] font-semibold py-3 rounded-2xl text-sm"
-        >
-          <Camera className="w-4 h-4" />
-          Screenshot
-        </Link>
+      {/* Start a transaction. The two things done most often get the big
+          tiles and open the form with the type already chosen, so there is no
+          default to forget to change. */}
+      <section className="order-1 px-5 mb-5 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href="/entry?type=Cash%20In"
+            className="flex flex-col items-start gap-1 rounded-2xl bg-emerald-500 text-black px-4 py-4"
+          >
+            <ArrowDownRight className="w-5 h-5" />
+            <span className="text-base font-semibold">Cash In</span>
+            <span className="text-xs opacity-80 leading-snug">They give cash, you send e-money</span>
+          </Link>
+          <Link
+            href="/entry?type=Cash%20Out"
+            className="flex flex-col items-start gap-1 rounded-2xl bg-white/[0.09] border border-white/[0.1] px-4 py-4"
+          >
+            <ArrowUpLeft className="w-5 h-5" />
+            <span className="text-base font-semibold">Cash Out</span>
+            <span className="text-xs text-muted-foreground leading-snug">They send e-money, you give cash</span>
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href="/entry"
+            className="flex items-center justify-center gap-2 bg-white/[0.07] border border-white/[0.08] font-medium py-3 rounded-2xl text-sm"
+          >
+            <Keyboard className="w-4 h-4" />
+            Something else
+          </Link>
+          <Link
+            href="/capture"
+            className="flex items-center justify-center gap-2 bg-white/[0.07] border border-white/[0.08] font-medium py-3 rounded-2xl text-sm"
+          >
+            <Camera className="w-4 h-4" />
+            Screenshot
+          </Link>
+        </div>
       </section>
 
       {/* Today's Summary */}
@@ -413,7 +506,7 @@ export default function Dashboard() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {known ? d.transaction_type : "Type not read"}
+                      {typeName(d.transaction_type)}
                       {d.platform !== "Unknown" && <span className="text-muted-foreground"> · {d.platform}</span>}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
@@ -467,7 +560,7 @@ export default function Dashboard() {
                     <Icon className="w-4 h-4" style={{ color: cfg.color }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{tx.transaction_type}</p>
+                    <p className="text-sm font-medium">{typeName(tx.transaction_type)}</p>
                     <p className="text-[11px] text-muted-foreground">
                       {tx.transaction_type === "Wallet Transfer"
                         ? `${tx.platform} → ${tx.transfer_to ?? "?"}`

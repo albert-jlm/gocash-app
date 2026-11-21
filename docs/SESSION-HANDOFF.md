@@ -48,11 +48,12 @@ next.
 
 UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
 
-- **Phase 1, safety and speed:** no pre-selected transaction type; Cash In /
-  Cash Out / More tiles on Home; one plain name per type ("Take out profit",
-  "Move my own money"); Discard asks first, Save shows "Saved · Undo"; the
-  summary and Save stay above the keyboard; large amounts with thousands
-  separators; a disabled Save says what is missing.
+- **Phase 1, safety and speed: done 2026-11-21.** No pre-selected type; Cash
+  In / Cash Out tiles on Home; one name per type (`src/lib/display.ts`);
+  Discard asks first; "Saved · Undo" on Home after a save (owner only);
+  summary and Save lifted above the keyboard (`useKeyboardInset`, not yet
+  checked on a real phone); grouped amounts; a disabled Save says what is
+  missing.
 - **Phase 2, review screen:** show the receipt image; mark each field read /
   not found / please check.
 - **Phase 3, legibility and themes:** minimum text size, contrast fixes,

@@ -20,7 +20,7 @@ eval(pre.replace(/^const /gm, 'var '));
     const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
     await mock(page);
     await page.goto('http://localhost:8768/entry', { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Move', exact: true }).click();
+    await page.getByRole('button', { name: 'Move my own money', exact: true }).click();
     await page.selectOption('#platform', 'Maya');
     await page.selectOption('#transfer-to', 'GCash');
     await page.fill('#amount', '2,000');

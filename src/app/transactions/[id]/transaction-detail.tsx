@@ -11,6 +11,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { newIdempotencyKey, voidTransaction } from "@/lib/ledger";
+import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 
 const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = {
@@ -182,7 +183,7 @@ export default function TransactionDetail({
             <Icon className="w-6 h-6" style={{ color: cfg.color }} />
           </div>
           <div className="flex-1">
-            <p className="text-base font-semibold">{tx.transaction_type}</p>
+            <p className="text-base font-semibold">{typeName(tx.transaction_type)}</p>
             <p className="text-xs text-muted-foreground">
               {isTransfer ? `${tx.platform} → ${tx.transfer_to ?? "?"}` : tx.platform}
             </p>

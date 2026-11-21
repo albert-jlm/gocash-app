@@ -87,3 +87,35 @@ describe("parsePesosInput — what a person typed, read exactly or not at all", 
     expect(parsePesosInput("₱")).toBeNull();
   });
 });
+
+// The on-screen formatter lives in the app, but what it produces must always
+// be something parsePesosInput reads back to the same amount.
+import { formatAmountInput } from "../../../../src/lib/display.ts";
+
+describe("formatAmountInput — grouping as the operator types", () => {
+  it("groups thousands and keeps what was typed", () => {
+    expect(formatAmountInput("1850")).toBe("1,850");
+    expect(formatAmountInput("18500")).toBe("18,500");
+    expect(formatAmountInput("1234567")).toBe("1,234,567");
+    expect(formatAmountInput("1850.")).toBe("1,850.");
+    expect(formatAmountInput("1850.5")).toBe("1,850.5");
+    expect(formatAmountInput("1,850.50")).toBe("1,850.50");
+    expect(formatAmountInput("")).toBe("");
+    expect(formatAmountInput(".5")).toBe("0.5");
+  });
+
+  it("drops everything that is not part of an amount", () => {
+    expect(formatAmountInput("₱1,850.00")).toBe("1,850.00");
+    expect(formatAmountInput("12abc")).toBe("12");
+    expect(formatAmountInput("1.2.3")).toBe("1.23");
+    expect(formatAmountInput("1850.999")).toBe("1,850.99");
+    expect(formatAmountInput("007")).toBe("7");
+  });
+
+  it("always reads back to the same centavos", () => {
+    for (const typed of ["1850", "18500.5", "999999.99", "5", "0.75", "1000000"]) {
+      const shown = formatAmountInput(typed);
+      expect(parsePesosInput(shown)).toBe(Math.round(Number(typed) * 100));
+    }
+  });
+});

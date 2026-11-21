@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
 import { EntryEffects } from "@/components/entry-effects";
+import { formatAmountInput, typeName } from "@/lib/display";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { CashOutFeeChoice } from "@/components/cash-out-fee-choice";
 import { parsePesosInput, toMinor } from "@core/money.ts";
 import { CASH_ACCOUNT_NAME, isTransactionType } from "@core/types.ts";
@@ -119,6 +121,9 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  // Discard cannot be undone and sits just under Save, so it asks first.
+  const [askDiscard, setAskDiscard] = useState(false);
+  const keyboardInset = useKeyboardInset();
   const discardKey = useRef<string>(newIdempotencyKey("discard"));
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -213,6 +218,15 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const transferReady = !isTransfer
     || (transferTo !== "" && transferTo !== platform && platformFeeMinor !== null);
 
+  // What still stands between the operator and Save, in order.
+  const missing =
+    txType === "" ? "Choose the transaction type"
+    : platform === "" ? (isTransfer ? "Choose where the money came from" : "Choose which app this was")
+    : isTransfer && transferTo === "" ? "Choose where the money went"
+    : !amountValid ? "Enter the amount"
+    : !transferReady ? "Fix the app's fee"
+    : null;
+
   const preview = useMemo(() => {
     if (!context || !amountValid || platform === "" || !isTransactionType(txType)) return null;
     try {
@@ -260,7 +274,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     // "Cash In" and an unread amount as 0; both are now left empty so the
     // operator has to supply them, and Save stays disabled until they do.
     setTxType(isTransactionType(data.transaction_type) ? data.transaction_type : "");
-    setAmount(data.amount > 0 ? data.amount.toString() : "");
+    setAmount(data.amount > 0 ? formatAmountInput(data.amount.toString()) : "");
     setTransferTo(data.transfer_to ?? "");
     setPlatformFee(data.platform_fee > 0 ? data.platform_fee.toString() : "");
     setAccountNumber(data.account_number ?? "");
@@ -331,7 +345,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       // the operator to record it a second time.
       const alreadySaved = response.status === 409 && data.status === "confirmed";
       if (!response.ok && !alreadySaved) throw new Error(data.error || "Failed to save");
-      router.push("/transactions");
+      // Home shows "Saved · Undo" for this one.
+      router.push(`/?saved=${tx.id}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
@@ -466,12 +481,12 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 <SelectValue placeholder="Choose the type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Cash In">Cash In</SelectItem>
-                <SelectItem value="Cash Out">Cash Out</SelectItem>
-                <SelectItem value="Telco Load">Telco Load</SelectItem>
-                <SelectItem value="Bills Payment">Bills Payment</SelectItem>
-                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                <SelectItem value="Wallet Transfer">Moving my own money</SelectItem>
+                <SelectItem value="Cash In">{typeName("Cash In")}</SelectItem>
+                <SelectItem value="Cash Out">{typeName("Cash Out")}</SelectItem>
+                <SelectItem value="Telco Load">{typeName("Telco Load")}</SelectItem>
+                <SelectItem value="Bills Payment">{typeName("Bills Payment")}</SelectItem>
+                <SelectItem value="Bank Transfer">{typeName("Bank Transfer")}</SelectItem>
+                <SelectItem value="Wallet Transfer">{typeName("Wallet Transfer")}</SelectItem>
               </SelectContent>
             </Select>
           </FieldRow>
@@ -501,11 +516,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
               <Input
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                 inputMode="decimal"
                 autoComplete="off"
                 aria-invalid={!amountValid}
-                className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 tabular-nums text-sm"
+                className="bg-white/[0.07] border-white/[0.1] h-14 rounded-xl pl-8 tabular-nums text-2xl font-semibold"
               />
             </div>
             {!amountValid && (
@@ -603,29 +618,58 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       </section>
 
       {/* Action Button */}
-      <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
+      <div
+        className="sticky bottom-0 px-5 pt-3 bg-background border-t border-white/[0.06]"
+        style={{
+          bottom: keyboardInset,
+          paddingBottom: keyboardInset > 0 ? 12 : "max(1.5rem, env(safe-area-inset-bottom))",
+        }}
+      >
         <button
           onClick={handleSave}
           disabled={saving || discarding || isPreview || platform === "" || txType === "" || !amountValid || !transferReady}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-emerald-500 active:bg-emerald-600 text-black font-semibold py-4 rounded-2xl text-base transition-colors disabled:bg-white/[0.08] disabled:text-muted-foreground disabled:cursor-not-allowed"
         >
           {saving ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Saving…</>
           ) : (
-            <><Check className="w-5 h-5" /> {isPreview ? "Save Transaction (preview)" : "Save Transaction"}</>
+            missing && !isPreview
+              ? <>{missing}</>
+              : <><Check className="w-5 h-5" /> {isPreview ? "Save Transaction (preview)" : "Save Transaction"}</>
           )}
         </button>
-        {!isPreview && (
+        {!isPreview && !askDiscard && (
           <button
             type="button"
-            onClick={handleDiscard}
+            onClick={() => setAskDiscard(true)}
             disabled={saving || discarding}
             className="mt-2.5 w-full flex items-center justify-center gap-2 rounded-2xl border border-red-500/25 bg-red-500/[0.08] text-red-300 font-medium py-3.5 text-sm active:bg-red-500/[0.15] disabled:opacity-50 transition-colors"
           >
-            {discarding
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Discarding…</>
-              : <><Trash2 className="w-4 h-4" /> Discard this draft</>}
+            <Trash2 className="w-4 h-4" /> Discard this draft
           </button>
+        )}
+        {!isPreview && askDiscard && (
+          <div className="mt-2.5 rounded-2xl border border-red-500/25 bg-red-500/[0.08] p-3 space-y-2.5">
+            <p className="text-sm text-center">Discard this draft? It can&apos;t be brought back.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAskDiscard(false)}
+                disabled={discarding}
+                className="rounded-xl bg-white/[0.08] font-medium py-3 text-sm disabled:opacity-50"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscard}
+                disabled={discarding}
+                className="rounded-xl bg-red-500 text-white font-semibold py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {discarding ? <><Loader2 className="w-4 h-4 animate-spin" /> Discarding…</> : "Yes, discard"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </AppShell>

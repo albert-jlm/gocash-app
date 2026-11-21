@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ArrowLeftRight,
 } from "lucide-react";
+import { typeName } from "@/lib/display";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
@@ -163,7 +164,7 @@ function TransactionsList() {
                 : "bg-white/[0.07] text-muted-foreground hover:bg-white/[0.11]",
             ].join(" ")}
           >
-            {f}
+            {f === "All" ? "All" : typeName(f)}
           </button>
         ))}
       </div>
@@ -214,7 +215,7 @@ function TransactionsList() {
                       {/* Details */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {tx.transaction_type === "Unknown" ? "Type not read" : tx.transaction_type}
+                          {typeName(tx.transaction_type)}
                         </p>
                         <p className="text-[11px] text-muted-foreground truncate">
                           {tx.transaction_type === "Wallet Transfer"

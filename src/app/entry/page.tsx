@@ -38,35 +38,11 @@ import {
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
 import { EntryEffects } from "@/components/entry-effects";
+import { TYPE_HINT, formatAmountInput, typeName } from "@/lib/display";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { CashOutFeeChoice } from "@/components/cash-out-fee-choice";
 
-/** Shorter labels than the enum values; the counter has no room for "Profit Remittance". */
-const TYPE_LABEL: Record<TransactionType, string> = {
-  "Cash In": "Cash In",
-  "Cash Out": "Cash Out",
-  "Telco Load": "Load",
-  "Bills Payment": "Bills",
-  "Bank Transfer": "Transfer",
-  "Profit Remittance": "Remit",
-  "Wallet Transfer": "Move",
-};
 
-/**
- * What the operator is doing, in their words, so the direction is unambiguous
- * on screen rather than only in the posting code. The four contradictory
- * definitions of "Cash In" across the PRD, the spec and the old settings UI are
- * what made four of six transaction types destroy money, and the fix is not
- * only correct code — it is saying which way round it is where it is used.
- */
-const TYPE_HINT: Record<TransactionType, string> = {
-  "Cash In": "Customer hands you cash. Your wallet sends them e-money.",
-  "Cash Out": "Customer sends you e-money. You hand them cash.",
-  "Telco Load": "Customer hands you cash. You send them load.",
-  "Bills Payment": "Customer hands you cash. You pay their bill.",
-  "Bank Transfer": "Customer hands you cash. You transfer it to their bank.",
-  "Profit Remittance": "You take earnings out of the drawer. No customer.",
-  "Wallet Transfer": "You move your own money between wallets or the drawer. No customer, nothing earned.",
-};
 
 
 export default function EntryPage() {
@@ -86,7 +62,19 @@ export default function EntryPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [txType, setTxType] = useState<TransactionType>("Cash In");
+  // No type is selected to begin with. "Cash In" used to be pre-selected, and
+  // a forgotten tap then recorded a Cash Out as a Cash In: wallet and drawer
+  // both moved the wrong way, in a perfectly balanced entry. The Home tiles
+  // open this form with the type already chosen (?type=Cash%20Out).
+  const [txType, setTxType] = useState<TransactionType | "">("");
+  const keyboardInset = useKeyboardInset();
+
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("type");
+    if (wanted && (TRANSACTION_TYPES as readonly string[]).includes(wanted)) {
+      setTxType(wanted as TransactionType);
+    }
+  }, []);
   const [platform, setPlatform] = useState("");
   const [amount, setAmount] = useState("");
   const [amountIncludesFee, setAmountIncludesFee] = useState(false);
@@ -156,7 +144,7 @@ export default function EntryPage() {
   }, [amount]);
 
   const preview = useMemo(() => {
-    if (!context || amountPesos <= 0) return null;
+    if (!context || amountPesos <= 0 || txType === "") return null;
     if (needsPlatform && !platform) return null;
     try {
       return previewEntry(
@@ -176,16 +164,25 @@ export default function EntryPage() {
   }, [context, amountPesos, needsPlatform, platform, txType, amountIncludesFee,
       isTransfer, transferTo, platformFeeMinor]);
 
-  const canSave =
-    !saving && amountPesos > 0 && (!needsPlatform || platform !== "") && preview !== null
-    && (!isTransfer || (transferTo !== "" && transferTo !== platform && platformFeeMinor !== null));
+  // What still stands between the operator and Save, in order. A greyed-out
+  // button that does not say why leaves them guessing.
+  const missing =
+    txType === "" ? "Choose what happened"
+    : needsPlatform && platform === "" ? (isTransfer ? "Choose where the money came from" : "Choose the wallet")
+    : isTransfer && transferTo === "" ? "Choose where the money went"
+    : amountPesos <= 0 ? "Enter the amount"
+    : isTransfer && platformFeeMinor === null ? "Fix the app's fee"
+    : preview === null ? "This can't be recorded as entered"
+    : null;
+
+  const canSave = !saving && missing === null && txType !== "";
 
   async function handleSave() {
-    if (!canSave) return;
+    if (!canSave || !txType) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await createAndConfirmTransaction({
+      const saved = await createAndConfirmTransaction({
         transactionType: txType,
         platform,
         amountPesos,
@@ -196,7 +193,8 @@ export default function EntryPage() {
         platformFeePesos: isTransfer && platformFeeMinor !== null ? platformFeeMinor / 100 : 0,
         idempotencyKey: idempotencyKey.current,
       });
-      router.push("/transactions");
+      // Home shows "Saved · Undo" for this one.
+      router.push(`/?saved=${saved.transactionId}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not save");
       setSaving(false);
@@ -257,27 +255,29 @@ export default function EntryPage() {
           <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
             What happened
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {TRANSACTION_TYPES.map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTxType(t)}
-                className={`rounded-xl py-2.5 text-xs font-medium transition-colors ${
+                aria-pressed={txType === t}
+                className={`rounded-xl px-2 py-3.5 text-sm font-medium transition-colors ${
                   txType === t
                     ? "bg-emerald-500 text-black"
                     : "bg-white/[0.07] text-muted-foreground"
                 }`}
               >
-                {TYPE_LABEL[t]}
+                {typeName(t)}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-muted-foreground leading-relaxed pt-0.5">
-            {TYPE_HINT[txType]}
+          <p className="text-sm text-muted-foreground leading-relaxed pt-0.5">
+            {txType === "" ? "Tap what just happened at the counter." : TYPE_HINT[txType]}
           </p>
         </div>
 
+        {txType !== "" && (<>
         {/* ----- platform ----- */}
         {needsPlatform && (
           <div className="space-y-2">
@@ -338,8 +338,8 @@ export default function EntryPage() {
               autoComplete="off"
               placeholder="0.00"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-xl bg-white/[0.07] pl-11 pr-4 py-4 text-2xl font-semibold tabular-nums"
+              onChange={(e) => setAmount(formatAmountInput(e.target.value))}
+              className="w-full rounded-xl bg-white/[0.07] pl-11 pr-4 py-4 text-3xl font-semibold tabular-nums"
             />
           </div>
 
@@ -475,27 +475,44 @@ export default function EntryPage() {
             <p className="text-xs text-red-300 leading-relaxed">{saveError}</p>
           </div>
         )}
+        </>)}
       </section>
 
-      {/* ----- save ----- */}
-      <div className="sticky bottom-0 mt-auto px-5 pb-8 pt-4 bg-gradient-to-t from-background via-background to-transparent">
+      {/* ----- save -----
+          The bar carries a one-line summary as well as the button, and is
+          lifted above the on-screen keyboard: the fuller breakdown further up
+          is usually hidden behind one or the other while an amount is typed. */}
+      <div
+        className="sticky bottom-0 mt-auto px-5 pt-3 bg-background border-t border-white/[0.06]"
+        style={{
+          bottom: keyboardInset,
+          paddingBottom: keyboardInset > 0 ? 12 : "max(1.5rem, env(safe-area-inset-bottom))",
+        }}
+      >
+        {preview && txType !== "" && (
+          <p className="text-sm text-center pb-2.5 tabular-nums" aria-live="polite">
+            <span className="font-medium">{typeName(txType)}</span>
+            <span className="text-muted-foreground"> · </span>
+            {isTransfer
+              ? <span className="text-muted-foreground">{platform} → {transferTo === CASH_ACCOUNT_NAME ? "Cash drawer" : transferTo}</span>
+              : <span className="text-emerald-400 font-medium">you earn {formatPesos(preview.feePesos)}</span>}
+          </p>
+        )}
         <button
           type="button"
           onClick={handleSave}
           disabled={!canSave}
-          className="w-full rounded-xl bg-emerald-500 text-black font-semibold py-4 text-sm disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full rounded-xl bg-emerald-500 text-black font-semibold py-4 text-base disabled:bg-white/[0.08] disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {saving ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               Saving…
             </>
-          ) : preview && isTransfer ? (
-            "Record transfer"
-          ) : preview ? (
-            `Record — you earn ${formatPesos(preview.feePesos)}`
+          ) : missing ? (
+            missing
           ) : (
-            "Record transaction"
+            `Record ${formatPesos(amountPesos)}`
           )}
         </button>
       </div>
