@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
-import { EntryEffects } from "@/components/entry-effects";
 import { formatAmountInput, typeName } from "@/lib/display";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { CashOutFeeChoice } from "@/components/cash-out-fee-choice";
@@ -35,6 +34,9 @@ import {
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { Sheet } from "@/components/sheet";
+import { summaryLine } from "@/components/entry-effects";
+import { receiptUrl } from "@/lib/ledger";
 
 // Shown only if the operator's wallets could not be loaded, so the form is
 // still usable. The server checks the platform against real accounts anyway.
@@ -136,6 +138,15 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const [accountNumber, setAccountNumber] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [txDate, setTxDate] = useState("");
+  const [receipt, setReceipt] = useState<string | null>(null);
+  const [showReceipt, setShowReceipt] = useState(false);
+
+  useEffect(() => {
+    if (isPreview) return;
+    let cancelled = false;
+    receiptUrl(transactionId).then((url) => { if (!cancelled) setReceipt(url); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [transactionId, isPreview]);
 
   // ---------------------------------------------------------------------------
   // Load
@@ -398,259 +409,170 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   // Main render
   // ---------------------------------------------------------------------------
 
+  const walletName = (p: string) => (p === CASH_ACCOUNT_NAME ? "Cash drawer" : p);
+  const control = "bg-transparent text-right text-[15px] font-medium outline-none min-w-0 flex-1 placeholder:text-primary placeholder:font-semibold";
+  const row = "flex items-center justify-between gap-4 min-h-[52px] border-b border-border";
+  const label = (text: string, flag: boolean) => (
+    <span className={`text-[15px] flex items-center gap-2 flex-shrink-0 ${flag ? "text-foreground" : "text-muted-foreground"}`}>
+      {flag && <span className="w-2 h-2 rounded-full bg-primary" />}
+      {text}
+    </span>
+  );
+
   return (
     <AppShell>
-      {/* Header */}
-      <PageHeader title="Review" back="/" />
+      <PageHeader
+        title="Review"
+        back="/"
+        action={
+          <button type="button" onClick={() => setAskDiscard(true)} className="h-11 -mr-1 text-[15px] text-muted-foreground justify-self-end">
+            Discard
+          </button>
+        }
+      />
 
-      {/* AI read badge */}
-      {/* The banner tells the truth about what happened.
-          It used to render the green "AI read your screenshot" success state
-          unconditionally — including over a platform the model explicitly said
-          it could not identify, styled identically to a confident read. */}
-      <section className="px-5 mb-4">
-        {unread.length > 0 ? (
-          <div className="flex items-start gap-2.5 bg-warning/[0.10] border border-warning/20 rounded-2xl px-4 py-3">
-            <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-warning">
-                We couldn&apos;t read {unread.join(" or ")}
-              </p>
-              <p className="text-[13px] text-muted-foreground leading-relaxed">
-                Fill {unread.length === 1 ? "it" : "them"} in below from the receipt.
-                Nothing is saved until you do.
-              </p>
+      <section className="px-6 flex-1 pb-6 lg:max-w-md lg:mx-auto lg:w-full">
+        <div className="flex items-center gap-3.5 mb-3">
+          {receipt ? (
+            <button type="button" onClick={() => setShowReceipt(true)} aria-label="View receipt" className="w-[54px] h-[76px] rounded-[10px] overflow-hidden bg-muted flex-shrink-0">
+              <img src={receipt} alt="" className="w-full h-full object-cover object-top" />
+            </button>
+          ) : (
+            <div className="w-[54px] h-[76px] rounded-[10px] bg-muted flex-shrink-0 p-2.5 flex flex-col gap-1.5" aria-hidden>
+              <span className="h-1 rounded bg-input" /><span className="h-1 rounded bg-input" /><span className="h-2 w-3/5 rounded bg-muted-foreground" /><span className="h-1 rounded bg-input" />
             </div>
-          </div>
-        ) : (
-          <p className="text-[15px] text-muted-foreground">Read from your screenshot. Check it, then save.</p>
-        )}
-      </section>
-
-      {/* Form */}
-      <section className="px-5 flex-1">
-        {saveError && (
-          <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2.5 mb-4">
-            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
-            <p className="text-[13px] text-destructive">{saveError}</p>
-          </div>
-        )}
-
-        <div className="rounded-[20px] p-4 space-y-4 mb-4 bg-muted">
-          {/* Platform */}
-          <FieldRow label={isTransfer ? "From" : "App used"}>
-            <Select value={platform} onValueChange={(v) => setPlatform(v ?? "")}>
-
-              <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-[15px]">
-                <SelectValue placeholder="Choose the app" />
-              </SelectTrigger>
-              <SelectContent>
-                {platformOptions.map((p) => (
-                  <SelectItem key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldRow>
-
-          {/* Transaction type */}
-          <FieldRow label="Transaction type">
-            <Select value={txType} onValueChange={(v) => setTxType(v ?? "")}>
-
-              <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-[15px]">
-                <SelectValue placeholder="Choose the type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Cash In">{typeName("Cash In")}</SelectItem>
-                <SelectItem value="Cash Out">{typeName("Cash Out")}</SelectItem>
-                <SelectItem value="Telco Load">{typeName("Telco Load")}</SelectItem>
-                <SelectItem value="Bills Payment">{typeName("Bills Payment")}</SelectItem>
-                <SelectItem value="Bank Transfer">{typeName("Bank Transfer")}</SelectItem>
-                <SelectItem value="Wallet Transfer">{typeName("Wallet Transfer")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </FieldRow>
-
-          {/* Destination: transfers only */}
-          {isTransfer && (
-            <FieldRow label="To">
-              <Select value={transferTo} onValueChange={(v) => setTransferTo(v ?? "")}>
-                <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-[15px]">
-                  <SelectValue placeholder="Choose where it went" />
-                </SelectTrigger>
-                <SelectContent>
-                  {platformOptions.filter((p) => p !== platform).map((p) => (
-                    <SelectItem key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[13px] text-muted-foreground leading-relaxed">
-                Your own money moving between your wallets or the drawer. No fee is earned.
-              </p>
-            </FieldRow>
           )}
+          <div className="text-[13px] text-muted-foreground">
+            <p>{unread.length > 0 ? `Couldn't read ${unread.join(" or ")}.` : "Read from your screenshot."}</p>
+            {receipt && (
+              <button type="button" onClick={() => setShowReceipt(true)} className="text-foreground font-medium underline underline-offset-4 h-8">
+                View receipt
+              </button>
+            )}
+          </div>
+        </div>
 
-          {/* Amount */}
-          <FieldRow label={isTransfer ? "Amount that arrived" : "Amount"}>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[15px] pointer-events-none">₱</span>
+        <div>
+          <div className={row}>
+            {label("Type", txType === "")}
+            <select aria-label="Type" value={txType} onChange={(e) => setTxType(e.target.value)} className={control}>
+              <option value="">Choose</option>
+              {["Cash In", "Cash Out", "Telco Load", "Bills Payment", "Bank Transfer", "Wallet Transfer"].map((t) => (
+                <option key={t} value={t}>{typeName(t)}</option>
+              ))}
+            </select>
+          </div>
+          <div className={row}>
+            {label(isTransfer ? "From" : "Wallet", platform === "")}
+            <select aria-label={isTransfer ? "From" : "Wallet"} value={platform} onChange={(e) => setPlatform(e.target.value)} className={control}>
+              <option value="">Choose</option>
+              {platformOptions.map((p) => <option key={p} value={p}>{walletName(p)}</option>)}
+            </select>
+          </div>
+          {isTransfer && (
+            <div className={row}>
+              {label("To", transferTo === "")}
+              <select aria-label="To" value={transferTo} onChange={(e) => setTransferTo(e.target.value)} className={control}>
+                <option value="">Choose</option>
+                {platformOptions.filter((p) => p !== platform).map((p) => <option key={p} value={p}>{walletName(p)}</option>)}
+              </select>
+            </div>
+          )}
+          <div className={row}>
+            {label("Amount", !amountValid)}
+            <span className="flex items-center justify-end flex-1 min-w-0">
+              <span className="text-muted-foreground mr-0.5">₱</span>
               <input
-                value={amount}
-                onChange={(e) => setAmount(formatAmountInput(e.target.value))}
+                aria-label="Amount"
                 inputMode="decimal"
                 autoComplete="off"
-                aria-invalid={!amountValid}
-                className="bg-muted border-border h-14 rounded-xl pl-8 tabular-nums text-2xl font-semibold"
+                placeholder="Add"
+                value={amount}
+                onChange={(e) => setAmount(formatAmountInput(e.target.value))}
+                className="amount bg-transparent text-right text-[17px] font-semibold outline-none placeholder:text-primary"
+                style={{ width: `${Math.max(3, amount.length) * 0.66}em` }}
               />
-            </div>
-            {!amountValid && (
-              <p className="text-[13px] text-destructive">
-                {amountMinor === 0 || amount.trim() === ""
-                  ? "Enter the amount on the receipt."
-                  : "This isn't a readable amount. Use digits like 1850 or 1,850.50."}
-              </p>
-            )}
-
-            {txType === "Cash Out" && context && amountValid && (
-              <CashOutFeeChoice
-                amountPesos={(amountMinor as number) / 100}
-                platform={platform}
-                rules={context.rules}
-                value={amountIncludesFee}
-                onChange={setAmountIncludesFee}
-              />
-            )}
-          </FieldRow>
-
+            </span>
+          </div>
           {isTransfer && (
-            <FieldRow label="Fee the app charged you (if any)">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[15px] pointer-events-none">₱</span>
-                <input
-                  value={platformFee}
-                  onChange={(e) => setPlatformFee(e.target.value)}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="0.00"
-                  aria-invalid={platformFeeMinor === null}
-                  className="bg-muted border-border h-11 rounded-xl pl-7 tabular-nums text-[15px]"
-                />
-              </div>
-              {platformFeeMinor === null && (
-                <p className="text-[13px] text-destructive">This isn&apos;t a readable amount. Use digits like 15 or 15.00.</p>
-              )}
-            </FieldRow>
-          )}
-
-          {/* Fee and effect: computed, never typed. The same code prices it
-              on the server when Save is tapped. */}
-          {preview && (
-            <div className="rounded-xl bg-muted border border-border p-3 space-y-2">
-              <p className="label">
-                What saving this does
-              </p>
-              {isTransfer && (
-                <p className="text-[13px] text-muted-foreground">Your own money, moved. Nothing is earned on this.</p>
-              )}
-              {!preview.rule && !isTransfer && (
-                <p className="text-[13px] text-warning leading-relaxed">
-                  No fee rule covers {txType} on {platform} yet, so this earns nothing.
-                  Set one in <Link href="/settings/rules" className="underline">Settings → Fees</Link>.
-                </p>
-              )}
-              <div className="h-px bg-muted" />
-              <EntryEffects postings={preview.postings} dense />
+            <div className={row}>
+              {label("App's fee", platformFeeMinor === null)}
+              <input aria-label="App's fee" inputMode="decimal" autoComplete="off" placeholder="None" value={platformFee} onChange={(e) => setPlatformFee(e.target.value)} className={`${control} tabular-nums placeholder:!text-muted-foreground placeholder:!font-medium`} />
             </div>
           )}
-
-          {/* Customer number */}
-          <FieldRow label="Customer number">
-            <input
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              readOnly={false}
-              placeholder="Not found"
-              className="bg-muted border-border h-11 rounded-xl text-[15px] tabular-nums"
-            />
-          </FieldRow>
-
-          {/* Reference number */}
-          <FieldRow label="Transaction number">
-            <input
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              readOnly={false}
-              placeholder="Not found"
-              className="bg-muted border-border h-11 rounded-xl text-[15px] tabular-nums"
-            />
-          </FieldRow>
-
-          {/* Date & Time */}
-          <FieldRow label="Date & Time">
-            <input
-              type="datetime-local"
-              value={txDate}
-              onChange={(e) => setTxDate(e.target.value)}
-              className="bg-muted border-border h-11 rounded-xl text-[15px]"
-            />
-          </FieldRow>
+          {!isTransfer && (
+            <div className={row}>
+              {label("Customer no.", false)}
+              <input aria-label="Customer number" inputMode="numeric" autoComplete="off" placeholder="Add" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={`${control} tabular-nums`} />
+            </div>
+          )}
+          <div className={row}>
+            {label("Reference", referenceNumber === "")}
+            <input aria-label="Reference number" autoComplete="off" placeholder="Add" value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} className={`${control} tabular-nums`} />
+          </div>
+          <div className={row}>
+            {label("Date", false)}
+            <input aria-label="Date and time" type="datetime-local" value={txDate} onChange={(e) => setTxDate(e.target.value)} className={`${control} tabular-nums`} />
+          </div>
         </div>
+
+        <p className="mt-4 text-[15px] font-medium min-h-6" aria-live="polite">
+          {preview ? summaryLine(preview.postings) : null}
+        </p>
+
+        {preview && !preview.rule && !isTransfer && (
+          <p className="mt-1 text-[13px] text-warning">
+            No fee is set for this yet, so it earns nothing.{" "}
+            <Link href="/settings/rules" className="underline underline-offset-4">Set one</Link>
+          </p>
+        )}
+
+        {txType === "Cash Out" && (
+          <div className="w-fit -ml-1 mt-1">
+            <CashOutFeeChoice value={amountIncludesFee} onChange={setAmountIncludesFee} />
+          </div>
+        )}
+
+        {saveError && (
+          <div className="mt-3 rounded-2xl bg-destructive/10 p-3 flex gap-2.5">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-[15px] text-destructive">{saveError}</p>
+          </div>
+        )}
       </section>
 
-      {/* Action Button */}
       <div
-        className="sticky bottom-0 px-5 pt-3 bg-background border-t border-border"
+        className="sticky bottom-0 mt-auto px-6 pt-3 bg-background lg:max-w-md lg:mx-auto lg:w-full"
         style={{
           bottom: keyboardInset,
           paddingBottom: keyboardInset > 0 ? 12 : "max(1.5rem, env(safe-area-inset-bottom))",
         }}
       >
         <button
+          type="button"
           onClick={handleSave}
-          disabled={saving || discarding || isPreview || platform === "" || txType === "" || !amountValid || !transferReady}
-          className="btn btn-primary w-full"
+          disabled={saving || discarding || missing !== null || isPreview}
+          className="btn btn-primary w-full disabled:!opacity-100 disabled:!bg-muted disabled:!text-muted-foreground"
         >
-          {saving ? (
-            <><Loader2 className="w-5 h-5 animate-spin" /> Saving…</>
-          ) : (
-            missing && !isPreview
-              ? <>{missing}</>
-              : <><Check className="w-5 h-5" /> {isPreview ? "Save (preview)" : "Save"}</>
-          )}
+          {saving ? (<><Loader2 className="w-4 h-4 animate-spin" />Saving…</>) : missing ?? "Save"}
         </button>
-        {!isPreview && !askDiscard && (
-          <button
-            type="button"
-            onClick={() => setAskDiscard(true)}
-            disabled={saving || discarding}
-            className="mt-2.5 w-full flex items-center justify-center gap-2 rounded-2xl border border-destructive/25 bg-destructive/[0.08] text-destructive font-medium py-3.5 text-[15px] active:bg-destructive/[0.15] disabled:opacity-50 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" /> Discard this draft
-          </button>
-        )}
-        {!isPreview && askDiscard && (
-          <div className="mt-2.5 rounded-2xl border border-destructive/25 bg-destructive/[0.08] p-3 space-y-2.5">
-            <p className="text-[15px] text-center">Discard this draft? It can&apos;t be brought back.</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setAskDiscard(false)}
-                disabled={discarding}
-                className="btn btn-secondary"
-              >
-                Keep it
-              </button>
-              <button
-                type="button"
-                onClick={handleDiscard}
-                disabled={discarding}
-                className="btn btn-danger"
-              >
-                {discarding ? <><Loader2 className="w-4 h-4 animate-spin" /> Discarding…</> : "Yes, discard"}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      <Sheet open={askDiscard} onClose={() => setAskDiscard(false)} title="Discard this draft?">
+        <p className="text-[15px] text-muted-foreground mt-2 mb-5">It was never counted, so no balance changes.</p>
+        <div className="space-y-2.5">
+          <button type="button" onClick={handleDiscard} disabled={discarding} className="btn btn-danger w-full">
+            {discarding ? "Discarding…" : "Discard"}
+          </button>
+          <button type="button" onClick={() => setAskDiscard(false)} className="btn btn-secondary w-full">
+            Keep it
+          </button>
+        </div>
+      </Sheet>
+
+      <Sheet open={showReceipt} onClose={() => setShowReceipt(false)} title="Receipt">
+        {receipt && <img src={receipt} alt="The receipt screenshot" className="mt-3 w-full max-h-[70dvh] object-contain rounded-2xl bg-muted" />}
+      </Sheet>
     </AppShell>
   );
 }

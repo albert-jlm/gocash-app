@@ -106,14 +106,14 @@ UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
 - **Cash Out wording (operator's decision):** the app shows only
   "You earn ₱X" and a "Fee is included in the amount" checkbox. It does not
   say how much to give or collect.
-- **Still in the old layout (tokens only, not redesigned):** the review
-  screen (`confirm-form.tsx`), History, transaction detail, capture, login,
-  onboarding and the Settings sub-pages.
-- **Phase 2, review screen:** rebuild to the mockup (receipt thumbnail, plain
-  rows, only the unread field marked); mark each field read / not found /
-  please check.
-- **Phase 4, home and history:** history status filter, search, day
-  subtotals in the new style; drawer count on Home.
+- **Review screen rebuilt 2026-11-22:** plain rows, a dot on any field that
+  still needs filling, the receipt thumbnail (tap to view) and Discard in the
+  header. Receipt images are private; `receipt-url` returns a 10-minute
+  signed link after checking the transaction belongs to the caller's shop.
+- **Still in the old inner layout:** History, transaction detail, onboarding.
+  They use the shared header, buttons and text sizes.
+- **Next:** History search, status filter and day subtotals; Android share
+  target; "delete the whole account" (owner only, not built).
 - Not yet checked on a real phone: the keypad, the theme switch, and
   `useKeyboardInset`.
 
