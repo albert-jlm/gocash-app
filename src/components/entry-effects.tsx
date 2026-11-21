@@ -37,15 +37,40 @@ function describeCashOut(postings: readonly Posting[], feeInside: boolean): Line
     return [
       first,
       { label: "Give the customer", value: cashOnly, tone: "plain" },
-      { label: "Your fee, already in what they sent", value: earned, tone: "earn" },
+      { label: "Fee, inside what they sent", value: earned, tone: "earn" },
     ];
   }
   return [
     first,
     { label: "Give the customer", value: received, tone: "plain" },
-    { label: "Collect your fee in cash", value: earned, tone: "earn" },
-    { label: `Or give ${cashOnly} and keep the fee. Either way the drawer ends ${cashOnly} lower.`, value: "", tone: "note" },
+    { label: "Collect fee in cash", value: earned, tone: "earn" },
   ];
+}
+
+const short = (minor: number) => {
+  const pesos = Math.abs(minor) / 100;
+  return "₱" + pesos.toLocaleString("en-PH", { minimumFractionDigits: Number.isInteger(pesos) ? 0 : 2, maximumFractionDigits: 2 });
+};
+
+export function summaryLine(postings: readonly Posting[], opts: { feeInside?: boolean } = {}): string {
+  const wallet = postings.find((p) => p.account.kind === "platform");
+  const cash = postings.find((p) => p.account.kind === "cash");
+  const fee = postings.find((p) => p.account.kind === "revenue");
+  const cost = postings.find((p) => p.account.kind === "expense");
+  const equity = postings.find((p) => p.account.kind === "equity");
+  const parts: string[] = [];
+
+  if (wallet && cash && fee && wallet.amount > 0 && cash.amount < 0) {
+    return opts.feeInside
+      ? `Give ${short(cash.amount)} · fee ${short(fee.amount)} is inside`
+      : `Give ${short(wallet.amount)} · collect ${short(fee.amount)} fee`;
+  }
+  if (cash && cash.amount > 0) parts.push(`Collect ${short(cash.amount)}`);
+  if (cash && cash.amount < 0) parts.push(equity ? `Take ${short(cash.amount)} from the drawer` : `Give ${short(cash.amount)}`);
+  if (fee && fee.amount < 0) parts.push(`you earn ${short(fee.amount)}`);
+  if (cost) parts.push(`app fee ${short(cost.amount)}`);
+  if (parts.length === 0 && !fee) parts.push("Your own money, moved");
+  return parts.join(" · ");
 }
 
 export function describeEffects(postings: readonly Posting[], opts: { feeInside?: boolean } = {}): Line[] {
@@ -102,7 +127,7 @@ export function EntryEffects({
         line.tone === "note" ? (
           <p key={i} className="text-[13px] text-muted-foreground leading-relaxed pt-1">{line.label}</p>
         ) : (
-          <div key={i} className={`flex items-baseline justify-between gap-3 ${dense ? "text-[13px]" : "text-sm"}`}>
+          <div key={i} className={`flex items-baseline justify-between gap-3 ${dense ? "text-[13px]" : "text-[15px]"}`}>
             <span className="text-muted-foreground">{line.label}</span>
             <span className={`tabular-nums font-medium flex-shrink-0 ${TONE[line.tone]}`}>{line.value}</span>
           </div>

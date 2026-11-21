@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const STEPS: { title: string; body: string }[] = [
   { title: "Sign in", body: "Enter your email. We send a six-digit code; type it in. There is no password." },
-  { title: "Enter what you hold today", body: "Settings → Wallets. For the cash drawer and each wallet, tap Set the real balance and type what is really there." },
+  { title: "Enter what you hold today", body: "Settings → Wallets. For the cash drawer and each wallet, tap Set balance and type what is really there." },
   { title: "Add your own numbers", body: "Settings → My numbers & accounts. This lets the app tell a customer apart from you moving your own money." },
   { title: "Put it on your home screen", body: "iPhone: open it in Safari, tap Share, then Add to Home Screen. Android: open it in Chrome, tap the menu, then Add to Home screen." },
 ];
@@ -13,7 +13,7 @@ const HOW: { title: string; steps: string[] }[] = [
     steps: [
       "On Home, tap Cash In or Cash Out.",
       "Pick the wallet, then type the amount on the keypad.",
-      "Check the line under the amount: it says what each balance does and what you earn.",
+      "Check the line under the amount: it says what to give or collect and what you earn.",
       "Tap Save. If it was a mistake, the owner can tap Undo on Home straight away.",
     ],
   },
@@ -52,15 +52,22 @@ const HOW: { title: string; steps: string[] }[] = [
   {
     title: "Fix a balance that is wrong",
     steps: [
-      "Settings → Wallets, then Set the real balance on that wallet.",
+      "Settings → Wallets, then Set balance on that wallet.",
       "Type what it really holds and save. The correction is kept on record.",
     ],
   },
   {
     title: "Get told when a wallet is running low",
     steps: [
-      "Settings → Wallets, then Alert below on that wallet.",
+      "Settings → Wallets, then Set alert on that wallet.",
       "Enter the lowest amount you want to keep in it. Home shows a Top up notice when it drops below.",
+    ],
+  },
+  {
+    title: "Stop using a wallet",
+    steps: [
+      "Move any money out of it first, so its balance is zero.",
+      "Settings → Platforms, then Archive on that wallet. Its history is kept, and Bring back restores it.",
     ],
   },
   {

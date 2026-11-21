@@ -235,26 +235,26 @@ export default function CapturePage() {
         {error && (
           <div className="w-full max-w-sm flex items-start gap-2.5 bg-destructive/10 rounded-2xl px-4 py-3 mb-4">
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-[15px] text-destructive">{error}</p>
           </div>
         )}
 
         <div className="w-full max-w-sm space-y-2.5">
           <button
             onClick={openGallery}
-            className="font-heading h-[54px] w-full flex items-center justify-center gap-2.5 bg-primary text-primary-foreground font-semibold rounded-full text-[17px]"
+            className="btn btn-primary w-full"
           >
             <ImageIcon className="w-5 h-5" />
             Pick from gallery
           </button>
           <button
             onClick={openCamera}
-            className="font-heading h-[54px] w-full flex items-center justify-center gap-2.5 bg-muted font-semibold rounded-full text-[17px]"
+            className="btn btn-secondary w-full"
           >
             <Camera className="w-5 h-5" />
             Take a photo
           </button>
-          <Link href="/new" className="block text-center text-sm text-muted-foreground underline underline-offset-4 py-3">
+          <Link href="/new" className="block text-center text-[15px] text-muted-foreground underline underline-offset-4 py-3">
             Type it in
           </Link>
         </div>
@@ -276,7 +276,7 @@ export default function CapturePage() {
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
           <p className="text-base font-semibold mb-1.5">Reading your screenshot…</p>
-          <p className="text-sm text-muted-foreground">This usually takes a few seconds</p>
+          <p className="text-[15px] text-muted-foreground">This usually takes a few seconds</p>
         </div>
       )}
     </div>

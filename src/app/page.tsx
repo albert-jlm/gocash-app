@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, ArrowDown, ArrowUp, Smartphone, ReceiptText, Ellipsis,
-  ChevronRight, ChevronDown, AlertCircle, Check,
+  ChevronRight, ChevronDown, AlertCircle, Check, CircleHelp,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
@@ -178,7 +178,7 @@ export default function Dashboard() {
 
       setLoadError(false);
 
-      const [walletsRes, pendingRes, todayTxRes, recentRes, revenueRes, takenRes, settingsRes] = await Promise.all([
+      const [walletsRes, pendingRes, todayTxRes, recentRes, revenueRes, takenRes, settingsRes, activeRes] = await Promise.all([
         supabase
           .from("account_balances")
           .select("account_id, name, kind, natural_balance")
@@ -226,7 +226,10 @@ export default function Dashboard() {
           .eq("status", "confirmed")
           .eq("transaction_type", "Profit Remittance"),
         supabase.from("operators").select("settings").eq("id", opId).maybeSingle(),
+        supabase.from("accounts").select("id").eq("operator_id", opId).eq("is_active", false),
       ]);
+      const hidden = new Set((activeRes.data ?? []).map((a) => a.id));
+      const shown = walletsRes.data ? walletsRes.data.filter((w) => !hidden.has(w.account_id)) : null;
 
       // A failed query used to be ignored, so being offline looked like an
       // account with no wallets and no transactions.
@@ -253,15 +256,15 @@ export default function Dashboard() {
       const nextFloors = settingsRes.data ? readFloors(settingsRes.data.settings) : null;
       if (nextFloors) setFloors(nextFloors);
 
-      if (walletsRes.data) setWallets(walletsRes.data);
+      if (shown) setWallets(shown);
       setPendingCount(count);
       if (pendingRes.data) setPending(pendingRes.data);
       if (today) setTodayStats(today);
       if (recentRes.data) setRecentTx(recentRes.data);
 
-      if (walletsRes.data && pendingRes.data && today && recentRes.data) {
+      if (shown && pendingRes.data && today && recentRes.data) {
         lastHome = {
-          wallets: walletsRes.data,
+          wallets: shown,
           pendingCount: count,
           pending: pendingRes.data,
           todayStats: today,
@@ -348,7 +351,14 @@ export default function Dashboard() {
 
   return (
     <AppShell active="home" tabBar wide>
-      <section className="px-6 pt-[calc(env(safe-area-inset-top)+1.75rem)] lg:pt-10">
+      <section className="relative px-6 pt-[calc(env(safe-area-inset-top)+1.75rem)] lg:pt-10">
+        <Link
+          href="/help"
+          aria-label="Help"
+          className="absolute right-3.5 top-[calc(env(safe-area-inset-top)+1rem)] lg:top-6 w-11 h-11 grid place-items-center text-muted-foreground"
+        >
+          <CircleHelp className="w-[22px] h-[22px]" strokeWidth={1.9} />
+        </Link>
         <p className="text-[13px] text-muted-foreground">Total on hand</p>
         <p className="amount text-[46px] font-semibold leading-[1.05] tracking-tight">
           <span className="text-2xl font-medium text-muted-foreground align-[13px] mr-0.5">₱</span>
@@ -417,7 +427,7 @@ export default function Dashboard() {
 
       <nav aria-label="New transaction" className="grid grid-cols-5 px-6 mt-5 sm:max-w-md">
         {ACTIONS.map(({ label, href, Icon }) => (
-          <Link key={label} href={href} className="flex flex-col items-center gap-1.5 text-xs font-medium">
+          <Link key={label} href={href} className="flex flex-col items-center gap-1.5 text-[13px] font-medium">
             <span className="w-[50px] h-[50px] rounded-full bg-action text-action-foreground grid place-items-center">
               <Icon className="w-[22px] h-[22px]" strokeWidth={1.9} />
             </span>
@@ -430,7 +440,7 @@ export default function Dashboard() {
         <section className="px-6 mt-5" role="status">
           <div className="flex items-center gap-3 bg-muted rounded-2xl px-4 py-3">
             <Check className="w-4 h-4 flex-shrink-0" />
-            <p className="text-sm flex-1 min-w-0">
+            <p className="text-[15px] flex-1 min-w-0">
               <span className="font-medium">Saved</span>
               <span className="text-muted-foreground">
                 {" · "}{typeName(justSaved.transaction_type)} ₱{justSaved.amount.toLocaleString("en-PH")}
@@ -441,15 +451,15 @@ export default function Dashboard() {
                 type="button"
                 onClick={handleUndo}
                 disabled={undoing}
-                className="text-sm font-semibold underline underline-offset-4 px-2 py-2 -my-2 disabled:opacity-50 flex-shrink-0"
+                className="text-[15px] font-semibold underline underline-offset-4 px-2 py-2 -my-2 disabled:opacity-50 flex-shrink-0"
               >
                 {undoing ? "Undoing…" : "Undo"}
               </button>
             ) : (
-              <Link href={`/transactions?id=${justSaved.id}`} className="text-sm font-semibold underline underline-offset-4 flex-shrink-0">View</Link>
+              <Link href={`/transactions?id=${justSaved.id}`} className="text-[15px] font-semibold underline underline-offset-4 flex-shrink-0">View</Link>
             )}
           </div>
-          {undoError && <p className="text-xs text-destructive mt-1.5 px-1">{undoError}</p>}
+          {undoError && <p className="text-[13px] text-destructive mt-1.5 px-1">{undoError}</p>}
         </section>
       )}
 
@@ -461,7 +471,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 bg-destructive/10 rounded-2xl px-4 py-3 text-left"
           >
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-            <p className="text-sm text-destructive flex-1">
+            <p className="text-[15px] text-destructive flex-1">
               Couldn&apos;t load everything. Tap to try again.
             </p>
           </button>
@@ -496,7 +506,7 @@ export default function Dashboard() {
               type="button"
               onClick={() => setShowDrafts((v) => !v)}
               aria-expanded={showDrafts}
-              className="w-full flex items-center gap-2.5 bg-muted rounded-2xl pl-4 pr-3.5 h-12 text-sm font-medium text-left"
+              className="w-full flex items-center gap-2.5 bg-muted rounded-2xl pl-4 pr-3.5 h-12 text-[15px] font-medium text-left"
             >
               <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
               <span className="flex-1">
@@ -526,7 +536,7 @@ export default function Dashboard() {
                   </Link>
                 ))}
                 {pendingCount > pending.length && (
-                  <Link href="/transactions" className="block py-3 text-sm font-medium underline underline-offset-4">
+                  <Link href="/transactions" className="block py-3 text-[15px] font-medium underline underline-offset-4">
                     See all {pendingCount}
                   </Link>
                 )}
@@ -546,7 +556,7 @@ export default function Dashboard() {
           </div>
 
           {recentTx.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8">Nothing recorded yet.</p>
+            <p className="text-[15px] text-muted-foreground py-8">Nothing recorded yet.</p>
           ) : (
             recentTx.map((tx) => {
               const voided = tx.status === "voided";
@@ -582,7 +592,7 @@ export default function Dashboard() {
       </div>
       <Sheet open={earningsOpen} onClose={closeEarnings} title="Earnings">
         <p className="amount text-[34px] font-semibold tracking-tight">{pesos(earningsHeld ?? 0)}</p>
-        <p className="text-sm text-muted-foreground mb-5">Fees earned and not yet taken out.</p>
+        <p className="text-[15px] text-muted-foreground mb-5">Fees earned and not yet taken out.</p>
 
         {earningsEditing ? (
           <>
@@ -602,12 +612,12 @@ export default function Dashboard() {
             <p className="text-[13px] text-muted-foreground mt-2">
               The change is kept on record. Drawer and wallet balances do not move.
             </p>
-            {earningsError && <p className="text-sm text-destructive mt-2">{earningsError}</p>}
+            {earningsError && <p className="text-[15px] text-destructive mt-2">{earningsError}</p>}
             <button
               type="button"
               onClick={saveEarnings}
               disabled={earningsSaving}
-              className="font-heading mt-4 w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] disabled:opacity-60"
+              className="btn btn-primary mt-4 w-full"
             >
               {earningsSaving ? "Saving…" : "Save"}
             </button>
@@ -616,14 +626,14 @@ export default function Dashboard() {
           <div className="space-y-2.5">
             <Link
               href="/entry?type=Profit%20Remittance"
-              className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] flex items-center justify-center"
+              className="btn btn-primary w-full"
             >
               Take out profit
             </Link>
             <button
               type="button"
               onClick={() => setEarningsEditing(true)}
-              className="font-heading w-full h-[54px] rounded-full bg-muted font-semibold text-[17px]"
+              className="btn btn-secondary w-full"
             >
               Edit amount
             </button>

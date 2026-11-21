@@ -114,13 +114,13 @@ export default function MyAccountsPage() {
         {error && (
           <div className="flex items-start gap-2.5 bg-destructive/10 border border-destructive/20 rounded-2xl px-4 py-3">
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-destructive leading-relaxed">{error}</p>
+            <p className="text-[13px] text-destructive leading-relaxed">{error}</p>
           </div>
         )}
         {notice && (
           <div className="flex items-start gap-2.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3">
             <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-primary leading-relaxed">{notice}</p>
+            <p className="text-[13px] text-primary leading-relaxed">{notice}</p>
           </div>
         )}
 
@@ -128,10 +128,10 @@ export default function MyAccountsPage() {
         {wallets.map((w) => {
           const rows = identifiers.filter((r) => r.account_id === w.id);
           return (
-            <div key={w.id} className="bg-muted/60 rounded-2xl overflow-hidden">
-              <p className="px-4 pt-3.5 pb-2 text-sm font-semibold">{w.name}</p>
+            <div key={w.id} className="bg-muted rounded-2xl overflow-hidden">
+              <p className="px-4 pt-3.5 pb-2 text-[15px] font-semibold">{w.name}</p>
               {rows.length === 0 ? (
-                <p className="px-4 pb-3.5 text-xs text-muted-foreground">Nothing added yet.</p>
+                <p className="px-4 pb-3.5 text-[13px] text-muted-foreground">Nothing added yet.</p>
               ) : (
                 <div className="divide-y divide-border">
                   {rows.map((r) => (
@@ -140,8 +140,8 @@ export default function MyAccountsPage() {
                         ? <Smartphone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                         : <Landmark className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm tabular-nums truncate">{pretty(r)}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[15px] tabular-nums truncate">{pretty(r)}</p>
+                        <p className="text-[13px] text-muted-foreground">
                           {r.kind === "mobile" ? "Mobile number" : "Account number"}
                         </p>
                       </div>
@@ -150,7 +150,7 @@ export default function MyAccountsPage() {
                         onClick={() => handleRemove(r)}
                         disabled={removingId === r.id}
                         aria-label={`Remove ${pretty(r)}`}
-                        className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+                        className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 disabled:opacity-50"
                       >
                         {removingId === r.id
                           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -164,14 +164,14 @@ export default function MyAccountsPage() {
           );
         })}
 
-        <form onSubmit={handleAdd} className="bg-muted/60 rounded-2xl p-4 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Add one</p>
+        <form onSubmit={handleAdd} className="bg-muted rounded-2xl p-4 space-y-3">
+          <p className="label">Add one</p>
 
           <select
             aria-label="Which wallet"
             value={walletId}
             onChange={(e) => setWalletId(e.target.value)}
-            className="w-full rounded-xl bg-muted px-4 py-3 text-sm appearance-none"
+            className="w-full rounded-xl bg-muted px-4 py-3 text-[15px] appearance-none"
           >
             <option value="">Which wallet is it?</option>
             {wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -183,7 +183,7 @@ export default function MyAccountsPage() {
                 key={k}
                 type="button"
                 onClick={() => setKind(k)}
-                className={`rounded-xl py-2.5 text-xs font-medium ${
+                className={`rounded-xl py-2.5 text-[13px] font-medium ${
                   kind === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -199,13 +199,13 @@ export default function MyAccountsPage() {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={kind === "mobile" ? "09XX XXX XXXX" : "Account number, digits only"}
-            className="w-full rounded-xl bg-muted px-4 py-3 text-sm tabular-nums"
+            className="w-full rounded-xl bg-muted px-4 py-3 text-[15px] tabular-nums"
           />
 
           <button
             type="submit"
             disabled={adding || !walletId || value.trim() === ""}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 rounded-xl text-sm disabled:opacity-40"
+            className="btn btn-primary w-full"
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Add

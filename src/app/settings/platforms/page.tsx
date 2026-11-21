@@ -11,8 +11,6 @@ import {
   Check,
   Archive,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { addPlatform as addPlatformAccount, retirePlatform } from "@/lib/ledger";
@@ -34,8 +32,6 @@ interface PlatformAccount {
   is_active: boolean;
 }
 
-// Built-in platforms cannot be deactivated
-const BUILT_IN = new Set(["GCash", "MariBank", "Maya", "Cash"]);
 
 // NOTE: adding a platform used to seed six `transaction_rules` rows alongside
 // the wallet. It no longer seeds anything, for two reasons. Direction — the
@@ -64,6 +60,21 @@ export default function PlatformsSettingsPage() {
   // Deactivate
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<PlatformAccount | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  async function restorePlatform(account: PlatformAccount) {
+    setRestoringId(account.id);
+    setError(null);
+    try {
+      const restored = await addPlatformAccount(account.name);
+      setAccounts((prev) => [...prev.filter((a) => a.id !== account.id && a.id !== restored.id), restored]);
+      showSuccess(`${account.name} is back`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not bring the wallet back");
+    } finally {
+      setRestoringId(null);
+    }
+  }
 
   // Feedback
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +187,7 @@ export default function PlatformsSettingsPage() {
   }
 
   const platforms = accounts.filter((a) => a.kind === "platform" && a.is_active);
+  const archived = accounts.filter((a) => a.kind === "platform" && !a.is_active);
   const cashAccount = accounts.find((a) => a.kind === "cash" && a.is_active);
 
   return (
@@ -187,7 +199,7 @@ export default function PlatformsSettingsPage() {
         info={<>
           <p>Each wallet you use gets its own balance and fee rules.</p>
           <p>A new wallet starts at ₱0. Set its real balance under <b>Settings → Wallets</b>.</p>
-          <p>Archiving hides a wallet and keeps its history. GCash and MariBank cannot be archived.</p>
+          <p>Archive any wallet you don&apos;t use. It is hidden, its history is kept, and you can bring it back.</p>
         </>}
       />
 
@@ -196,75 +208,80 @@ export default function PlatformsSettingsPage() {
         {successMsg && (
           <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-4 py-2.5">
             <Check className="w-4 h-4 text-primary flex-shrink-0" />
-            <p className="text-sm text-primary font-medium">{successMsg}</p>
+            <p className="text-[15px] text-primary font-medium">{successMsg}</p>
           </div>
         )}
 
         {/* Platform accounts */}
         {platforms.map((a) => {
-          const isBuiltIn = BUILT_IN.has(a.name);
           const isDeactivating = deactivatingId === a.id;
 
           return (
             <div
               key={a.id}
-              className="flex items-center gap-3 bg-muted/60 border border-border rounded-2xl px-4 py-3.5"
+              className="flex items-center gap-3 bg-muted rounded-[20px] px-4 py-3.5"
             >
               <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
                 <CreditCard className="w-4 h-4 text-muted-foreground" />
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{a.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {isBuiltIn ? "Built-in" : "Custom platform"}
-                </p>
+                <p className="text-[15px] font-semibold">{a.name}</p>
               </div>
 
-              {!isBuiltIn && (
-                <button
-                  onClick={() => setArchiving(a)}
-                  disabled={isDeactivating}
-                  aria-label={`Archive ${a.name}`}
-                  className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center hover:bg-warning/20 transition-colors disabled:opacity-50"
-                >
-                  {isDeactivating ? (
-                    <Loader2 className="w-3.5 h-3.5 text-warning animate-spin" />
-                  ) : (
-                    <Archive className="w-3.5 h-3.5 text-warning" />
-                  )}
-                </button>
-              )}
+              <button
+                onClick={() => setArchiving(a)}
+                disabled={isDeactivating}
+                className="btn btn-outline btn-sm"
+              >
+                {isDeactivating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Archive"}
+              </button>
             </div>
           );
         })}
 
         {/* Cash account — always shown, cannot be deactivated */}
         {cashAccount && (
-          <div className="flex items-center gap-3 bg-muted/60 border border-border rounded-2xl px-4 py-3.5">
+          <div className="flex items-center gap-3 bg-muted rounded-[20px] px-4 py-3.5">
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
               <CreditCard className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">Cash</p>
-              <p className="text-xs text-muted-foreground">Physical cash register</p>
+              <p className="text-[15px] font-semibold">Cash</p>
+              <p className="text-[13px] text-muted-foreground">Physical cash register</p>
+            </div>
+          </div>
+        )}
+
+        {archived.length > 0 && (
+          <div className="pt-2">
+            <p className="label">Archived</p>
+            <div className="space-y-2">
+              {archived.map((a) => (
+                <div key={a.id} className="flex items-center gap-3 card px-4 py-3">
+                  <p className="flex-1 min-w-0 text-[15px] font-semibold text-muted-foreground">{a.name}</p>
+                  <button onClick={() => restorePlatform(a)} disabled={restoringId === a.id} className="btn btn-secondary btn-sm bg-background">
+                    {restoringId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Bring back"}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
         {/* Add Platform */}
         {showAdd ? (
-          <div className="bg-muted/60 border border-border rounded-2xl p-4 space-y-3">
+          <div className="bg-muted rounded-[20px] p-4 space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <label className="label">
                 Platform name
-              </Label>
-              <Input
+              </label>
+              <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="e.g. Maya, PayMaya"
                 autoFocus
-                className="bg-muted border-border h-10 rounded-xl text-sm"
+                className="bg-muted border-border h-10 rounded-xl text-[15px]"
               />
             </div>
 
@@ -275,13 +292,9 @@ export default function PlatformsSettingsPage() {
               in Settings → Wallets, where a count against an empty ledger posts
               exactly that.
             */}
-            <p className="text-xs text-muted-foreground/60 leading-relaxed">
-              New platforms start at ₱0.00. Set the opening balance in
-              Settings → Wallets by reconciling against what you have counted.
-            </p>
 
             {error && (
-              <div className="flex items-center gap-2 text-xs text-destructive">
+              <div className="flex items-center gap-2 text-[13px] text-destructive">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                 {error}
               </div>
@@ -291,7 +304,7 @@ export default function PlatformsSettingsPage() {
               <button
                 onClick={addPlatform}
                 disabled={adding}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                className="btn btn-primary btn-sm flex-1"
               >
                 {adding ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -302,7 +315,7 @@ export default function PlatformsSettingsPage() {
               </button>
               <button
                 onClick={() => { setShowAdd(false); setError(null); setNewName(""); }}
-                className="px-4 py-2.5 bg-muted text-muted-foreground font-medium rounded-xl text-sm"
+                className="btn btn-secondary btn-sm"
               >
                 Cancel
               </button>
@@ -311,16 +324,16 @@ export default function PlatformsSettingsPage() {
         ) : (
           <button
             onClick={() => { setShowAdd(true); setError(null); }}
-            className="w-full flex items-center justify-center gap-2 bg-muted/60 border border-dashed border-border rounded-2xl py-3.5 text-sm text-muted-foreground hover:bg-muted transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-muted border-dashed rounded-[20px] py-3.5 text-[15px] text-muted-foreground hover:bg-muted transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add a new platform
+            Add a wallet
           </button>
         )}
 
       </section>
       <Sheet open={archiving !== null} onClose={() => setArchiving(null)} title={`Archive ${archiving?.name ?? "wallet"}?`}>
-        <ul className="text-sm text-muted-foreground space-y-1.5 mt-2 mb-5 list-disc pl-5">
+        <ul className="text-[15px] text-muted-foreground space-y-1.5 mt-2 mb-5 list-disc pl-5">
           <li>It disappears from Home and from new transactions.</li>
           <li>Its past transactions stay in History.</li>
           <li>A wallet that still holds money cannot be archived. Move the money out first.</li>
@@ -333,14 +346,14 @@ export default function PlatformsSettingsPage() {
               setArchiving(null);
               if (target) deactivatePlatform(target);
             }}
-            className="font-heading w-full h-[54px] rounded-full bg-destructive text-white dark:text-background font-semibold text-[17px]"
+            className="btn btn-danger w-full"
           >
             Archive
           </button>
           <button
             type="button"
             onClick={() => setArchiving(null)}
-            className="font-heading w-full h-[54px] rounded-full bg-muted font-semibold text-[17px]"
+            className="btn btn-secondary w-full"
           >
             Keep it
           </button>

@@ -100,13 +100,13 @@ export default function LoginPage() {
       <div className="flex-1 sm:flex-none flex flex-col items-center justify-center pt-[calc(env(safe-area-inset-top)+2rem)] pb-8 sm:pb-10">
         <img src="/logo.svg" alt="" width={76} height={76} className="rounded-[20px] mb-5 dark:ring-1 dark:ring-input" />
         <h1 className="text-[30px] font-bold tracking-tight leading-none">gocash</h1>
-        <p className="text-sm text-muted-foreground mt-2">Your shop&apos;s books</p>
+        <p className="text-[15px] text-muted-foreground mt-2">Your shop&apos;s books</p>
       </div>
 
       <div className="pb-[max(2rem,env(safe-area-inset-bottom))] sm:pb-0">
         {sent ? (
           <form onSubmit={handleVerifyCode} className="space-y-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[15px] text-muted-foreground">
               We emailed a code to <span className="text-foreground font-medium">{email}</span>.
             </p>
             <label htmlFor="code" className="sr-only">Sign-in code</label>
@@ -124,14 +124,14 @@ export default function LoginPage() {
               autoComplete="one-time-code"
               className={`${field} amount text-center text-2xl font-semibold tracking-[0.4em]`}
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-[15px] text-destructive">{error}</p>}
             <button type="submit" disabled={loading || code.length < 6} className={primary}>
               {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />Checking…</>) : "Sign in"}
             </button>
             <button
               type="button"
               onClick={() => { setSent(false); setCode(""); setError(null); }}
-              className="w-full h-11 text-sm text-muted-foreground underline underline-offset-4"
+              className="w-full h-11 text-[15px] text-muted-foreground underline underline-offset-4"
             >
               Use a different email
             </button>
@@ -149,14 +149,14 @@ export default function LoginPage() {
               autoComplete="email"
               className={field}
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-[15px] text-destructive">{error}</p>}
             <button type="submit" disabled={loading || !email} className={primary}>
               {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />Sending…</>) : "Email me a sign-in code"}
             </button>
             <p className="text-[13px] text-muted-foreground text-center">No password needed.</p>
           </form>
         )}
-        <Link href="/help" className="block text-center text-sm text-muted-foreground underline underline-offset-4 py-4">
+        <Link href="/help" className="block text-center text-[15px] text-muted-foreground underline underline-offset-4 py-4">
           How GoCash works
         </Link>
       </div>

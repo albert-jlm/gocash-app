@@ -57,7 +57,7 @@ async function mock(page) {
       if (!kind) rows = rows.filter(r => r.kind !== 'revenue');
       return json(rows);
     }
-    if (p.endsWith('/accounts')) return json(balances.map(b => ({ id: b.account_id, name: b.name, kind: b.kind, is_active: true })));
+    if (p.endsWith('/accounts')) return json(u.searchParams.get('is_active') === 'eq.false' ? [] : balances.map(b => ({ id: b.account_id, name: b.name, kind: b.kind, is_active: true })));
     if (p.endsWith('/fee_rules')) return json(rules);
     if (p.endsWith('/transactions')) {
       let rows = txs; const st = u.searchParams.get('status'), id = u.searchParams.get('id');

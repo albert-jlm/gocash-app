@@ -23,6 +23,7 @@ import { typeName } from "@/lib/display";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -141,12 +142,7 @@ function TransactionsList() {
   return (
     <AppShell active="history" tabBar wide>
       {/* Header */}
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-3">
-        <h1 className="text-xl font-semibold">My Transactions</h1>
-        <p className="text-[12px] text-muted-foreground mt-0.5">
-          {transactions.length} total · {transactions.filter(t => t.status === "awaiting_confirm").length} to review
-        </p>
-      </header>
+      <PageHeader title="History" />
 
       {/* Filter Chips — horizontal scroll, pill style */}
       <div
@@ -158,7 +154,7 @@ function TransactionsList() {
             key={f}
             onClick={() => setActiveFilter(f)}
             className={[
-              "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all",
+              "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-all",
               activeFilter === f
                 ? "bg-primary text-primary-foreground shadow-sm shadow-none"
                 : "bg-muted text-muted-foreground hover:bg-foreground/10",
@@ -173,21 +169,21 @@ function TransactionsList() {
       <div className="px-5 pb-8 space-y-5 flex-1">
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
               <History className="w-6 h-6 text-muted-foreground/50" />
             </div>
-            <p className="text-sm font-medium text-muted-foreground">No transactions yet.</p>
-            <Link href="/entry" className="text-sm text-primary mt-2 font-medium">
+            <p className="text-[15px] font-medium text-muted-foreground">No transactions yet.</p>
+            <Link href="/entry" className="text-[15px] text-primary mt-2 font-medium">
               Add your first one →
             </Link>
           </div>
         ) : (
           groups.map((group) => (
             <div key={group.key}>
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">
+              <h2 className="label mb-2.5">
                 {group.label}
               </h2>
-              <div className="bg-muted/60 rounded-2xl overflow-hidden divide-y divide-border border border-border">
+              <div className="bg-muted rounded-[20px] overflow-hidden divide-y divide-">
                 {group.items.map((tx) => {
                   const cfg = TYPE_CONFIG[tx.transaction_type] ?? {
                     color: "var(--foreground)",
@@ -214,10 +210,10 @@ function TransactionsList() {
 
                       {/* Details */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
+                        <p className="text-[15px] font-medium truncate">
                           {typeName(tx.transaction_type)}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-[13px] text-muted-foreground truncate">
                           {tx.transaction_type === "Wallet Transfer"
                             ? `${tx.platform} → ${tx.transfer_to ?? "?"}`
                             : maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
@@ -226,23 +222,23 @@ function TransactionsList() {
 
                       {/* Amounts + badge */}
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <p className={`text-sm font-semibold tabular-nums ${isVoided ? "line-through text-muted-foreground" : ""}`}>
+                        <p className={`text-[15px] font-semibold tabular-nums ${isVoided ? "line-through text-muted-foreground" : ""}`}>
                           {isPending && !(tx.amount > 0) ? "Amount?" : "₱" + tx.amount.toLocaleString("en-PH")}
                         </p>
                         <div className="flex items-center gap-1.5">
                           {/* A draft has earned nothing yet; its fee is worked
                               out when it is confirmed. */}
                           {!isVoided && !isPending && tx.transaction_type !== "Wallet Transfer" && (
-                            <p className="text-xs text-primary font-medium tabular-nums">
+                            <p className="text-[13px] text-primary font-medium tabular-nums">
                               +₱{tx.net_profit.toFixed(0)}
                             </p>
                           )}
                           {isVoided ? (
-                            <span className="text-xs font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                            <span className="text-[13px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
                               Voided
                             </span>
                           ) : isPending ? (
-                            <span className="flex items-center gap-1 text-xs font-bold bg-warning/20 text-warning px-1.5 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-[13px] font-bold bg-warning/20 text-warning px-1.5 py-0.5 rounded-full">
                               <span className="w-1 h-1 rounded-full bg-warning animate-pulse" />
                               Review
                             </span>

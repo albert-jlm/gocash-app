@@ -57,19 +57,19 @@ export function CashOutFeeChoice({
   const rows = [
     {
       includes: true,
-      title: `Yes: they sent ${formatPesos(handedOver(options.inside.postings))} plus my fee`,
-      detail: `Give ${formatPesos(handedOver(options.inside.postings))} · you earn ${formatPesos(options.inside.feePesos)}`,
+      title: "Yes",
+      detail: `Give ${formatPesos(handedOver(options.inside.postings))}`,
     },
     {
       includes: false,
-      title: `No: my fee is on top of the ${formatPesos(amountPesos)}`,
-      detail: `Give ${formatPesos(amountPesos)} and collect ${formatPesos(options.onWhole.feePesos)} in cash`,
+      title: "No, it is on top",
+      detail: `Give ${formatPesos(amountPesos)}, collect ${formatPesos(options.onWhole.feePesos)}`,
     },
   ];
 
   return (
     <div className="space-y-2 pt-1" role="radiogroup" aria-label="Is your fee already inside the amount they sent?">
-      <p className="text-[13px] text-muted-foreground">Is your fee already inside the amount they sent?</p>
+      <p className="text-[13px] text-muted-foreground">Is your fee inside the amount sent?</p>
       {rows.map((row) => {
         const selected = value === row.includes;
         return (
@@ -80,7 +80,7 @@ export function CashOutFeeChoice({
             aria-checked={selected}
             onClick={() => onChange(row.includes)}
             className={`w-full flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-              selected ? "border-primary/50 bg-primary/[0.08]" : "border-border bg-muted/60"
+              selected ? "border-primary/50 bg-primary/[0.08]" : "border-border bg-muted"
             }`}
           >
             <span
@@ -91,8 +91,8 @@ export function CashOutFeeChoice({
               {selected && <Check className="w-3 h-3 text-primary-foreground" />}
             </span>
             <span className="min-w-0">
-              <span className="block text-xs font-medium">{row.title}</span>
-              <span className="block text-xs text-muted-foreground">{row.detail}</span>
+              <span className="block text-[13px] font-medium">{row.title}</span>
+              <span className="block text-[13px] text-muted-foreground">{row.detail}</span>
             </span>
           </button>
         );

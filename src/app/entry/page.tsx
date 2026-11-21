@@ -34,7 +34,7 @@ import {
   type EntryContext,
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
-import { describeEffects } from "@/components/entry-effects";
+import { summaryLine } from "@/components/entry-effects";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { formatAmountInput, typeName } from "@/lib/display";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
@@ -211,12 +211,10 @@ export default function EntryPage() {
 
   const walletLabel = (p: string) => (p === CASH_ACCOUNT_NAME ? "Cash drawer" : p);
   const pill = (on: boolean) =>
-    `h-11 px-4 rounded-full text-sm font-medium flex-shrink-0 transition-colors ${
+    `h-11 px-4 rounded-full text-[15px] font-medium flex-shrink-0 transition-colors ${
       on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
     }`;
-  const allEffects = preview ? describeEffects(preview.postings, { feeInside: amountIncludesFee }) : [];
-  const effects = allEffects.filter((line) => line.tone !== "note");
-  const effectsNote = allEffects.find((line) => line.tone === "note")?.label ?? null;
+  const summary = preview ? summaryLine(preview.postings, { feeInside: amountIncludesFee }) : null;
 
   return (
     <AppShell active="new">
@@ -230,14 +228,14 @@ export default function EntryPage() {
       {loadError && (
         <div className="mx-6 mb-4 rounded-2xl bg-destructive/10 p-3 flex gap-2.5">
           <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-destructive">{loadError}</p>
+          <p className="text-[15px] text-destructive">{loadError}</p>
         </div>
       )}
 
       {context && context.platforms.length === 0 && (
         <div className="mx-6 mb-4 rounded-2xl bg-muted p-3 flex gap-2.5">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <p className="text-sm">
+          <p className="text-[15px]">
             No wallets set up yet. Add one in{" "}
             <Link href="/settings/platforms" className="underline underline-offset-4">Settings → Platforms</Link>.
           </p>
@@ -295,23 +293,12 @@ export default function EntryPage() {
             />
           </div>
 
-          <p className="mt-3 text-sm text-center text-muted-foreground min-h-5" aria-live="polite">
-            {effects.length > 0
-              ? effects.map((line, i) => (
-                  <span key={i}>
-                    {i > 0 && " · "}
-                    {line.label} <span className="text-foreground font-semibold tabular-nums">{line.value}</span>
-                  </span>
-                ))
-              : isTransfer ? "The amount that arrived at the other end" : null}
+          <p className="mt-3 text-[15px] text-center font-medium min-h-6" aria-live="polite">
+            {summary ?? (isTransfer ? <span className="text-muted-foreground font-normal">The amount that arrived</span> : null)}
           </p>
 
-          {effectsNote && (
-            <p className="mt-1.5 text-[13px] text-center text-muted-foreground">{effectsNote}</p>
-          )}
-
           {preview && !preview.rule && !isTransfer && (
-            <p className="mt-2 text-sm text-center text-warning">
+            <p className="mt-2 text-[15px] text-center text-warning">
               No fee is set for this yet, so it earns nothing.{" "}
               <Link href="/settings/rules" className="underline underline-offset-4">Set one</Link>
             </p>
@@ -349,7 +336,7 @@ export default function EntryPage() {
                 />
               </div>
               {platformFeeMinor === null && (
-                <p className="text-sm text-destructive mt-1.5">Use digits like 15 or 15.00.</p>
+                <p className="text-[15px] text-destructive mt-1.5">Use digits like 15 or 15.00.</p>
               )}
             </div>
           )}
@@ -359,7 +346,7 @@ export default function EntryPage() {
               type="button"
               onClick={() => setShowDetails((v) => !v)}
               aria-expanded={showDetails}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground h-11 mx-auto"
+              className="flex items-center gap-1.5 text-[15px] text-muted-foreground h-11 mx-auto"
             >
               Reference and customer number
               <ChevronDown className={`w-4 h-4 transition-transform ${showDetails ? "rotate-180" : ""}`} />
@@ -398,7 +385,7 @@ export default function EntryPage() {
           {saveError && (
             <div className="mt-3 rounded-2xl bg-destructive/10 p-3 flex gap-2.5">
               <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-destructive">{saveError}</p>
+              <p className="text-[15px] text-destructive">{saveError}</p>
             </div>
           )}
         </section>
@@ -415,7 +402,7 @@ export default function EntryPage() {
           type="button"
           onClick={handleSave}
           disabled={!canSave}
-          className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="btn btn-primary w-full"
         >
           {saving ? (
             <>

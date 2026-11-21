@@ -11,8 +11,6 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -36,6 +34,7 @@ import {
   type EntryContext,
 } from "@/lib/ledger";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 
 // Shown only if the operator's wallets could not be loaded, so the form is
 // still usable. The server checks the platform against real accounts anyway.
@@ -88,9 +87,9 @@ function FieldRow({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+      <label className="label">
         {label}
-      </Label>
+      </label>
       {children}
     </div>
   );
@@ -378,7 +377,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading transaction…</p>
+          <p className="text-[15px] text-muted-foreground">Loading transaction…</p>
         </div>
       </div>
     );
@@ -389,8 +388,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto px-5">
         <div className="text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
-          <p className="text-sm text-destructive">{fetchError}</p>
-          <Link href="/" className="text-sm text-primary block">Go home</Link>
+          <p className="text-[15px] text-destructive">{fetchError}</p>
+          <Link href="/" className="text-[15px] text-primary block">Go home</Link>
         </div>
       </div>
     );
@@ -403,18 +402,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   return (
     <AppShell>
       {/* Header */}
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-base font-semibold">Review Transaction</h1>
-          <p className="text-xs text-muted-foreground">Confirm or fix the details below</p>
-        </div>
-      </header>
+      <PageHeader title="Review" back="/" />
 
       {/* AI read badge */}
       {/* The banner tells the truth about what happened.
@@ -426,25 +414,17 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           <div className="flex items-start gap-2.5 bg-warning/[0.10] border border-warning/20 rounded-2xl px-4 py-3">
             <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-warning">
+              <p className="text-[13px] font-semibold text-warning">
                 We couldn&apos;t read {unread.join(" or ")}
               </p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
+              <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Fill {unread.length === 1 ? "it" : "them"} in below from the receipt.
                 Nothing is saved until you do.
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 bg-primary/8 border border-primary/15 rounded-2xl px-4 py-3">
-            <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-primary">AI read your screenshot</p>
-              <p className="text-xs text-muted-foreground">{platform} · edit any field below if needed</p>
-            </div>
-          </div>
+          <p className="text-[15px] text-muted-foreground">Read from your screenshot. Check it, then save.</p>
         )}
       </section>
 
@@ -453,16 +433,16 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         {saveError && (
           <div className="flex items-start gap-2 bg-destructive/10 border border-destructive/20 rounded-xl px-3 py-2.5 mb-4">
             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-destructive">{saveError}</p>
+            <p className="text-[13px] text-destructive">{saveError}</p>
           </div>
         )}
 
-        <div className="rounded-2xl p-4 space-y-4 mb-4 bg-muted border border-border">
+        <div className="rounded-[20px] p-4 space-y-4 mb-4 bg-muted">
           {/* Platform */}
           <FieldRow label={isTransfer ? "From" : "App used"}>
             <Select value={platform} onValueChange={(v) => setPlatform(v ?? "")}>
 
-              <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-sm">
+              <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-[15px]">
                 <SelectValue placeholder="Choose the app" />
               </SelectTrigger>
               <SelectContent>
@@ -477,7 +457,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           <FieldRow label="Transaction type">
             <Select value={txType} onValueChange={(v) => setTxType(v ?? "")}>
 
-              <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-sm">
+              <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-[15px]">
                 <SelectValue placeholder="Choose the type" />
               </SelectTrigger>
               <SelectContent>
@@ -495,7 +475,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           {isTransfer && (
             <FieldRow label="To">
               <Select value={transferTo} onValueChange={(v) => setTransferTo(v ?? "")}>
-                <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-sm">
+                <SelectTrigger className="bg-muted border-border h-11 w-full rounded-xl text-[15px]">
                   <SelectValue placeholder="Choose where it went" />
                 </SelectTrigger>
                 <SelectContent>
@@ -504,7 +484,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground leading-relaxed">
+              <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Your own money moving between your wallets or the drawer. No fee is earned.
               </p>
             </FieldRow>
@@ -513,8 +493,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           {/* Amount */}
           <FieldRow label={isTransfer ? "Amount that arrived" : "Amount"}>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
-              <Input
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[15px] pointer-events-none">₱</span>
+              <input
                 value={amount}
                 onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                 inputMode="decimal"
@@ -524,7 +504,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
               />
             </div>
             {!amountValid && (
-              <p className="text-xs text-destructive">
+              <p className="text-[13px] text-destructive">
                 {amountMinor === 0 || amount.trim() === ""
                   ? "Enter the amount on the receipt."
                   : "This isn't a readable amount. Use digits like 1850 or 1,850.50."}
@@ -545,19 +525,19 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           {isTransfer && (
             <FieldRow label="Fee the app charged you (if any)">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
-                <Input
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-[15px] pointer-events-none">₱</span>
+                <input
                   value={platformFee}
                   onChange={(e) => setPlatformFee(e.target.value)}
                   inputMode="decimal"
                   autoComplete="off"
                   placeholder="0.00"
                   aria-invalid={platformFeeMinor === null}
-                  className="bg-muted border-border h-11 rounded-xl pl-7 tabular-nums text-sm"
+                  className="bg-muted border-border h-11 rounded-xl pl-7 tabular-nums text-[15px]"
                 />
               </div>
               {platformFeeMinor === null && (
-                <p className="text-xs text-destructive">This isn&apos;t a readable amount. Use digits like 15 or 15.00.</p>
+                <p className="text-[13px] text-destructive">This isn&apos;t a readable amount. Use digits like 15 or 15.00.</p>
               )}
             </FieldRow>
           )}
@@ -565,15 +545,15 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           {/* Fee and effect: computed, never typed. The same code prices it
               on the server when Save is tapped. */}
           {preview && (
-            <div className="rounded-xl bg-muted/60 border border-border p-3 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <div className="rounded-xl bg-muted border border-border p-3 space-y-2">
+              <p className="label">
                 What saving this does
               </p>
               {isTransfer && (
-                <p className="text-xs text-muted-foreground">Your own money, moved. Nothing is earned on this.</p>
+                <p className="text-[13px] text-muted-foreground">Your own money, moved. Nothing is earned on this.</p>
               )}
               {!preview.rule && !isTransfer && (
-                <p className="text-xs text-warning leading-relaxed">
+                <p className="text-[13px] text-warning leading-relaxed">
                   No fee rule covers {txType} on {platform} yet, so this earns nothing.
                   Set one in <Link href="/settings/rules" className="underline">Settings → Fees</Link>.
                 </p>
@@ -585,33 +565,33 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
           {/* Customer number */}
           <FieldRow label="Customer number">
-            <Input
+            <input
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
               readOnly={false}
               placeholder="Not found"
-              className="bg-muted border-border h-11 rounded-xl text-sm tabular-nums"
+              className="bg-muted border-border h-11 rounded-xl text-[15px] tabular-nums"
             />
           </FieldRow>
 
           {/* Reference number */}
           <FieldRow label="Transaction number">
-            <Input
+            <input
               value={referenceNumber}
               onChange={(e) => setReferenceNumber(e.target.value)}
               readOnly={false}
               placeholder="Not found"
-              className="bg-muted border-border h-11 rounded-xl text-sm tabular-nums"
+              className="bg-muted border-border h-11 rounded-xl text-[15px] tabular-nums"
             />
           </FieldRow>
 
           {/* Date & Time */}
           <FieldRow label="Date & Time">
-            <Input
+            <input
               type="datetime-local"
               value={txDate}
               onChange={(e) => setTxDate(e.target.value)}
-              className="bg-muted border-border h-11 rounded-xl text-sm"
+              className="bg-muted border-border h-11 rounded-xl text-[15px]"
             />
           </FieldRow>
         </div>
@@ -628,14 +608,14 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
         <button
           onClick={handleSave}
           disabled={saving || discarding || isPreview || platform === "" || txType === "" || !amountValid || !transferReady}
-          className="w-full flex items-center justify-center gap-2 bg-primary active:bg-primary/80 text-primary-foreground font-semibold py-4 rounded-2xl text-base transition-colors disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+          className="btn btn-primary w-full"
         >
           {saving ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Saving…</>
           ) : (
             missing && !isPreview
               ? <>{missing}</>
-              : <><Check className="w-5 h-5" /> {isPreview ? "Save Transaction (preview)" : "Save Transaction"}</>
+              : <><Check className="w-5 h-5" /> {isPreview ? "Save (preview)" : "Save"}</>
           )}
         </button>
         {!isPreview && !askDiscard && (
@@ -643,20 +623,20 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             type="button"
             onClick={() => setAskDiscard(true)}
             disabled={saving || discarding}
-            className="mt-2.5 w-full flex items-center justify-center gap-2 rounded-2xl border border-destructive/25 bg-destructive/[0.08] text-destructive font-medium py-3.5 text-sm active:bg-destructive/[0.15] disabled:opacity-50 transition-colors"
+            className="mt-2.5 w-full flex items-center justify-center gap-2 rounded-2xl border border-destructive/25 bg-destructive/[0.08] text-destructive font-medium py-3.5 text-[15px] active:bg-destructive/[0.15] disabled:opacity-50 transition-colors"
           >
             <Trash2 className="w-4 h-4" /> Discard this draft
           </button>
         )}
         {!isPreview && askDiscard && (
           <div className="mt-2.5 rounded-2xl border border-destructive/25 bg-destructive/[0.08] p-3 space-y-2.5">
-            <p className="text-sm text-center">Discard this draft? It can&apos;t be brought back.</p>
+            <p className="text-[15px] text-center">Discard this draft? It can&apos;t be brought back.</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setAskDiscard(false)}
                 disabled={discarding}
-                className="rounded-xl bg-muted font-medium py-3 text-sm disabled:opacity-50"
+                className="btn btn-secondary"
               >
                 Keep it
               </button>
@@ -664,7 +644,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 type="button"
                 onClick={handleDiscard}
                 disabled={discarding}
-                className="rounded-xl bg-destructive text-white font-semibold py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                className="btn btn-danger"
               >
                 {discarding ? <><Loader2 className="w-4 h-4 animate-spin" /> Discarding…</> : "Yes, discard"}
               </button>

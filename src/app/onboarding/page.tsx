@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ChevronRight, Wallet } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase/client";
 import { provisionOperator } from "@/lib/ledger";
 import { parsePesosInput } from "@core/money.ts";
@@ -155,38 +153,38 @@ export default function OnboardingPage() {
         <div className="flex-1 sm:flex-none flex flex-col">
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-2">Welcome!</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
               Let&apos;s set up your account. This takes less than a minute.
             </p>
           </div>
 
           <div className="space-y-4 flex-1 sm:flex-none sm:mb-8">
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <label className="label">
                 Your name
-              </Label>
-              <Input
+              </label>
+              <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Maria Santos"
                 autoFocus
-                className="bg-muted border-border h-12 rounded-xl text-sm"
+                className="bg-muted border-border h-12 rounded-xl text-[15px]"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <label className="label">
                 Phone number{" "}
                 <span className="normal-case tracking-normal font-normal text-muted-foreground/60">
                   (optional)
                 </span>
-              </Label>
-              <Input
+              </label>
+              <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="09XX XXX XXXX"
-                className="bg-muted border-border h-12 rounded-xl text-sm"
+                className="bg-muted border-border h-12 rounded-xl text-[15px]"
               />
             </div>
           </div>
@@ -195,7 +193,7 @@ export default function OnboardingPage() {
             <button
               onClick={() => setStep(2)}
               disabled={!name.trim()}
-              className="w-full flex items-center justify-center gap-2 bg-primary disabled:opacity-50 text-primary-foreground font-semibold py-4 rounded-2xl text-[15px]"
+              className="btn btn-primary w-full"
             >
               Next
               <ChevronRight className="w-5 h-5" />
@@ -210,7 +208,7 @@ export default function OnboardingPage() {
               <Wallet className="w-6 h-6 text-primary" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Your current balances</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
               Enter how much you have right now in each wallet. You can always adjust these later.
             </p>
           </div>
@@ -223,39 +221,39 @@ export default function OnboardingPage() {
               { label: "Cash on hand", value: cashBalance, onChange: setCashBalance, color: "text-primary" },
             ].map(({ label, value, onChange, color }) => (
               <div key={label} className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <label className="label">
                   {label}
-                </Label>
+                </label>
                 <div className="relative">
-                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none ${color}`}>
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[15px] pointer-events-none ${color}`}>
                     ₱
                   </span>
-                  <Input
+                  <input
                     type="number"
                     inputMode="decimal"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder="0.00"
-                    className="bg-muted border-border h-12 rounded-xl pl-7 text-sm tabular-nums"
+                    className="bg-muted border-border h-12 rounded-xl pl-7 text-[15px] tabular-nums"
                   />
                 </div>
               </div>
             ))}
 
-            <p className="text-xs text-muted-foreground leading-relaxed pt-1">
+            <p className="text-[13px] text-muted-foreground leading-relaxed pt-1">
               Not sure? Enter 0 for now and set it in Settings → Wallets.
             </p>
           </div>
 
           {error && (
-            <p className="text-xs text-destructive px-1 pb-2">{error}</p>
+            <p className="text-[13px] text-destructive px-1 pb-2">{error}</p>
           )}
 
           <div className="py-8 space-y-3">
             <button
               onClick={handleFinish}
               disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-primary disabled:opacity-60 text-primary-foreground font-semibold py-4 rounded-2xl text-[15px]"
+              className="btn btn-primary w-full"
             >
               {saving ? (
                 <>
@@ -268,7 +266,7 @@ export default function OnboardingPage() {
             </button>
             <button
               onClick={() => setStep(1)}
-              className="w-full text-sm text-muted-foreground py-2"
+              className="w-full text-[15px] text-muted-foreground py-2"
             >
               Back
             </button>

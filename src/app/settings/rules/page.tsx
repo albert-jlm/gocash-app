@@ -14,12 +14,11 @@ import {
   Building2,
   TrendingDown,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { typeName } from "@/lib/display";
 
 // ---------------------------------------------------------------------------
 // Config — plain-language descriptions for each transaction type
@@ -219,32 +218,25 @@ export default function RulesSettingsPage() {
             <div
               key={rule.id}
               className={[
-                "rounded-2xl border transition-colors",
+                "rounded-[20px] transition-colors",
                 // fee_rules has no is_active column, and it does not need one:
                 // a rule that earns nothing is a rate of 0 with a minimum of 0,
                 // which is exactly what a NULL rate meant before. Dimming the
                 // card conveys that without a second way to express it.
                 rule.rate_bps === 0 && rule.minimum_minor === 0
-                  ? "bg-muted/60 border-border opacity-50"
-                  : "bg-muted/60 border-border",
+                  ? "bg-muted border-border opacity-50"
+                  : "bg-muted border-border",
               ].join(" ")}
             >
               {/* Rule header */}
               <div className="px-4 py-3.5 flex items-start gap-3">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: meta.color + "18" }}
-                >
-                  <Icon className="w-4 h-4" style={{ color: meta.color }} />
-                </div>
-
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <p className="text-sm font-semibold">{rule.transaction_type}</p>
+                    <p className="text-[15px] font-semibold">{typeName(rule.transaction_type)}</p>
 
                     <div className="flex items-center gap-2">
                       {justSaved && (
-                        <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                        <span className="flex items-center gap-1 text-[13px] text-primary font-medium">
                           <Check className="w-3 h-3" /> Saved
                         </span>
                       )}
@@ -258,30 +250,18 @@ export default function RulesSettingsPage() {
                     </div>
                   </div>
 
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {meta.desc}
-                  </p>
 
                   {/* Profit display — skip for Profit Remittance (no profit) */}
                   {!isProfitRemittance && !isEditing && (
-                    <div className="flex items-center gap-3 mt-2.5">
-                      <div className="bg-muted rounded-lg px-2.5 py-1.5">
-                        <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">Rate</p>
-                        <p className="text-sm font-semibold tabular-nums">
-                          {rule.rate_bps > 0 ? `${rule.rate_bps / 100}%` : "—"}
-                        </p>
-                      </div>
-                      <div className="bg-muted rounded-lg px-2.5 py-1.5">
-                        <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">Min</p>
-                        <p className="text-sm font-semibold tabular-nums">
-                          {rule.minimum_minor > 0 ? `₱${(rule.minimum_minor / 100).toFixed(2)}` : "—"}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => startEdit(rule)}
-                        className="ml-auto text-xs text-primary font-medium"
-                      >
-                        Edit →
+                    <div className="flex items-center justify-between gap-3 mt-2">
+                      <p className="amount text-[17px] font-semibold">
+                        {rule.rate_bps > 0 ? `${rule.rate_bps / 100}%` : "No rate"}
+                        <span className="text-muted-foreground font-medium text-[15px]">
+                          {rule.minimum_minor > 0 ? ` · at least ₱${rule.minimum_minor / 100}` : ""}
+                        </span>
+                      </p>
+                      <button onClick={() => startEdit(rule)} className="btn btn-primary btn-sm">
+                        Edit
                       </button>
                     </div>
                   )}
@@ -293,40 +273,40 @@ export default function RulesSettingsPage() {
                 <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border mx-4">
                   <div className="grid grid-cols-2 gap-3 pt-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      <label className="label">
                         Rate (%)
-                      </Label>
-                      <Input
+                      </label>
+                      <input
                         type="number"
                         inputMode="decimal"
                         value={editRate}
                         onChange={(e) => setEditRate(e.target.value)}
                         placeholder="e.g. 2"
                         autoFocus
-                        className="bg-muted border-border h-10 rounded-xl text-sm tabular-nums"
+                        className="bg-muted border-border h-10 rounded-xl text-[15px] tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      <label className="label">
                         Min (₱)
-                      </Label>
-                      <Input
+                      </label>
+                      <input
                         type="number"
                         inputMode="decimal"
                         value={editMin}
                         onChange={(e) => setEditMin(e.target.value)}
                         placeholder="e.g. 5"
-                        className="bg-muted border-border h-10 rounded-xl text-sm tabular-nums"
+                        className="bg-muted border-border h-10 rounded-xl text-[15px] tabular-nums"
                       />
                     </div>
                   </div>
 
-                  <p className="text-xs text-muted-foreground/60 leading-relaxed">
+                  <p className="text-[13px] text-muted-foreground/60 leading-relaxed">
                     Your profit = max(amount × rate ÷ 100, minimum)
                   </p>
 
                   {error && (
-                    <div className="flex items-center gap-2 text-xs text-destructive">
+                    <div className="flex items-center gap-2 text-[13px] text-destructive">
                       <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                       {error}
                     </div>
@@ -336,14 +316,14 @@ export default function RulesSettingsPage() {
                     <button
                       onClick={() => saveRule(rule)}
                       disabled={saving}
-                      className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                      className="btn btn-primary btn-sm flex-1"
                     >
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       Save
                     </button>
                     <button
                       onClick={cancelEdit}
-                      className="px-4 py-2.5 bg-muted text-muted-foreground font-medium rounded-xl text-sm"
+                      className="btn btn-secondary btn-sm"
                     >
                       Cancel
                     </button>

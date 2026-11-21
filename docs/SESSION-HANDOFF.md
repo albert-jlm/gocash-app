@@ -76,6 +76,16 @@ UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
   area; the tab bar is part of the layout. Sign-in and Home data are kept in
   memory between screens. Logo and icons are in `public/`
   (sources in `~/gocash-mockups/logo`).
+- **Coherence pass (2026-11-21):** shared styles live in `globals.css`
+  (`.btn`, `.btn-primary/-secondary/-outline/-danger`, `.btn-sm`, `.field`,
+  `.label`, `.card`) and `src/components/page-header.tsx` (centred title,
+  back chevron, info button that opens a sheet with the page's notes). Text
+  sizes are 13 / 15 / 17. New screens must use these, not one-off classes.
+- **Also added 2026-11-21:** low-balance alerts (`settings.low_balance` on
+  the operator row, set under Settings → Wallets; the operator's are GCash
+  2,000 and Maya 1,000), owner can edit the Earnings figure
+  (`adjust-earnings` function), any wallet can be archived and brought
+  back, public `/help` page, Cash Out says "Give X · collect Y fee".
 - **Still in the old layout (tokens only, not redesigned):** the review
   screen (`confirm-form.tsx`), History, transaction detail, capture, login,
   onboarding and the Settings sub-pages.

@@ -16,7 +16,7 @@
  */
 
 import Link from "next/link";
-import { Camera, History, Home, Keyboard, ScanLine, Settings } from "lucide-react";
+import { Camera, CircleHelp, History, Home, Keyboard, ScanLine, Settings } from "lucide-react";
 
 export type NavKey = "home" | "new" | "history" | "settings";
 
@@ -27,12 +27,13 @@ const TABS: { key: NavKey | "screenshot"; href: string; label: string; Icon: Rea
   { key: "settings", href: "/settings",     label: "Settings", Icon: Settings },
 ];
 
-const SIDEBAR: { key: NavKey | "screenshot"; href: string; label: string; Icon: React.ElementType }[] = [
+const SIDEBAR: { key: NavKey | "screenshot" | "help"; href: string; label: string; Icon: React.ElementType }[] = [
   { key: "home",       href: "/",             label: "Home",              Icon: Home },
   { key: "new",        href: "/new",          label: "New transaction",   Icon: Keyboard },
   { key: "screenshot", href: "/capture",      label: "Upload a screenshot", Icon: Camera },
   { key: "history",    href: "/transactions", label: "History",           Icon: History },
   { key: "settings",   href: "/settings",     label: "Settings",          Icon: Settings },
+  { key: "help",       href: "/help",         label: "Help",              Icon: CircleHelp },
 ];
 
 export function AppShell({

@@ -10,8 +10,6 @@ import {
   AlertCircle,
   Scale,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -146,8 +144,11 @@ export default function WalletsSettingsPage() {
         .order("kind")
         .order("name");
 
+      const { data: hiddenRows } = await supabase
+        .from("accounts").select("id").eq("operator_id", opId).eq("is_active", false);
+      const hidden = new Set((hiddenRows ?? []).map((a) => a.id));
       if (readError) setError(readError.message);
-      if (data) setAccounts(data as AccountRow[]);
+      if (data) setAccounts((data as AccountRow[]).filter((a) => !hidden.has(a.account_id)));
       setDataLoading(false);
     }
     fetchAccounts();
@@ -254,7 +255,7 @@ export default function WalletsSettingsPage() {
         {notice && (
           <div className="flex items-start gap-2.5 bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3">
             <Check className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-primary leading-relaxed">{notice}</p>
+            <p className="text-[13px] text-primary leading-relaxed">{notice}</p>
           </div>
         )}
         {accounts.map((a) => {
@@ -272,7 +273,7 @@ export default function WalletsSettingsPage() {
                       <CreditCard className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="opacity-75 text-xs font-medium">{a.name}</p>
+                      <p className="opacity-75 text-[13px] font-medium">{a.name}</p>
                       {/* natural_balance, not balance: the sign-corrected figure
                           is the one a human should read. */}
                       <p className="amount text-[22px] font-semibold tracking-tight leading-tight">
@@ -284,38 +285,38 @@ export default function WalletsSettingsPage() {
               </div>
 
               {/* Reconciliation */}
-              <div className="bg-muted/60 border border-border border-t-0 rounded-b-2xl">
+              <div className="bg-muted border border-border border-t-0 rounded-b-2xl">
                 {isReconciling ? (
                   <div className="p-4 space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      <label className="label">
                         What it really holds
-                      </Label>
+                      </label>
                       <div className="relative">
-                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-muted-foreground`}>
+                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[15px] pointer-events-none text-muted-foreground`}>
                           ₱
                         </span>
-                        <Input
+                        <input
                           type="number"
                           inputMode="decimal"
                           value={countedValue}
                           onChange={(e) => setCountedValue(e.target.value)}
                           autoFocus
-                          className="bg-muted border-border h-11 rounded-xl pl-7 text-sm tabular-nums"
+                          className="bg-muted border-border h-11 rounded-xl pl-7 text-[15px] tabular-nums"
                         />
                       </div>
                     </div>
 
                     {/* The count against the books */}
-                    <div className="rounded-xl bg-muted/60 px-3.5 py-3 space-y-1.5">
+                    <div className="rounded-xl bg-muted px-3.5 py-3 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Book balance</span>
-                        <span className="text-xs tabular-nums text-muted-foreground">
+                        <span className="text-[13px] text-muted-foreground">Book balance</span>
+                        <span className="text-[13px] tabular-nums text-muted-foreground">
                           {formatPesos(a.natural_balance)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Difference</span>
+                        <span className="text-[13px] text-muted-foreground">Difference</span>
                         <span
                           className={[
                             "text-[13px] font-semibold tabular-nums",
@@ -329,7 +330,7 @@ export default function WalletsSettingsPage() {
                           {diff === null ? "—" : (diff > 0 ? "+" : "") + formatMinorPesos(diff)}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground/60 leading-relaxed pt-0.5">
+                      <p className="text-[13px] text-muted-foreground/60 leading-relaxed pt-0.5">
                         {diff === null || diff === 0
                           ? "This matches. Nothing to change."
                           : diff > 0
@@ -339,7 +340,7 @@ export default function WalletsSettingsPage() {
                     </div>
 
                     {error && (
-                      <div className="flex items-start gap-2 text-xs text-destructive">
+                      <div className="flex items-start gap-2 text-[13px] text-destructive">
                         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                         <span className="leading-relaxed">{error}</span>
                       </div>
@@ -349,42 +350,35 @@ export default function WalletsSettingsPage() {
                       <button
                         onClick={() => submitReconcile(a)}
                         disabled={saving || diff === null || diff === 0}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                        className="btn btn-primary btn-sm flex-1"
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         Save
                       </button>
                       <button
                         onClick={cancelReconcile}
-                        className="px-4 py-2.5 bg-muted text-muted-foreground font-medium rounded-xl text-sm"
+                        className="btn btn-secondary btn-sm"
                       >
                         Cancel
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => startReconcile(a)}
-                    className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    <Scale className="w-3.5 h-3.5 flex-shrink-0" />
-                    Set the real balance
-                  </button>
-                )}
-                {!isReconciling && (
-                  <button
-                    onClick={() => {
-                      setFloorFor(a);
-                      setFloorInput(floors[a.name] ? formatAmountInput(String(floors[a.name])) : "");
-                      setFloorError(null);
-                    }}
-                    className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left text-sm text-muted-foreground border-t border-border"
-                  >
-                    <span>Alert below</span>
-                    <span className="amount font-semibold text-foreground">
-                      {floors[a.name] ? formatPesos(floors[a.name]) : "Off"}
-                    </span>
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 p-3">
+                    <button onClick={() => startReconcile(a)} className="btn btn-primary btn-sm">
+                      Set balance
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFloorFor(a);
+                        setFloorInput(floors[a.name] ? formatAmountInput(String(floors[a.name])) : "");
+                        setFloorError(null);
+                      }}
+                      className="btn btn-outline btn-sm"
+                    >
+                      {floors[a.name] ? `Alert at ${formatPesos(floors[a.name]).replace(/\.00$/, "")}` : "Set alert"}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -393,7 +387,7 @@ export default function WalletsSettingsPage() {
 
       </section>
       <Sheet open={floorFor !== null} onClose={() => setFloorFor(null)} title={`Alert when ${floorFor?.name === "Cash" ? "the cash drawer" : floorFor?.name ?? "it"} is low`}>
-        <p className="text-sm text-muted-foreground mt-1 mb-4">Home tells you to top up when the balance drops below this.</p>
+        <p className="text-[15px] text-muted-foreground mt-1 mb-4">Home tells you to top up when the balance drops below this.</p>
         <label htmlFor="floor-amount" className="sr-only">Amount</label>
         <div className="relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
@@ -408,13 +402,13 @@ export default function WalletsSettingsPage() {
             className="amount w-full h-[54px] rounded-2xl bg-muted pl-9 pr-4 text-xl font-semibold"
           />
         </div>
-        {floorError && <p className="text-sm text-destructive mt-2">{floorError}</p>}
+        {floorError && <p className="text-[15px] text-destructive mt-2">{floorError}</p>}
         <div className="space-y-2.5 mt-4">
           <button
             type="button"
             onClick={() => submitFloor(false)}
             disabled={floorSaving}
-            className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] disabled:opacity-60"
+            className="btn btn-primary w-full"
           >
             {floorSaving ? "Saving…" : "Save"}
           </button>
@@ -423,7 +417,7 @@ export default function WalletsSettingsPage() {
               type="button"
               onClick={() => submitFloor(true)}
               disabled={floorSaving}
-              className="font-heading w-full h-[54px] rounded-full bg-muted font-semibold text-[17px]"
+              className="btn btn-secondary w-full"
             >
               Turn off
             </button>

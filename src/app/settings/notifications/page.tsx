@@ -10,8 +10,6 @@ import {
   Bell,
   MessageCircle,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
@@ -124,7 +122,7 @@ export default function NotificationsSettingsPage() {
 
       <section className="px-5 flex-1 space-y-4 pb-10">
         {/* Telegram card */}
-        <div className="bg-muted/60 border border-border rounded-2xl overflow-hidden">
+        <div className="bg-muted rounded-[20px] overflow-hidden">
           {/* Card header */}
           <div className="px-4 py-3.5 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -132,7 +130,7 @@ export default function NotificationsSettingsPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Telegram</p>
+                <p className="text-[15px] font-semibold">Telegram</p>
                 <button
                   onClick={() =>
                     setSettings((s) => ({ ...s, telegram_enabled: !s.telegram_enabled }))
@@ -150,7 +148,7 @@ export default function NotificationsSettingsPage() {
                   />
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+              <p className="text-[13px] text-muted-foreground leading-relaxed mt-0.5">
                 Receive a message when a transaction is processed by AI
               </p>
             </div>
@@ -160,20 +158,20 @@ export default function NotificationsSettingsPage() {
           {settings.telegram_enabled && (
             <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border mx-4">
               <div className="space-y-1.5 pt-3">
-                <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <label className="label">
                   Telegram Chat ID
-                </Label>
-                <Input
+                </label>
+                <input
                   value={settings.telegram_chat_id}
                   onChange={(e) =>
                     setSettings((s) => ({ ...s, telegram_chat_id: e.target.value }))
                   }
                   placeholder="e.g. 123456789"
                   inputMode="numeric"
-                  className="bg-muted border-border h-10 rounded-xl text-sm tabular-nums"
+                  className="bg-muted border-border h-10 rounded-xl text-[15px] tabular-nums"
                 />
               </div>
-              <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              <p className="text-[13px] text-muted-foreground/60 leading-relaxed">
                 Send /start to @GoCashTrackerBot on Telegram, then paste the Chat ID it gives you.
               </p>
             </div>
@@ -181,19 +179,19 @@ export default function NotificationsSettingsPage() {
         </div>
 
         {/* Future — push notifications placeholder */}
-        <div className="flex items-center gap-3 bg-muted/60 border border-border rounded-2xl px-4 py-3.5 opacity-50">
+        <div className="flex items-center gap-3 bg-muted rounded-[20px] px-4 py-3.5 opacity-50">
           <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
             <Bell className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">Push Notifications</p>
-            <p className="text-xs text-muted-foreground">Coming soon</p>
+            <p className="text-[15px] font-semibold">Push Notifications</p>
+            <p className="text-[13px] text-muted-foreground">Coming soon</p>
           </div>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="flex items-center gap-2 text-xs text-destructive">
+          <div className="flex items-center gap-2 text-[13px] text-destructive">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
             {error}
           </div>
@@ -203,7 +201,7 @@ export default function NotificationsSettingsPage() {
         <button
           onClick={save}
           disabled={saving}
-          className="w-full flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-3 rounded-xl text-sm transition-colors"
+          className="btn btn-primary w-full"
         >
           {saving ? (
             <Loader2 className="w-4 h-4 animate-spin" />
