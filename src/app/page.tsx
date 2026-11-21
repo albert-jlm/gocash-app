@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import {
   Loader2, ArrowDown, ArrowUp, Smartphone, ReceiptText, Ellipsis,
   ChevronRight, ChevronDown, AlertCircle, Check,
@@ -90,6 +90,7 @@ let lastHome: {
   pending: PendingRow[];
   todayStats: { count: number; total: number; earnings: number };
   recentTx: TxRow[];
+  earnings: number | null;
 } | null = null;
 
 export default function Dashboard() {
@@ -108,6 +109,7 @@ export default function Dashboard() {
   const [reloadTick, setReloadTick] = useState(0);
   const [todayStats, setTodayStats] = useState(lastHome?.todayStats ?? { count: 0, total: 0, earnings: 0 });
   const [recentTx, setRecentTx] = useState<TxRow[]>(lastHome?.recentTx ?? []);
+  const [earningsHeld, setEarningsHeld] = useState<number | null>(lastHome?.earnings ?? null);
   const [dataLoading, setDataLoading] = useState(lastHome === null);
 
   // Wallet scroll snap — progress dot tracking
@@ -159,7 +161,7 @@ export default function Dashboard() {
 
       setLoadError(false);
 
-      const [walletsRes, pendingRes, todayTxRes, recentRes] = await Promise.all([
+      const [walletsRes, pendingRes, todayTxRes, recentRes, revenueRes, takenRes] = await Promise.all([
         supabase
           .from("account_balances")
           .select("account_id, name, kind, natural_balance")
@@ -195,11 +197,22 @@ export default function Dashboard() {
           .in("status", ["confirmed", "voided"])
           .order("created_at", { ascending: false })
           .limit(5),
+        supabase
+          .from("account_balances")
+          .select("natural_balance")
+          .eq("operator_id", opId)
+          .eq("kind", "revenue"),
+        supabase
+          .from("transactions")
+          .select("amount")
+          .eq("operator_id", opId)
+          .eq("status", "confirmed")
+          .eq("transaction_type", "Profit Remittance"),
       ]);
 
       // A failed query used to be ignored, so being offline looked like an
       // account with no wallets and no transactions.
-      if (walletsRes.error || pendingRes.error || todayTxRes.error || recentRes.error) {
+      if (walletsRes.error || pendingRes.error || todayTxRes.error || recentRes.error || revenueRes.error || takenRes.error) {
         setLoadError(true);
       }
 
@@ -211,6 +224,14 @@ export default function Dashboard() {
           }
         : null;
       const count = pendingRes.count ?? pendingRes.data?.length ?? 0;
+
+      const held = revenueRes.data && takenRes.data
+        ? Math.round(
+            (revenueRes.data.reduce((sum, r) => sum + r.natural_balance, 0) -
+              takenRes.data.reduce((sum, t) => sum + t.amount, 0)) * 100,
+          ) / 100
+        : null;
+      if (held !== null) setEarningsHeld(held);
 
       if (walletsRes.data) setWallets(walletsRes.data);
       setPendingCount(count);
@@ -225,6 +246,7 @@ export default function Dashboard() {
           pending: pendingRes.data,
           todayStats: today,
           recentTx: recentRes.data,
+          earnings: held,
         };
       }
       setDataLoading(false);
@@ -296,14 +318,14 @@ export default function Dashboard() {
         <div
           ref={walletScrollRef}
           onScroll={handleWalletScroll}
-          className="flex gap-2.5 px-6 scroll-pl-6 overflow-x-auto cursor-grab sm:grid sm:grid-cols-4 sm:overflow-visible sm:cursor-default"
+          className="flex gap-2.5 px-6 scroll-pl-6 overflow-x-auto cursor-grab sm:grid sm:grid-cols-[repeat(auto-fit,minmax(130px,1fr))] sm:overflow-visible sm:cursor-default"
           style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
-          {ordered.map((w) => {
+          {ordered.map((w, index) => {
             const cash = w.kind === "cash";
             return (
+              <Fragment key={w.account_id}>
               <div
-                key={w.account_id}
                 className={`flex-shrink-0 w-[150px] sm:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between ${
                   cash ? "bg-primary text-primary-foreground" : "bg-muted"
                 }`}
@@ -314,12 +336,23 @@ export default function Dashboard() {
                 </p>
                 <p className="amount text-xl font-semibold">{pesos(w.natural_balance)}</p>
               </div>
+              {index === 0 && earningsHeld !== null && (
+            <Link
+              href={role === "owner" ? "/entry?type=Profit%20Remittance" : "/transactions"}
+              className="flex-shrink-0 w-[150px] sm:w-auto h-[88px] rounded-[20px] px-4 py-3.5 flex flex-col justify-between bg-spark text-spark-foreground dark:border dark:border-primary/60"
+              style={{ scrollSnapAlign: "start" }}
+            >
+              <p className="text-[13px] opacity-75">Earnings</p>
+              <p className="amount text-xl font-semibold">{pesos(earningsHeld)}</p>
+            </Link>
+          )}
+              </Fragment>
             );
           })}
         </div>
         {ordered.length > 2 && (
           <div className="flex justify-center gap-[5px] mt-2.5 sm:hidden" aria-hidden>
-            {ordered.map((_, i) => (
+            {[...ordered, ...(earningsHeld !== null ? [null] : [])].map((_, i) => (
               <span
                 key={i}
                 className={`h-[5px] rounded-full transition-all ${i === activeWallet ? "w-3.5 bg-foreground" : "w-[5px] bg-input"}`}

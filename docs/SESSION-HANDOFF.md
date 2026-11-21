@@ -65,6 +65,15 @@ UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
   lists every transaction type, and the entry screen has wallet pills and an
   on-screen keypad (`src/components/amount-keypad.tsx`). Mockup sources are
   in `~/gocash-mockups/v6`. Lime stays under about 10% of a light screen.
+- **Earnings card (2026-11-21):** the operator asked for earnings "in a
+  separate wallet" and chose display only: Home shows an Earnings card =
+  fees earned (revenue balance) minus confirmed "Take out profit". Drawer
+  and wallet balances are unchanged and still match the real drawer and
+  apps. No ledger change.
+- **App feel (2026-11-21):** the shell is a fixed frame with its own scroll
+  area; the tab bar is part of the layout. Sign-in and Home data are kept in
+  memory between screens. Logo and icons are in `public/`
+  (sources in `~/gocash-mockups/logo`).
 - **Still in the old layout (tokens only, not redesigned):** the review
   screen (`confirm-form.tsx`), History, transaction detail, capture, login,
   onboarding and the Settings sub-pages.

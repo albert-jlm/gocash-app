@@ -24,6 +24,7 @@ const balances = [
   { account_id: 'a2', name: 'GCash', kind: 'platform', balance_minor: 1250050, natural_balance: 12500.5 },
   { account_id: 'a3', name: 'MariBank', kind: 'platform', balance_minor: 300000, natural_balance: 3000 },
   { account_id: 'a4', name: 'Maya', kind: 'platform', balance_minor: 760000, natural_balance: 7600 },
+  { account_id: 'a5', name: 'Fees earned', kind: 'revenue', balance_minor: -124000, natural_balance: 1240 },
 ];
 const txs = [
   { id: 't1', transaction_type: 'Unknown', platform: 'Unknown', account_number: null, reference_number: null, amount: 0, net_profit: 0, created_at: iso(4), transaction_date: null, status: 'awaiting_confirm', confirmed_at: null, was_edited: false, transfer_to: null, platform_fee: 0 },
@@ -52,6 +53,8 @@ async function mock(page) {
     if (p.endsWith('/account_balances')) {
       let rows = balances; const kind = u.searchParams.get('kind');
       if (kind && kind.startsWith('eq.')) rows = rows.filter(r => r.kind === kind.slice(3));
+      if (kind && kind.startsWith('in.')) rows = rows.filter(r => kind.includes(r.kind));
+      if (!kind) rows = rows.filter(r => r.kind !== 'revenue');
       return json(rows);
     }
     if (p.endsWith('/accounts')) return json(balances.map(b => ({ id: b.account_id, name: b.name, kind: b.kind, is_active: true })));
