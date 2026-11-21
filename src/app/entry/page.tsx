@@ -214,7 +214,9 @@ export default function EntryPage() {
     `h-11 px-4 rounded-full text-sm font-medium flex-shrink-0 transition-colors ${
       on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
     }`;
-  const effects = preview ? describeEffects(preview.postings) : [];
+  const allEffects = preview ? describeEffects(preview.postings, { feeInside: amountIncludesFee }) : [];
+  const effects = allEffects.filter((line) => line.tone !== "note");
+  const effectsNote = allEffects.find((line) => line.tone === "note")?.label ?? null;
 
   return (
     <AppShell active="new">
@@ -303,6 +305,10 @@ export default function EntryPage() {
                 ))
               : isTransfer ? "The amount that arrived at the other end" : null}
           </p>
+
+          {effectsNote && (
+            <p className="mt-1.5 text-[13px] text-center text-muted-foreground">{effectsNote}</p>
+          )}
 
           {preview && !preview.rule && !isTransfer && (
             <p className="mt-2 text-sm text-center text-warning">

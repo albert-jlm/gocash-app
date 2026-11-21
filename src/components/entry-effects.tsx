@@ -18,9 +18,40 @@
 import type { Posting } from "@core/types.ts";
 import { formatPesos } from "@/lib/ledger";
 
-interface Line { label: string; value: string; tone: "up" | "down" | "earn" | "plain" }
+interface Line { label: string; value: string; tone: "up" | "down" | "earn" | "plain" | "note" }
 
-export function describeEffects(postings: readonly Posting[]): Line[] {
+function describeCashOut(postings: readonly Posting[], feeInside: boolean): Line[] | null {
+  const wallet = postings.find((p) => p.account.kind === "platform");
+  const cash = postings.find((p) => p.account.kind === "cash");
+  const fee = postings.find((p) => p.account.kind === "revenue");
+  if (postings.length !== 3 || !wallet || !cash || !fee) return null;
+  if (!(wallet.amount > 0 && cash.amount < 0 && fee.amount < 0)) return null;
+  if (wallet.account.kind !== "platform") return null;
+
+  const received = formatPesos(wallet.amount / 100);
+  const cashOnly = formatPesos(-cash.amount / 100);
+  const earned = formatPesos(-fee.amount / 100);
+  const first: Line = { label: `${wallet.account.platform} wallet`, value: `+${received}`, tone: "up" };
+
+  if (feeInside) {
+    return [
+      first,
+      { label: "Give the customer", value: cashOnly, tone: "plain" },
+      { label: "Your fee, already in what they sent", value: earned, tone: "earn" },
+    ];
+  }
+  return [
+    first,
+    { label: "Give the customer", value: received, tone: "plain" },
+    { label: "Collect your fee in cash", value: earned, tone: "earn" },
+    { label: `Or give ${cashOnly} and keep the fee. Either way the drawer ends ${cashOnly} lower.`, value: "", tone: "note" },
+  ];
+}
+
+export function describeEffects(postings: readonly Posting[], opts: { feeInside?: boolean } = {}): Line[] {
+  const cashOut = describeCashOut(postings, opts.feeInside === true);
+  if (cashOut) return cashOut;
+
   const money: Line[] = [];
   const outcome: Line[] = [];
 
@@ -52,18 +83,31 @@ const TONE: Record<Line["tone"], string> = {
   down: "text-destructive",
   earn: "text-primary",
   plain: "text-foreground",
+  note: "text-muted-foreground",
 };
 
-export function EntryEffects({ postings, dense = false }: { postings: readonly Posting[]; dense?: boolean }) {
-  const lines = describeEffects(postings);
+export function EntryEffects({
+  postings,
+  dense = false,
+  feeInside = false,
+}: {
+  postings: readonly Posting[];
+  dense?: boolean;
+  feeInside?: boolean;
+}) {
+  const lines = describeEffects(postings, { feeInside });
   return (
     <div className="space-y-1.5">
-      {lines.map((line, i) => (
-        <div key={i} className={`flex items-baseline justify-between gap-3 ${dense ? "text-xs" : "text-sm"}`}>
-          <span className="text-muted-foreground">{line.label}</span>
-          <span className={`tabular-nums font-medium flex-shrink-0 ${TONE[line.tone]}`}>{line.value}</span>
-        </div>
-      ))}
+      {lines.map((line, i) =>
+        line.tone === "note" ? (
+          <p key={i} className="text-[13px] text-muted-foreground leading-relaxed pt-1">{line.label}</p>
+        ) : (
+          <div key={i} className={`flex items-baseline justify-between gap-3 ${dense ? "text-[13px]" : "text-sm"}`}>
+            <span className="text-muted-foreground">{line.label}</span>
+            <span className={`tabular-nums font-medium flex-shrink-0 ${TONE[line.tone]}`}>{line.value}</span>
+          </div>
+        ),
+      )}
     </div>
   );
 }

@@ -57,19 +57,19 @@ export function CashOutFeeChoice({
   const rows = [
     {
       includes: true,
-      title: `Yes: ${formatPesos(handedOver(options.inside.postings))} cash plus my fee`,
-      detail: `You earn ${formatPesos(options.inside.feePesos)} · hand over ${formatPesos(handedOver(options.inside.postings))}`,
+      title: `Yes: they sent ${formatPesos(handedOver(options.inside.postings))} plus my fee`,
+      detail: `Give ${formatPesos(handedOver(options.inside.postings))} · you earn ${formatPesos(options.inside.feePesos)}`,
     },
     {
       includes: false,
-      title: `No: charge my fee on the whole ${formatPesos(amountPesos)}`,
-      detail: `You earn ${formatPesos(options.onWhole.feePesos)} · hand over ${formatPesos(handedOver(options.onWhole.postings))}`,
+      title: `No: my fee is on top of the ${formatPesos(amountPesos)}`,
+      detail: `Give ${formatPesos(amountPesos)} and collect ${formatPesos(options.onWhole.feePesos)} in cash`,
     },
   ];
 
   return (
-    <div className="space-y-2 pt-1" role="radiogroup" aria-label="Is your fee already inside this amount?">
-      <p className="text-xs text-muted-foreground">Is your fee already inside this amount?</p>
+    <div className="space-y-2 pt-1" role="radiogroup" aria-label="Is your fee already inside the amount they sent?">
+      <p className="text-[13px] text-muted-foreground">Is your fee already inside the amount they sent?</p>
       {rows.map((row) => {
         const selected = value === row.includes;
         return (
