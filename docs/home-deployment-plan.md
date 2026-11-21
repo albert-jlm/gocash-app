@@ -83,9 +83,16 @@ customer transaction with a fee.
       review screen. (2026-11-21)
 - [x] A platform's fee for the move is its own cost account ("Transfer
       Costs"). It does NOT reduce earnings. (2026-11-21)
-- [ ] A list of the shop's own numbers and accounts, so a receipt whose other
-      side is one of them is read as a transfer. Replaces the hardcoded numbers.
-- [ ] Recognise the second screenshot of the same transfer as its other half.
+- [x] A list of the shop's own numbers and accounts (Settings → My numbers &
+      accounts, owner only), so a receipt whose other side is one of them is
+      read as a transfer between the right two wallets. The two phone numbers
+      that were hardcoded in the code and the model prompt are gone; the list
+      is what keeps an own number from being saved as a customer's. (2026-11-21)
+- [x] The second screenshot of the same transfer (same route, same money,
+      within 15 minutes) is recognised as its other half and not recorded
+      again. (2026-11-21)
+- [ ] Not yet exercised with a real transfer on the live stack: the logic is
+      covered by tests and by an offline run over the private samples.
 - The shop's own bills, paid from a shop wallet, are ordinary Bills Payments
   at the normal fee. No special handling.
 

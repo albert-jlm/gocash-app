@@ -141,7 +141,18 @@ export async function handleShareUpload(req: Request): Promise<Response> {
 
     const type = data.transaction_type && data.transaction_type !== "Unknown" ? data.transaction_type : "";
     const platform = data.platform && data.platform !== "Unknown" ? data.platform : "";
-    const summary = [type, platform, pesos(data.amount)].filter(Boolean).join(" · ");
+    // A transfer reads better as a route than as a type and one app.
+    const route = data.transaction_type === "Wallet Transfer" && data.transfer_to
+      ? `Transfer ${platform} → ${data.transfer_to}`
+      : null;
+    const summary = (route ? [route, pesos(data.amount)] : [type, platform, pesos(data.amount)])
+      .filter(Boolean).join(" · ");
+
+    if (data.other_half) {
+      return reply(200, `This is the other side of a transfer already recorded${summary ? ` (${summary})` : ""}. Nothing new was added.`, {
+        transaction_id: data.transaction_id, duplicate: true,
+      });
+    }
 
     if (data.duplicate) {
       return reply(200, `Already recorded${summary ? `: ${summary}` : ""}. Nothing new was added.`, {

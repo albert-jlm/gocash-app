@@ -36,6 +36,9 @@ export interface ModelAnswer {
   reference_number?: unknown;
   account_number?: unknown;
   transaction_date?: unknown;
+  /** Wallet Transfer only, set by the rule reader's own-account matching. */
+  transfer_to?: unknown;
+  platform_fee?: unknown;
 }
 
 export type ReviewField = "platform" | "transaction_type" | "amount";
@@ -51,6 +54,10 @@ export interface ExtractedFields {
   referenceNumber: string | null;
   accountNumber: string | null;
   transactionDate: string | null;
+  /** Wallet Transfer only: the destination wallet, or null if not known yet. */
+  transferTo: string | null;
+  /** Wallet Transfer only: what the platform charged, in pesos. */
+  platformFee: number;
   /** Fields the operator must supply before this draft can be confirmed. */
   needsReview: ReviewField[];
 }
@@ -103,6 +110,15 @@ export interface ExtractOptions {
    * answer the rules exist to avoid.
    */
   keywordFallback?: boolean;
+  /**
+   * The operator's own wallet names. A platform that is one of them is
+   * accepted as it stands: the three built-in names are not the only wallets a
+   * shop can have ("GCash 2", a second number), and own-account matching
+   * names wallets by what the operator called them.
+   */
+  knownPlatforms?: readonly string[];
+  /** The shop's own mobile numbers (09XXXXXXXXX). Never a customer's number. */
+  ownNumbers?: readonly string[];
 }
 
 export function extractFields(ai: ModelAnswer, options: ExtractOptions = {}): ExtractedFields {
@@ -112,8 +128,12 @@ export function extractFields(ai: ModelAnswer, options: ExtractOptions = {}): Ex
 
   // ----- platform -----
   const claimedPlatform = text(ai.platform);
+  const ownWallet = claimedPlatform
+    ? (options.knownPlatforms ?? []).find((w) => w.toLowerCase() === claimedPlatform.toLowerCase())
+    : undefined;
   const platform =
-    (claimedPlatform && PLATFORM_ALIASES[claimedPlatform.toLowerCase().replace(/\s+/g, "")])
+    ownWallet
+    ?? (claimedPlatform && PLATFORM_ALIASES[claimedPlatform.toLowerCase().replace(/\s+/g, "")])
     ?? (keywordFallback ? detectPlatform(rawText) : "Unknown");
   if (platform === "Unknown") needsReview.push("platform");
 
@@ -134,9 +154,9 @@ export function extractFields(ai: ModelAnswer, options: ExtractOptions = {}): Ex
   // number was accepted whenever the model returned it directly.
   const claimedNumber = text(ai.account_number);
   const accountNumber =
-    claimedNumber && !isOperatorNumber(claimedNumber)
+    claimedNumber && !isOperatorNumber(claimedNumber, options.ownNumbers ?? [])
       ? claimedNumber
-      : (keywordFallback ? extractAccountNumber(rawText) : null);
+      : (keywordFallback ? extractAccountNumber(rawText, options.ownNumbers ?? []) : null);
 
   return {
     rawText,
@@ -146,6 +166,8 @@ export function extractFields(ai: ModelAnswer, options: ExtractOptions = {}): Ex
     referenceNumber: text(ai.reference_number),
     accountNumber,
     transactionDate: text(ai.transaction_date),
+    transferTo: txType === "Wallet Transfer" ? text(ai.transfer_to) : null,
+    platformFee: txType === "Wallet Transfer" ? (readAmount(ai.platform_fee) ?? 0) : 0,
     needsReview,
   };
 }

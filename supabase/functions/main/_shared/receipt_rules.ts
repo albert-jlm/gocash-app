@@ -41,15 +41,38 @@ export interface OcrResult {
 
 export interface RuleAnswer {
   raw_text: string;
-  platform: "GCash" | "Maya" | "MariBank" | "Unknown";
+  /** A layout's own app, or after applyOwnAccounts any of the shop's wallets. */
+  platform: string;
   transaction_type:
-    | "Cash In" | "Cash Out" | "Telco Load" | "Bills Payment" | "Bank Transfer" | "Unknown";
+    | "Cash In" | "Cash Out" | "Telco Load" | "Bills Payment" | "Bank Transfer" | "Wallet Transfer" | "Unknown";
   amount: number | null;
   reference_number: string | null;
   account_number: string | null;
   transaction_date: string | null;
   /** Which rule matched, for logs and tests. "none" when no layout was recognised. */
   layout: string;
+  /**
+   * Who was on the other side, as far as the screen shows it. Used only to
+   * decide whether that was the shop itself (see applyOwnAccounts); none of
+   * it is stored.
+   */
+  parties: {
+    /** GCash "Transfer from A to B": both numbers, in that order. */
+    from_mobile?: string | null;
+    to_mobile?: string | null;
+    /** The other side's mobile number, where the screen shows only one. */
+    mobile?: string | null;
+    /** The other side's bank or wallet account number, digits only, in full. */
+    account?: string | null;
+    /** Only the last four digits were shown ("ending in 4388", "....4388"). */
+    account_last4?: string | null;
+  };
+  /**
+   * GCash bank transfer receipt only: what arrived and what GCash charged,
+   * separately. `amount` on that layout is their total.
+   */
+  transfer_amount?: number | null;
+  platform_fee?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +220,18 @@ function mobiles(text: string): string[] {
   return found;
 }
 
+/** Digits only, when there are enough to be an account number; else null. */
+function digitsOf(text: string | null | undefined): string | null {
+  const d = (text ?? "").replace(/\D/g, "");
+  return d.length >= 6 ? d : null;
+}
+
+/** The four digits after "ending in", or after a run of dots or asterisks. */
+function last4(text: string): string | null {
+  const m = /ending\s*in\s*(\d{4})(?!\d)/i.exec(text) ?? /[.*•x]{2,}\s*(\d{4})(?!\d)/i.exec(text);
+  return m ? m[1] : null;
+}
+
 /** Reference numbers are compared across screens, so spaces are removed. */
 function cleanReference(text: string | null): string | null {
   if (!text) return null;
@@ -228,6 +263,7 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
     account_number: null,
     transaction_date: parseDate(valueOf(rows, DATE_LABELS)),
     layout: "none",
+    parties: {},
   };
 
   // A date that sits beside the reference with no label of its own.
@@ -259,6 +295,7 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
       // the sign says which: "+" means the money came in.
       const numbers = mobiles(description);
       answer.layout = "gcash.details.transfer";
+      answer.parties = { from_mobile: numbers[0] ?? null, to_mobile: numbers[1] ?? null };
       if (sign === "+") {
         answer.transaction_type = "Cash Out";
         answer.account_number = numbers[0] ?? null;
@@ -269,6 +306,7 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
     } else if (d.startsWith("sentgcashto")) {
       answer.layout = "gcash.details.to-bank";
       answer.transaction_type = "Bank Transfer";
+      answer.parties = { account_last4: last4(description) };
     } else if (d.startsWith("paymentto") && sign === "-") {
       // Paid a merchant or biller from the wallet.
       answer.layout = "gcash.details.payment";
@@ -277,6 +315,7 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
       // A bank deposit into the wallet: the customer paid e-money, takes cash.
       answer.layout = "gcash.details.from-bank";
       answer.transaction_type = "Cash Out";
+      answer.parties = { account_last4: last4(description) };
     } else {
       answer.layout = "gcash.details.other";
       // Direction unknown: leave the type for the operator.
@@ -295,6 +334,7 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
     // The recipient's number is printed above "Sent via GCash".
     const upTo = rows.findIndex((r) => r.squashed.includes("sentviagcash"));
     answer.account_number = mobiles(rows.slice(0, upTo).map((r) => r.text).join("\n"))[0] ?? null;
+    answer.parties = { mobile: answer.account_number };
     return answer;
   }
 
@@ -306,6 +346,9 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
     // Total, not Transfer Amount: GCash's own fee leaves the wallet too, and
     // the wallet balance is what this app has to match.
     answer.amount = parseAmount(valueOf(rows, ["total"])) ?? parseAmount(valueOf(rows, ["transferamount"]));
+    answer.transfer_amount = parseAmount(valueOf(rows, ["transferamount"]));
+    answer.platform_fee = parseAmount(valueOf(rows, ["+fee", "fee"]));
+    answer.parties = { account_last4: last4(valueOf(rows, ["accountno.", "accountno", "accountnumber"]) ?? "") };
     return answer;
   }
 
@@ -341,11 +384,14 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
       answer.transaction_type = "Cash In";
       answer.amount = parseAmount(money ?? null);
       answer.account_number = mobiles(raw)[0] ?? null;
+      answer.parties = { mobile: answer.account_number, account: digitsOf(valueOf(rows, ["accountnumber"])) };
     } else if (has("receivedmoneyfrom")) {
       answer.layout = "maya.details.received";
       answer.transaction_type = "Cash Out";
       answer.amount = parseAmount(money ?? null);
       answer.account_number = mobiles(raw)[0] ?? null;
+      // From a bank, the sender is an account number, not a mobile.
+      answer.parties = { mobile: answer.account_number, account: digitsOf(valueOf(rows, ["accountnumber"])) };
     } else if (has("paymentsuccessful", "paidtomerchant")) {
       answer.layout = "maya.payment";
       answer.transaction_type = "Bills Payment";
@@ -379,6 +425,9 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
       const from = rows.findIndex((r) => squash(r.cells[0] ?? "") === "from");
       const to = rows.findIndex((r) => squash(r.cells[0] ?? "") === "to");
       const own = rows.findIndex((r) => /^maribank\s*:/i.test(r.text.trim()));
+      // The other side's account: the "Acct. No." line that is not ours.
+      const acct = rows.find((r) => /^acct\.?\s*no\.?\s*:?/i.test(r.text.trim()));
+      answer.parties = { account: digitsOf(acct?.text.replace(/^acct\.?\s*no\.?\s*:?/i, "") ?? null) };
       if (from >= 0 && to >= 0 && own > from && own < to) {
         answer.transaction_type = "Bank Transfer";
       } else if (to >= 0 && own > to) {
@@ -397,4 +446,102 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
   // unknown, so the draft is held for the operator.
   answer.amount = parseAmount(valueOf(rows, ["totalamount", "total", "amount"]));
   return answer;
+}
+
+// ---------------------------------------------------------------------------
+// The shop's own numbers and accounts
+// ---------------------------------------------------------------------------
+
+/** One of the shop's own identifiers, and the wallet it belongs to. */
+export interface OwnIdentifier {
+  kind: "mobile" | "account";
+  /** mobile: 09XXXXXXXXX. account: digits only. */
+  value: string;
+  /** The wallet's name, as in gocash.accounts. */
+  wallet: string;
+}
+
+export interface OwnedAnswer extends RuleAnswer {
+  /** Set when the receipt is the shop moving its own money. */
+  transfer_to: string | null;
+}
+
+/**
+ * Decide whether the other side of a receipt was the shop itself.
+ *
+ * A screen shows which way money moved, not why. If the counterparty is one of
+ * the shop's own numbers or accounts, nobody was served: it is a Wallet
+ * Transfer between two of the shop's wallets, and recording it as a Cash In or
+ * Cash Out would book a fee nobody paid.
+ *
+ * Three strengths of match, strongest first:
+ *   - a mobile number, exactly
+ *   - a full account number, exactly
+ *   - the last four digits of an account, and only if exactly ONE registered
+ *     account ends in them. A masked number cannot prove more than that, and
+ *     the operator confirms the draft either way.
+ *
+ * It also makes sure one of the shop's own numbers is never offered as the
+ * customer's number.
+ */
+export function applyOwnAccounts(answer: RuleAnswer, own: readonly OwnIdentifier[]): OwnedAnswer {
+  const out: OwnedAnswer = { ...answer, transfer_to: null };
+  if (own.length === 0 || answer.platform === "Unknown") return out;
+
+  const walletOfMobile = (m?: string | null) =>
+    m ? own.find((o) => o.kind === "mobile" && o.value === m)?.wallet ?? null : null;
+  const walletOfAccount = (a?: string | null) =>
+    a ? own.find((o) => o.kind === "account" && o.value === a)?.wallet ?? null : null;
+  const walletOfLast4 = (d?: string | null) => {
+    if (!d) return null;
+    const hits = own.filter((o) => o.kind === "account" && o.value.endsWith(d));
+    return hits.length === 1 ? hits[0].wallet : null;
+  };
+
+  if (out.account_number && walletOfMobile(out.account_number)) out.account_number = null;
+
+  const p = answer.parties;
+
+  // GCash "Transfer from A to B" shows both ends.
+  if (p.from_mobile || p.to_mobile) {
+    const from = walletOfMobile(p.from_mobile);
+    const to = walletOfMobile(p.to_mobile);
+    if (from && to && from !== to) {
+      out.transaction_type = "Wallet Transfer";
+      out.platform = from;
+      out.transfer_to = to;
+      out.account_number = null;
+    } else if (from && !to) {
+      // This phone is the sender: the screenshot belongs to that wallet, which
+      // matters when the shop runs two GCash numbers.
+      out.platform = from;
+    } else if (to && !from) {
+      out.platform = to;
+    }
+    return out;
+  }
+
+  const other = walletOfMobile(p.mobile) ?? walletOfAccount(p.account) ?? walletOfLast4(p.account_last4);
+  if (!other || other === answer.platform) return out;
+
+  const moneyIn = answer.transaction_type === "Cash Out";
+  const moneyOut = answer.transaction_type === "Cash In" || answer.transaction_type === "Bank Transfer";
+  if (!moneyIn && !moneyOut) return out;
+
+  out.transaction_type = "Wallet Transfer";
+  out.account_number = null;
+  if (moneyIn) {
+    out.platform = other;
+    out.transfer_to = answer.platform;
+  } else {
+    out.transfer_to = other;
+    // Where the receipt separates what arrived from what the app charged,
+    // the transfer is recorded that way round: amount = what arrived.
+    if (answer.transfer_amount && answer.platform_fee) {
+      out.amount = answer.transfer_amount;
+    } else {
+      out.platform_fee = null;
+    }
+  }
+  return out;
 }

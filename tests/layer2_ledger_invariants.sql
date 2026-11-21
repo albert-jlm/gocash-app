@@ -1132,3 +1132,67 @@ SELECT harness.expect_error('layer2', '2.40 only a transfer carries a destinatio
                'Cash In', 'GCash', 15, 1000, 'awaiting_confirm', 'manual')$s$
   ],
   'transactions_transfer_shape');
+
+-- ---------------------------------------------------------------------------
+-- 2.41–2.44 — the shop's own numbers and accounts (20260927000002).
+-- ---------------------------------------------------------------------------
+SELECT harness.probe('layer2', '2.41 an own number is stored cleaned, against the right wallet',
+  'The reader compares numbers exactly. "+63 917 000 0001" and "09170000001" '
+  'must be the same row, or a transfer to it is read as a customer.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_identifier('11111111-1111-1111-1111-111111111111',
+         'aaaa0000-0000-0000-0000-000000000001', 'mobile', '+63 917 000 0001', 'shop phone')$s$,
+    $s$SELECT gocash.add_identifier('11111111-1111-1111-1111-111111111111',
+         'aaaa0000-0000-0000-0000-000000000001', 'account', '1399-0000 002')$s$
+  ],
+  $q$
+  SELECT (SELECT count(*) FROM gocash.operator_identifiers
+           WHERE operator_id = '11111111-1111-1111-1111-111111111111'
+             AND kind = 'mobile' AND value = '09170000001' AND label = 'shop phone') = 1
+     AND (SELECT count(*) FROM gocash.operator_identifiers
+           WHERE operator_id = '11111111-1111-1111-1111-111111111111'
+             AND kind = 'account' AND value = '13990000002') = 1
+  $q$);
+
+SELECT harness.expect_error('layer2', '2.42 the same number cannot mean two wallets',
+  'If one number were both "my GCash" and "my Maya", a transfer to it would '
+  'have two possible destinations.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_identifier('11111111-1111-1111-1111-111111111111',
+         'aaaa0000-0000-0000-0000-000000000001', 'mobile', '09170000002')$s$,
+    $s$SELECT gocash.add_identifier('11111111-1111-1111-1111-111111111111',
+         'aaaa0000-0000-0000-0000-000000000001', 'mobile', '0917 000 0002')$s$
+  ],
+  'already registered');
+
+SELECT harness.expect_error('layer2', '2.43 an own number must belong to one of this shop''s wallets',
+  'Registering a number against another operator''s wallet, or against the '
+  'drawer or the revenue account, would point transfers at an account the '
+  'transfer type cannot post to.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_identifier('11111111-1111-1111-1111-111111111111',
+         'bbbb0000-0000-0000-0000-000000000001', 'mobile', '09170000003')$s$
+  ],
+  'not one of your wallets');
+
+SELECT harness.expect_ok('layer2', '2.44 staff cannot read the owner''s numbers',
+  'These are the owner''s personal numbers and accounts. Recording '
+  'transactions does not need them.',
+  ARRAY[
+    $s$INSERT INTO gocash.operator_identifiers (operator_id, account_id, kind, value)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'aaaa0000-0000-0000-0000-000000000001', 'mobile', '09170000009')$s$,
+    $s$SELECT set_config('request.jwt.claims',
+         '{"role":"authenticated","sub":"f0000000-0000-0000-0000-00000000000c"}', true)$s$,
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$DO $do$
+       BEGIN
+         IF (SELECT count(*) FROM gocash.operator_identifiers) <> 0 THEN
+           RAISE EXCEPTION 'staff could read the owner''s numbers';
+         END IF;
+       END
+       $do$$s$
+  ]);

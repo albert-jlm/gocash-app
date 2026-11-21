@@ -701,3 +701,40 @@ export async function revokeUploadKey(keyId: string): Promise<void> {
 
 /** Where a phone's share sheet sends screenshots. */
 export const SHARE_UPLOAD_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/share-upload`;
+
+// ---------------------------------------------------------------------------
+// The shop's own numbers and accounts
+// ---------------------------------------------------------------------------
+
+export interface OwnIdentifierRow {
+  id: string;
+  account_id: string;
+  kind: "mobile" | "account";
+  value: string;
+  label: string | null;
+}
+
+export interface WalletOption { id: string; name: string }
+
+export async function listOwnIdentifiers(): Promise<{ identifiers: OwnIdentifierRow[]; wallets: WalletOption[] }> {
+  const data = await callFunction("own-accounts", { action: "list" });
+  return { identifiers: data.identifiers ?? [], wallets: data.wallets ?? [] };
+}
+
+/**
+ * Tell the app that a mobile number or account number is the shop's own, and
+ * which wallet it is. Receipts whose other side is that number are then read
+ * as a transfer between wallets, not as a customer.
+ */
+export async function addOwnIdentifier(input: {
+  accountId: string; kind: "mobile" | "account"; value: string; label?: string;
+}): Promise<OwnIdentifierRow> {
+  const data = await callFunction("own-accounts", {
+    action: "add", account_id: input.accountId, kind: input.kind, value: input.value, label: input.label ?? null,
+  });
+  return data.identifier as OwnIdentifierRow;
+}
+
+export async function removeOwnIdentifier(id: string): Promise<void> {
+  await callFunction("own-accounts", { action: "remove", identifier_id: id });
+}

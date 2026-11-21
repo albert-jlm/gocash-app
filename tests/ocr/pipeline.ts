@@ -23,6 +23,12 @@ import { toMinor } from "../../supabase/functions/_core/money.ts";
 import type { AccountRef, FeeRule, Posting } from "../../supabase/functions/_core/types.ts";
 import type { RecordedResponse } from "./types.ts";
 
+/**
+ * The operator's own numbers in the fixtures. Invented. In the app these come
+ * from gocash.operator_identifiers; nothing is hardcoded in the code under test.
+ */
+export const TEST_OPERATOR_NUMBERS: readonly string[] = ["09990000001"];
+
 export { extractFields };
 export type { ExtractedFields };
 
@@ -55,7 +61,7 @@ export interface ReplayOptions {
  * still fails loudly on either when the fixture did not declare it.
  */
 export function replay(ai: RecordedResponse, opts: ReplayOptions): ReplayResult {
-  const fields = extractFields(ai);
+  const fields = extractFields(ai, { ownNumbers: TEST_OPERATOR_NUMBERS });
 
   let amountMinor: number | null = null;
   let feeMinor: number | null = null;

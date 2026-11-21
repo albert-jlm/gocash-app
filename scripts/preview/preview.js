@@ -31,7 +31,7 @@ const txs = [
   { id: 't3', transaction_type: 'Cash In', platform: 'GCash', account_number: '09181234567', reference_number: '2029384756123', amount: 500, net_profit: 10, created_at: iso(40), transaction_date: iso(41), status: 'confirmed', confirmed_at: iso(39), was_edited: false },
   { id: 't4', transaction_type: 'Bills Payment', platform: 'Maya', account_number: null, reference_number: '9900112233446', amount: 1850, net_profit: 37, created_at: iso(95), transaction_date: iso(96), status: 'confirmed', confirmed_at: iso(94), was_edited: true },
   { id: 't5', transaction_type: 'Cash Out', platform: 'Maya', account_number: '09221234567', reference_number: '5512348899010', amount: 5000, net_profit: 100, created_at: iso(180), transaction_date: iso(181), status: 'voided', confirmed_at: iso(179), was_edited: false },
-  { id: 't7', transaction_type: 'Wallet Transfer', platform: 'Maya', transfer_to: 'GCash', platform_fee: 15, account_number: null, reference_number: '9503F408F2DB', amount: 2000, net_profit: 0, created_at: iso(60), transaction_date: iso(61), status: 'confirmed', confirmed_at: iso(59), was_edited: false },
+  { id: 't7', transaction_type: 'Wallet Transfer', platform: 'Maya', transfer_to: 'GCash', platform_fee: 15, account_number: null, reference_number: 'A1B2C3D4E5F6', amount: 2000, net_profit: 0, created_at: iso(60), transaction_date: iso(61), status: 'confirmed', confirmed_at: iso(59), was_edited: false },
   { id: 't6', transaction_type: 'Telco Load', platform: 'GCash', account_number: '09351234567', reference_number: null, amount: 100, net_profit: 5, created_at: iso(1500), transaction_date: iso(1501), status: 'confirmed', confirmed_at: iso(1499), was_edited: false },
 ];
 const rules = ['Cash In','Cash Out','Telco Load','Bills Payment','Bank Transfer','Profit Remittance'].map((t,i) => ({ id:'r'+i, transaction_type: t, platform: 'all', rate_bps: 200, minimum_minor: 500, rounding: 'ceil_unit', effective_from: iso(99999), effective_to: null }));
@@ -45,6 +45,7 @@ async function mock(page) {
     if (p.startsWith('/auth/v1/user')) return json(user);
     if (p.startsWith('/auth/v1/')) return json(session);
     if (p.endsWith('/rpc/my_membership')) return json([{ operator_id: 'op1', role: process.env.PREVIEW_ROLE || 'owner' }]);
+    if (p.endsWith('/functions/v1/own-accounts')) return json({ wallets: [{ id: 'a2', name: 'GCash' }, { id: 'a3', name: 'MariBank' }, { id: 'a4', name: 'Maya' }], identifiers: [{ id: 'i1', account_id: 'a2', kind: 'mobile', value: '09170000001', label: null }, { id: 'i2', account_id: 'a3', kind: 'account', value: '13240000917', label: null }] });
     if (p.endsWith('/functions/v1/manage-staff')) return json({ owner_email: 'owner@example.test', staff: [{ id: 'm1', email: 'tess@example.test', role: 'staff' }] });
     if (p.endsWith('/functions/v1/upload-keys')) return json({ keys: [{ id: 'k1', label: 'Shop iPhone', key_prefix: 'gck_Ab3xYz', created_at: iso(3000), last_used_at: iso(30) }] });
     if (p.endsWith('/operators')) return json(single ? { id: 'op1', telegram_chat_id: null, settings: {} } : [{ id: 'op1' }]);

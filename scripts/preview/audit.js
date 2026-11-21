@@ -15,7 +15,7 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(hit).pipe(res);
 }).listen(8767);
 eval(pre.replace(/^const /gm, 'var '));
-const SCREENS = ['/', '/transactions', '/entry', '/capture', '/confirm?id=t2', '/confirm?id=t1', '/transactions?id=t3', '/transactions?id=t5', '/settings', '/settings/wallets', '/settings/rules', '/settings/platforms', '/settings/notifications', '/settings/staff', '/settings/share'];
+const SCREENS = ['/', '/transactions', '/entry', '/capture', '/confirm?id=t2', '/confirm?id=t1', '/transactions?id=t3', '/transactions?id=t5', '/settings', '/settings/wallets', '/settings/rules', '/settings/platforms', '/settings/notifications', '/settings/staff', '/settings/share', '/settings/my-accounts'];
 const WIDTHS = [[320, 568], [360, 740], [390, 844], [430, 932], [600, 960], [768, 1024], [820, 1180], [1024, 768], [1280, 800], [1440, 900], [1920, 1080]];
 (async () => {
   const browser = await chromium.launch({ executablePath: CHROME });

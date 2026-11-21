@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import OpenAI from "https://esm.sh/openai@4";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import { extractFields, type ModelAnswer } from "./_shared/extraction.ts";
-import { readReceipt, type OcrResult } from "./_shared/receipt_rules.ts";
+import { applyOwnAccounts, readReceipt, type OcrResult, type OwnIdentifier } from "./_shared/receipt_rules.ts";
+import { resolveTransferAccounts } from "./_shared/transfer.ts";
 import { resolveRuleAt } from "./_shared/fee_rules.ts";
 import { resolveMembership } from "./_shared/operator.ts";
 import { calculateFee, detectGrossAmount } from "../_core/fees.ts";
@@ -88,7 +89,7 @@ Transaction type rules (from the CUSTOMER's perspective):
 
 Account number rules:
 - Must be the CUSTOMER's mobile number, NOT the operator's number
-- Operator blacklist (never use): 09990000001, 13990000002
+- Never return the operator's own number as the customer's. If you cannot tell which number is the customer's, return null
 - If multiple numbers are visible, pick the one that received or sent the transaction (not the operator's own number)
 - Format: 09XXXXXXXXX (11 digits starting with 09)
 
@@ -354,9 +355,28 @@ export async function processReceipt(
         }, 503);
       }
 
-      const read = readReceipt(ocr);
+      // Was the other side the shop itself? Its own numbers and accounts are
+      // in gocash.operator_identifiers; a match turns the receipt into a
+      // transfer between two of its wallets instead of a customer transaction.
+      const { data: identifierRows } = await adminClient
+        .from("operator_identifiers")
+        .select("kind, value, accounts!inner(name, is_active)")
+        .eq("operator_id", operator.id);
+
+      const own: OwnIdentifier[] = (identifierRows ?? [])
+        // deno-lint-ignore no-explicit-any
+        .map((row: any) => {
+          const account = Array.isArray(row.accounts) ? row.accounts[0] : row.accounts;
+          return account?.is_active ? { kind: row.kind, value: row.value, wallet: account.name } : null;
+        })
+        .filter((x: OwnIdentifier | null): x is OwnIdentifier => x !== null);
+
+      const read = applyOwnAccounts(readReceipt(ocr), own);
       // Which rule matched, and nothing from the receipt itself.
-      console.log(`receipt read locally: layout=${read.layout} lines=${ocr.lines.length}`);
+      console.log(
+        `receipt read locally: layout=${read.layout} lines=${ocr.lines.length}` +
+        (read.transfer_to ? " own-transfer" : ""),
+      );
 
       // No known layout, no amount and no reference: this is not a receipt
       // (a photo, a chat, a shopping page). A draft with every field empty
@@ -376,9 +396,31 @@ export async function processReceipt(
     // `needsReview` for the confirm screen. See _shared/extraction.ts.
     // The rule reader's "Unknown" is final; a model's may be rescued by
     // keywords. See ExtractOptions.
+    const { data: walletRows } = await adminClient
+      .from("accounts").select("name")
+      .eq("operator_id", operator.id).eq("kind", "platform").eq("is_active", true);
+    const knownPlatforms = (walletRows ?? []).map((w: { name: string }) => w.name);
+
+    // The shop's own mobile numbers, so one of them is never recorded as a
+    // customer's. (The rule reader has already used the full list, accounts
+    // included; this covers the model path, which has not.)
+    const { data: ownMobileRows } = await adminClient
+      .from("operator_identifiers").select("value")
+      .eq("operator_id", operator.id).eq("kind", "mobile");
+    const ownNumbers = (ownMobileRows ?? []).map((r: { value: string }) => r.value);
+
     const fields = reader === "openai"
-      ? extractFields(ai)
-      : extractFields(ai, { keywordFallback: false });
+      ? extractFields(ai, { knownPlatforms, ownNumbers })
+      : extractFields(ai, { keywordFallback: false, knownPlatforms, ownNumbers });
+
+    // A transfer's destination has to be one of the operator's active wallets
+    // (or the drawer). If it is not usable, the draft is still saved as a
+    // transfer and the operator picks the destination on the review screen.
+    let transferTo: string | null = null;
+    if (fields.txType === "Wallet Transfer" && fields.transferTo) {
+      const ends = await resolveTransferAccounts(adminClient, operator.id, fields.platform, fields.transferTo);
+      if (ends.ok) transferTo = ends.to;
+    }
     const { rawText, platform, txType, accountNumber } = fields;
     // The column is NOT NULL. Zero means "not read": confirm-transaction
     // refuses a zero amount, so this cannot be posted until it is entered.
@@ -429,6 +471,54 @@ export async function processReceipt(
       }
     }
 
+    // ----- the other half of a transfer already recorded -----
+    // Moving money between two wallets produces a receipt in each app, with
+    // different reference numbers, so the check above cannot see that they
+    // are one movement. Same route, same money, within a quarter of an hour:
+    // this screenshot is the other side of a transfer that is already here.
+    if (fields.txType === "Wallet Transfer" && transferTo && fields.amount !== null) {
+      const when = fields.transactionDate ? new Date(fields.transactionDate).getTime() : Date.now();
+      const windowMs = 15 * 60 * 1000;
+      const { data: candidates } = await adminClient
+        .from("transactions")
+        .select("id, status, platform, transfer_to, transaction_type, amount, platform_fee, net_profit, account_number, reference_number, transaction_date")
+        .eq("operator_id", operator.id)
+        .eq("transaction_type", "Wallet Transfer")
+        .eq("platform", fields.platform)
+        .eq("transfer_to", transferTo)
+        .neq("status", "voided")
+        .gte("transaction_date", new Date(when - windowMs).toISOString())
+        .lte("transaction_date", new Date(when + windowMs).toISOString());
+
+      // The sending side may show the total including the app's fee and the
+      // receiving side only what arrived, so either reading counts as equal.
+      const cents = (n: unknown) => Math.round(Number(n ?? 0) * 100);
+      const mine = cents(fields.amount), myFee = cents(fields.platformFee);
+      // deno-lint-ignore no-explicit-any
+      const half = (candidates ?? []).find((c: any) => {
+        const theirs = cents(c.amount), theirFee = cents(c.platform_fee);
+        return theirs === mine || theirs + theirFee === mine || theirs === mine + myFee;
+      });
+
+      if (half) {
+        await cleanupUploadedImage();
+        return jsonResponse(req, {
+          transaction_id: half.id,
+          status: half.status,
+          platform: half.platform,
+          transfer_to: half.transfer_to,
+          transaction_type: half.transaction_type,
+          amount: half.amount,
+          net_profit: half.net_profit,
+          account_number: half.account_number,
+          reference_number: half.reference_number,
+          transaction_date: half.transaction_date,
+          duplicate: true,
+          other_half: true,
+        });
+      }
+    }
+
     // Written with the service client. The browser role has no INSERT or
     // UPDATE on transactions (20260925000003): if it did, a client could write
     // a row straight to 'confirmed' with no ledger entry behind it. operator_id
@@ -456,6 +546,8 @@ export async function processReceipt(
         // that a row whose origin is unknown fails to insert rather than
         // quietly claiming to have been read from an image.
         entry_source: "ocr",
+        transfer_to: transferTo,
+        platform_fee: fields.txType === "Wallet Transfer" ? fields.platformFee : 0,
         was_edited: false,
         edit_history: [],
       })
@@ -525,7 +617,10 @@ export async function processReceipt(
       // What the operator has to supply before this can be saved. The confirm
       // screen derives the same thing from the row (Unknown / zero), so this
       // is for callers that show a summary without loading the draft.
-      needs_review: fields.needsReview,
+      transfer_to: transaction.transfer_to,
+      needs_review: fields.txType === "Wallet Transfer" && !transferTo
+        ? [...fields.needsReview, "transfer_to"]
+        : fields.needsReview,
       // No wallet_deltas: nothing has moved yet. The client shows this as a
       // draft for review; confirm-transaction reports the postings once the
       // operator accepts it.

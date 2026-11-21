@@ -17,6 +17,7 @@ import { handleReconcileAccount } from "./_reconcile_account.ts";
 import { handleProvisionOperator } from "./_provision_operator.ts";
 import { handleManagePlatform } from "./_manage_platform.ts";
 import { handleManageStaff } from "./_manage_staff.ts";
+import { handleOwnAccounts } from "./_own_accounts.ts";
 import { handleUploadKeys } from "./_upload_keys.ts";
 import { handleShareUpload } from "./_share_upload.ts";
 
@@ -51,6 +52,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   // gocash.accounts, so this is the only way the chart of accounts changes.
   "manage-platform": handleManagePlatform,
   // The owner gives other logins access to the shop's books, as staff.
+  // The shop's own numbers and accounts, so a receipt whose other side is the
+  // shop itself is read as a transfer between wallets. Owner only.
+  "own-accounts": handleOwnAccounts,
   "manage-staff": handleManageStaff,
   // Keys for a phone's share sheet. Create, list, revoke.
   "upload-keys": handleUploadKeys,

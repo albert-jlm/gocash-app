@@ -66,11 +66,13 @@ export function detectType(text: string): TransactionType | "Unknown" {
   return found.length === 1 ? found[0] : "Unknown";
 }
 
-const DEFAULT_BLACKLIST = ["09990000001", "13990000002"];
+// No numbers live in this file. The shop's own numbers are data
+// (gocash.operator_identifiers) and are passed in by the caller. Two of them
+// used to be written out here and in the model prompt, in a public repository.
 
 export function extractAccountNumber(
   text: string,
-  blacklist: string[] = DEFAULT_BLACKLIST
+  blacklist: readonly string[] = []
 ): string | null {
   // Anchored on both sides. Unanchored, this matched the "09…" inside a
   // date-prefixed reference such as MB2409240001987 and invented a customer
@@ -89,7 +91,7 @@ export function extractAccountNumber(
 /** True when `number` is one of the operator's own. */
 export function isOperatorNumber(
   number: string,
-  blacklist: string[] = DEFAULT_BLACKLIST
+  blacklist: readonly string[] = []
 ): boolean {
   const digits = number.replace(/[^\d+]/g, "");
   const normalized = digits.startsWith("+63") ? "0" + digits.slice(3) : digits;

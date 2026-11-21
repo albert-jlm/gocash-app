@@ -47,6 +47,7 @@ export default function SettingsPage() {
             { label: "Wallets",          href: "/settings/wallets",       desc: "Check balances against a count", ownerOnly: true },
             { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated", ownerOnly: true },
             { label: "Platforms",        href: "/settings/platforms",     desc: "Add or remove wallets", ownerOnly: true },
+            { label: "My numbers & accounts", href: "/settings/my-accounts", desc: "So moving your own money isn't counted as a customer", ownerOnly: true },
             { label: "Staff",            href: "/settings/staff",         desc: "Who else can record transactions", ownerOnly: true },
             { label: "Share from phone", href: "/settings/share",         desc: "Send screenshots from the share sheet", ownerOnly: false },
             { label: "Notifications",    href: "/settings/notifications", desc: "Telegram alerts (coming soon)", ownerOnly: true },

@@ -126,7 +126,7 @@ describe("GCash", () => {
       ["+Fee", "10.00"],
       ["Total", "p 1,010.00"],
       ["Date", "Sep 13, 202609:18 AM"],
-      ["InstaPay InvoiceNo.", "3346636"],
+      ["InstaPay InvoiceNo.", "6255245"],
       ["Ref No.", "2219252523104"],
     ]));
     expect(a).toMatchObject({
@@ -230,13 +230,13 @@ describe("MariBank", () => {
       ["M", "MariBank"], ["Transaction Receipt"], ["PHP", "15,000.00"],
       ["From", "EXAMPLE OWNER"], ["MariBank: *******0000"],
       ["To", "EXAMPLE RECIPIENT"], ["PNB"], ["Acct.No.:000000000000"],
-      ["TransferAmount", "PHP 15,000.00"], ["Reference Number", "844348"],
+      ["TransferAmount", "PHP 15,000.00"], ["Reference Number", "233781"],
       ["TransferMethod", "instaFay"], ["TransactionDate&Time", "10 Jun 2026, 10:46"],
       ["Receipt generated from MariBank app"],
     ]));
     expect(a).toMatchObject({
       layout: "maribank.transfer", platform: "MariBank", transaction_type: "Bank Transfer",
-      amount: 15000, reference_number: "844348", transaction_date: "2026-06-10T10:46:00+08:00",
+      amount: 15000, reference_number: "233781", transaction_date: "2026-06-10T10:46:00+08:00",
     });
   });
 
@@ -318,5 +318,115 @@ describe("amounts and dates as OCR renders them", () => {
     expect(parseDate("Jan 5, 2026 12:05AM")).toBe("2026-01-05T00:05:00+08:00");
     expect(parseDate("not a date")).toBeNull();
     expect(parseDate(null)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The shop's own numbers and accounts
+// ---------------------------------------------------------------------------
+import { applyOwnAccounts, type OwnIdentifier } from "../../supabase/functions/main/_shared/receipt_rules.ts";
+
+describe("when the other side is the shop itself", () => {
+  const OWN_GCASH = "09170000001";
+  const OWN_MAYA = "09170000005";
+  const OWN_BANK = "13240000917";
+  const own: OwnIdentifier[] = [
+    { kind: "mobile", value: OWN_GCASH, wallet: "GCash" },
+    { kind: "mobile", value: OWN_MAYA, wallet: "Maya" },
+    { kind: "account", value: OWN_BANK, wallet: "MariBank" },
+  ];
+
+  const mayaFromBank = (account: string) => readReceipt(screen([
+    ["Received money from", "X"], ["P2,000.00", "instaFay"], ["EXAMPLE OWNER"],
+    ["Completed", "Nov 18,2026,05:27 pm"],
+    ["Account type", "MariBank Philippines, Inc."], ["Account number", account],
+    ["Reference ID", "9503F408F2DB"], ["maya"],
+  ]));
+
+  it("money received from the shop's own bank account is a transfer, not a Cash Out", () => {
+    const a = applyOwnAccounts(mayaFromBank(OWN_BANK), own);
+    expect(a).toMatchObject({
+      transaction_type: "Wallet Transfer", platform: "MariBank", transfer_to: "Maya",
+      amount: 2000, account_number: null,
+    });
+  });
+
+  it("the same receipt from someone else's account stays a Cash Out", () => {
+    const a = applyOwnAccounts(mayaFromBank("99990000111"), own);
+    expect(a).toMatchObject({ transaction_type: "Cash Out", platform: "Maya", transfer_to: null });
+  });
+
+  it("GCash details between two of the shop's numbers: a transfer from one wallet to the other", () => {
+    const a = applyOwnAccounts(readReceipt(screen([
+      ["Transaction Details"], [`Transfer from ${OWN_GCASH} to`], [OWN_MAYA],
+      ["Amount", "-5,000.00"], ["Date & Time", "May 1, 2026 9:00AM"],
+      ["Reference Number", "1111111111111"],
+    ])), own);
+    expect(a).toMatchObject({
+      transaction_type: "Wallet Transfer", platform: "GCash", transfer_to: "Maya", amount: 5000, account_number: null,
+    });
+  });
+
+  it("with a customer on the other end it stays a customer transaction, and the shop's number is never the customer's", () => {
+    const a = applyOwnAccounts(readReceipt(screen([
+      ["Transaction Details"], [`Transfer from ${CUSTOMER} to`], [OWN_GCASH],
+      ["Amount", "+500.00"], ["Date & Time", "Feb 27, 2026 8:42AM"],
+      ["Reference Number", "4265040134042"],
+    ])), own);
+    expect(a).toMatchObject({
+      transaction_type: "Cash Out", platform: "GCash", transfer_to: null, account_number: CUSTOMER,
+    });
+  });
+
+  it("an Express Send to the shop's own Maya number is a transfer out of GCash", () => {
+    const a = applyOwnAccounts(readReceipt(screen([
+      ["Express Send"], ["EX.. O."], [OWN_MAYA], ["Sent via GCash"],
+      ["Amount", "3,000.00"], ["Total Amount Sent", "P3000.00"],
+      ["Ref No.4409227229071", "Sep 30,2026 8:18 PM"],
+    ])), own);
+    expect(a).toMatchObject({
+      transaction_type: "Wallet Transfer", platform: "GCash", transfer_to: "Maya", amount: 3000, account_number: null,
+    });
+  });
+
+  const bankTransfer = (masked: string) => readReceipt(screen([
+    ["Bank Transfer", "X"], ["Bank Transfer Complete"], ["Sent via GCash"],
+    ["Bank", "Example Bank"], ["Account No.", masked], ["Transfer Method", "InstaPay"],
+    ["Transfer Amount", "1,000.00"], ["+Fee", "10.00"], ["Total", "p 1,010.00"],
+    ["Date", "Sep 13, 202609:18 AM"], ["Ref No.", "2219252523104"],
+  ]));
+
+  it("a bank transfer to the shop's own account: what arrived is the amount, the app's charge is the fee", () => {
+    const a = applyOwnAccounts(bankTransfer("....0917"), own);
+    expect(a).toMatchObject({
+      transaction_type: "Wallet Transfer", platform: "GCash", transfer_to: "MariBank",
+      amount: 1000, platform_fee: 10,
+    });
+  });
+
+  it("last four digits only count when exactly one registered account ends in them", () => {
+    const two: OwnIdentifier[] = [...own, { kind: "account", value: "55550000917", wallet: "Maya" }];
+    const a = applyOwnAccounts(bankTransfer("....0917"), two);
+    expect(a).toMatchObject({ transaction_type: "Bank Transfer", platform: "GCash", transfer_to: null, amount: 1010 });
+  });
+
+  it("a different last four is somebody else's account", () => {
+    const a = applyOwnAccounts(bankTransfer("....4388"), own);
+    expect(a).toMatchObject({ transaction_type: "Bank Transfer", transfer_to: null, amount: 1010 });
+  });
+
+  it("with nothing registered, nothing changes", () => {
+    const before = mayaFromBank(OWN_BANK);
+    expect(applyOwnAccounts(before, [])).toMatchObject({ ...before, transfer_to: null });
+  });
+
+  it("a screenshot from a second GCash number is attributed to that wallet", () => {
+    const withSecond: OwnIdentifier[] = [...own, { kind: "mobile", value: "09170000007", wallet: "GCash 2" }];
+    const a = applyOwnAccounts(readReceipt(screen([
+      ["Transaction Details"], [`Transfer from ${CUSTOMER} to`], ["09170000007"],
+      ["Amount", "+800.00"], ["Date & Time", "May 2, 2026 9:00AM"],
+      ["Reference Number", "2222222222222"],
+    ])), withSecond);
+    expect(a).toMatchObject({ transaction_type: "Cash Out", platform: "GCash 2", account_number: CUSTOMER });
   });
 });
