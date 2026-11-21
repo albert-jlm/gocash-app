@@ -91,7 +91,22 @@ function readAmount(v: unknown): number | null {
   return minor / 100;
 }
 
-export function extractFields(ai: ModelAnswer): ExtractedFields {
+export interface ExtractOptions {
+  /**
+   * When the answer says "Unknown", look for keywords in the raw text.
+   *
+   * On for a vision model's answer: it helps when the model declined to name
+   * something the text plainly states. OFF for the rule reader: its "Unknown"
+   * means no known layout matched, and a keyword scan over an unrecognised
+   * screen would turn a bank app's page that merely mentions "biller" or
+   * "GCash" into a typed, attributed draft. That is the confident wrong
+   * answer the rules exist to avoid.
+   */
+  keywordFallback?: boolean;
+}
+
+export function extractFields(ai: ModelAnswer, options: ExtractOptions = {}): ExtractedFields {
+  const keywordFallback = options.keywordFallback !== false;
   const rawText = typeof ai.raw_text === "string" ? ai.raw_text : "";
   const needsReview: ReviewField[] = [];
 
@@ -99,7 +114,7 @@ export function extractFields(ai: ModelAnswer): ExtractedFields {
   const claimedPlatform = text(ai.platform);
   const platform =
     (claimedPlatform && PLATFORM_ALIASES[claimedPlatform.toLowerCase().replace(/\s+/g, "")])
-    ?? detectPlatform(rawText);
+    ?? (keywordFallback ? detectPlatform(rawText) : "Unknown");
   if (platform === "Unknown") needsReview.push("platform");
 
   // ----- type -----
@@ -107,7 +122,7 @@ export function extractFields(ai: ModelAnswer): ExtractedFields {
   const txType =
     claimedType && (TRANSACTION_TYPES as readonly string[]).includes(claimedType)
       ? claimedType
-      : detectType(rawText);
+      : (keywordFallback ? detectType(rawText) : "Unknown");
   if (txType === "Unknown") needsReview.push("transaction_type");
 
   // ----- amount -----
@@ -121,7 +136,7 @@ export function extractFields(ai: ModelAnswer): ExtractedFields {
   const accountNumber =
     claimedNumber && !isOperatorNumber(claimedNumber)
       ? claimedNumber
-      : extractAccountNumber(rawText);
+      : (keywordFallback ? extractAccountNumber(rawText) : null);
 
   return {
     rawText,

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import OpenAI from "https://esm.sh/openai@4";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import { extractFields, type ModelAnswer } from "./_shared/extraction.ts";
+import { readReceipt, type OcrResult } from "./_shared/receipt_rules.ts";
 import { resolveRuleAt } from "./_shared/fee_rules.ts";
 import { resolveMembership } from "./_shared/operator.ts";
 import { calculateFee, detectGrossAmount } from "../_core/fees.ts";
@@ -95,6 +96,35 @@ Reference number hints:
 - GCash reference: typically starts with digits, 13 characters
 - MariBank reference: alphanumeric, shown near "Reference No." or "Ref No."
 - Look for labels: "Ref", "Reference", "Transaction No.", "Confirmation No."`;
+
+/** The vision-model reader. Null when its answer is not a JSON object. */
+async function readWithOpenAI(mimeType: string, imageBase64: string): Promise<ModelAnswer | null> {
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    response_format: { type: "json_object" },
+    max_tokens: 600,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: "high" } },
+          { type: "text", text: EXTRACTION_PROMPT },
+        ],
+      },
+    ],
+  });
+
+  try {
+    const parsed: unknown = JSON.parse(completion.choices[0].message.content!);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    return parsed as ModelAnswer;
+  } catch {
+    return null;
+  }
+}
 
 export async function handleProcessTransaction(req: Request): Promise<Response> {
   const corsResponse = handleCors(req);
@@ -283,48 +313,61 @@ export async function processReceipt(
       return jsonResponse(req, { error: "Failed to store screenshot" }, 500);
     }
 
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      max_tokens: 600,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mimeType};base64,${body.image_base64}`,
-                detail: "high",
-              },
-            },
-            { type: "text", text: EXTRACTION_PROMPT },
-          ],
-        },
-      ],
-    });
-
+    // ----- read the receipt -----
+    // "local" (default): text is read off the image by the OCR service on this
+    // machine and turned into fields by fixed rules. Nothing leaves the server
+    // and there is no per-image cost. "openai": the previous path, a vision
+    // model, kept selectable for comparison. There is no automatic fallback
+    // from one to the other: a receipt the rules do not recognise is held for
+    // the operator, which is the safe outcome.
+    const reader = (Deno.env.get("RECEIPT_READER") ?? "local").toLowerCase();
     let ai: ModelAnswer;
-    try {
-      const parsed: unknown = JSON.parse(completion.choices[0].message.content!);
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        throw new Error("not an object");
+
+    if (reader === "openai") {
+      const answer = await readWithOpenAI(mimeType, body.image_base64);
+      if (!answer) {
+        console.error("Failed to parse AI response: [redacted for security]");
+        await cleanupUploadedImage();
+        await notifyProcessingError("AI extraction failed — could not parse response");
+        return jsonResponse(req, { error: "AI extraction failed — could not parse response" }, 422);
       }
-      ai = parsed as ModelAnswer;
-    } catch {
-      console.error("Failed to parse AI response: [redacted for security]");
-      await cleanupUploadedImage();
-      await notifyProcessingError("AI extraction failed — could not parse response");
-      return jsonResponse(req, { error: "AI extraction failed — could not parse response" }, 422);
+      ai = answer;
+    } else {
+      const ocrUrl = (Deno.env.get("OCR_URL") ?? "http://ocr:8000").replace(/\/+$/, "");
+      let ocr: OcrResult;
+      try {
+        const response = await fetch(`${ocrUrl}/ocr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: imageBytes,
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!response.ok) throw new Error(`OCR service answered ${response.status}`);
+        ocr = await response.json() as OcrResult;
+      } catch (err) {
+        console.error("OCR service unavailable:", err instanceof Error ? err.message : String(err));
+        await cleanupUploadedImage();
+        await notifyProcessingError("Receipt reading is unavailable");
+        return jsonResponse(req, {
+          error: "Screenshots can't be read right now. Type this one in instead",
+          code: "reader_unavailable",
+        }, 503);
+      }
+
+      const read = readReceipt(ocr);
+      // Which rule matched, and nothing from the receipt itself.
+      console.log(`receipt read locally: layout=${read.layout} lines=${ocr.lines.length}`);
+      ai = read;
     }
 
     // Everything the draft is built from. An unknown platform or type, or an
     // amount that could not be read, stays unknown and is listed in
     // `needsReview` for the confirm screen. See _shared/extraction.ts.
-    const fields = extractFields(ai);
+    // The rule reader's "Unknown" is final; a model's may be rescued by
+    // keywords. See ExtractOptions.
+    const fields = reader === "openai"
+      ? extractFields(ai)
+      : extractFields(ai, { keywordFallback: false });
     const { rawText, platform, txType, accountNumber } = fields;
     // The column is NOT NULL. Zero means "not read": confirm-transaction
     // refuses a zero amount, so this cannot be posted until it is entered.

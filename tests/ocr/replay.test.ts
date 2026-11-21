@@ -50,7 +50,7 @@ describe("the harness is testing the deployed pipeline", () => {
     // The harness imports extractFields from _shared/extraction.ts. If the
     // handler stops using it, this suite is measuring code that no longer runs.
     expect(src).toContain('from "./_shared/extraction.ts"');
-    expect(src).toContain("extractFields(ai)");
+    expect(src).toContain("extractFields(ai");
     // The defaults that turned "unknown" into a posting must not come back.
     expect(src).not.toContain("ai.amount ?? 0");
     expect(src).not.toContain("transaction_rules");
