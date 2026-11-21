@@ -66,11 +66,11 @@ export default function SettingsPage() {
             { label: "Profit settings",       href: "/settings/rules",         desc: "Your fee on each type",           ownerOnly: true,  Icon: BadgePercent },
             { label: "Platforms",             href: "/settings/platforms",     desc: "Add or archive wallets",          ownerOnly: true,  Icon: LayoutGrid },
             { label: "My numbers & accounts", href: "/settings/my-accounts",   desc: "Your own numbers",                ownerOnly: true,  Icon: Contact },
-            { label: "People",                href: "/settings/staff",         desc: "Owners and staff",                ownerOnly: true,  Icon: Users },
+            { label: "People",                href: "/settings/staff",         desc: "Owner, admins and staff",               ownerOnly: true,  Icon: Users },
             { label: "Share from phone",      href: "/settings/share",         desc: "Send screenshots in",             ownerOnly: false, Icon: Share },
             { label: "Notifications",         href: "/settings/notifications", desc: "Telegram, coming soon",           ownerOnly: true,  Icon: Bell },
             { label: "Help",                  href: "/help",                   desc: "How-tos and questions",           ownerOnly: false, Icon: CircleHelp },
-          ].filter((item) => role === "owner" || !item.ownerOnly)
+          ].filter((item) => role !== "staff" || !item.ownerOnly)
            .map(({ label, href, desc, Icon }) => (
             <Link key={href} href={href} className="flex items-center gap-3.5 px-4 py-3.5">
               <span className="w-10 h-10 rounded-full bg-background grid place-items-center flex-shrink-0">
@@ -88,7 +88,7 @@ export default function SettingsPage() {
         <div className="mt-4 card px-4 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[13px] text-muted-foreground">
-              Signed in as {role === "staff" ? "staff" : "owner"}
+              Signed in as {role ?? "…"}
             </p>
             <p className="text-[15px] font-medium truncate">{session?.user.email ?? "—"}</p>
           </div>

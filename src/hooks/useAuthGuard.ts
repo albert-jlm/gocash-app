@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 
-export type Role = "owner" | "staff";
+export type Role = "owner" | "admin" | "staff";
 
 interface AppSession {
   session: Session | null;
@@ -30,7 +30,7 @@ let remembered: { session: Session; operatorId: string; role: Role } | null = nu
 export function useAuthGuard(opts: { ownerOnly?: boolean } = {}): AppSession {
   const ownerOnly = opts.ownerOnly === true;
   const router = useRouter();
-  const known = remembered && (!ownerOnly || remembered.role === "owner") ? remembered : null;
+  const known = remembered && (!ownerOnly || remembered.role !== "staff") ? remembered : null;
   const [session, setSession] = useState<Session | null>(known?.session ?? null);
   const [operatorId, setOperatorId] = useState<string | null>(known?.operatorId ?? null);
   const [role, setRole] = useState<Role | null>(known?.role ?? null);
@@ -76,7 +76,7 @@ export function useAuthGuard(opts: { ownerOnly?: boolean } = {}): AppSession {
 
       // An owner-only screen opened by staff (a typed URL, an old link): send
       // them back rather than show a form the server will refuse.
-      if (ownerOnly && op.role !== "owner") {
+      if (ownerOnly && op.role === "staff") {
         router.replace("/settings");
         return;
       }

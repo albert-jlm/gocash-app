@@ -243,7 +243,7 @@ export default function TransactionDetail({
             means reversing it and entering it again, so that is what is
             offered. The Edit button that used to be here opened the confirm
             form, which could only ever answer "already confirmed". */}
-        {tx.status === "confirmed" && role === "owner" && !askVoid && (
+        {tx.status === "confirmed" && role !== "staff" && !askVoid && (
           <button
             type="button"
             onClick={() => { setAskVoid(true); setVoidError(null); }}
@@ -254,7 +254,7 @@ export default function TransactionDetail({
           </button>
         )}
 
-        {tx.status === "confirmed" && role === "owner" && askVoid && (
+        {tx.status === "confirmed" && role !== "staff" && askVoid && (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/[0.06] p-4 space-y-3">
             <p className="text-[15px] font-semibold">Void this transaction?</p>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
@@ -294,7 +294,7 @@ export default function TransactionDetail({
 
         {tx.status === "confirmed" && role === "staff" && (
           <p className="text-[13px] text-muted-foreground text-center leading-relaxed px-2">
-            Recorded wrong? Ask the owner to void it, then enter it again.
+            Recorded wrong? Ask the owner or an admin to void it, then enter it again.
           </p>
         )}
 

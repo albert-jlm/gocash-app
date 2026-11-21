@@ -9,13 +9,13 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
-import { resolveMembership, refuseUnlessOwner } from "./_shared/operator.ts";
+import { resolveMembership, refuseUnlessOwner, refuseUnlessFounder } from "./_shared/operator.ts";
 
 interface RequestBody {
   action: "list" | "add" | "remove" | "role";
   email?: string;
   member_id?: string;
-  role?: "staff" | "owner";
+  role?: "staff" | "admin";
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -70,11 +70,16 @@ export async function handleManageStaff(req: Request): Promise<Response> {
       return jsonResponse(req, {
         owner_email: shop?.email ?? null,
         your_email: user.email ?? null,
+        your_role: membership.role,
         staff: data ?? [],
       });
     }
 
     if (body.action === "add") {
+      if (body.role === "admin") {
+        const founderOnly = refuseUnlessFounder(req, membership);
+        if (founderOnly) return founderOnly;
+      }
       const email = (body.email ?? "").trim().toLowerCase();
       if (!EMAIL.test(email) || email.length > 200) {
         return jsonResponse(req, { error: "Enter a valid email address" }, 400);
@@ -117,14 +122,14 @@ export async function handleManageStaff(req: Request): Promise<Response> {
         return jsonResponse(req, { error: "Could not add that person" }, 500);
       }
 
-      const role = body.role === "owner" ? "owner" : "staff";
-      if (role === "owner") {
+      const role = body.role === "admin" ? "admin" : "staff";
+      if (role === "admin") {
         const { error: roleError } = await admin.rpc("set_member_role", {
-          p_operator_id: membership.operatorId, p_member_id: memberId, p_role: "owner",
+          p_operator_id: membership.operatorId, p_member_id: memberId, p_role: "admin",
         });
         if (roleError) {
           console.error("set_member_role failed:", roleError.code, roleError.message);
-          return jsonResponse(req, { error: "Added as staff, but could not make them an owner" }, 500);
+          return jsonResponse(req, { error: "Added as staff, but could not make them an admin" }, 500);
         }
       }
 
@@ -138,9 +143,11 @@ export async function handleManageStaff(req: Request): Promise<Response> {
       if (typeof body.member_id !== "string" || body.member_id === "") {
         return jsonResponse(req, { error: "member_id is required" }, 400);
       }
-      if (body.role !== "staff" && body.role !== "owner") {
-        return jsonResponse(req, { error: 'role must be "staff" or "owner"' }, 400);
+      if (body.role !== "staff" && body.role !== "admin") {
+        return jsonResponse(req, { error: 'role must be "staff" or "admin"' }, 400);
       }
+      const founderOnly = refuseUnlessFounder(req, membership);
+      if (founderOnly) return founderOnly;
       const { data: target } = await admin
         .from("operator_members").select("user_id")
         .eq("id", body.member_id).eq("operator_id", membership.operatorId).maybeSingle();
@@ -160,10 +167,14 @@ export async function handleManageStaff(req: Request): Promise<Response> {
 
     if (body.action === "remove") {
       const { data: target } = await admin
-        .from("operator_members").select("user_id")
+        .from("operator_members").select("user_id, role")
         .eq("id", body.member_id ?? "").eq("operator_id", membership.operatorId).maybeSingle();
       if (target && target.user_id === user.id) {
         return jsonResponse(req, { error: "You can't remove yourself" }, 400);
+      }
+      if (target && target.role === "admin") {
+        const founderOnly = refuseUnlessFounder(req, membership);
+        if (founderOnly) return founderOnly;
       }
       if (typeof body.member_id !== "string" || body.member_id === "") {
         return jsonResponse(req, { error: "member_id is required" }, 400);

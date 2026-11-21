@@ -21,19 +21,20 @@ export default function StaffSettingsPage() {
 
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   const [yourEmail, setYourEmail] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [newRole, setNewRole] = useState<"staff" | "owner">("staff");
+  const [newRole, setNewRole] = useState<"staff" | "admin">("staff");
   const [changingId, setChangingId] = useState<string | null>(null);
 
   async function handleRole(member: StaffMember) {
-    const next = member.role === "owner" ? "staff" : "owner";
+    const next = member.role === "admin" ? "staff" : "admin";
     setChangingId(member.id);
     setError(null);
     setNotice(null);
     try {
       await setStaffRole(member.id, next);
       setStaff((prev) => prev.map((m) => (m.id === member.id ? { ...m, role: next } : m)));
-      setNotice(`${member.email} is now ${next === "owner" ? "an owner" : "staff"}.`);
+      setNotice(`${member.email} is now ${next === "admin" ? "an admin" : "staff"}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not change that person's role");
     } finally {
@@ -52,7 +53,7 @@ export default function StaffSettingsPage() {
     if (authLoading) return;
     let cancelled = false;
     listStaff()
-      .then((r) => { if (!cancelled) { setOwnerEmail(r.ownerEmail); setYourEmail(r.yourEmail); setStaff(r.staff); } })
+      .then((r) => { if (!cancelled) { setOwnerEmail(r.ownerEmail); setYourEmail(r.yourEmail); setIsOwner(r.yourRole === "owner"); setStaff(r.staff); } })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load staff"); })
       .finally(() => { if (!cancelled) setDataLoading(false); });
     return () => { cancelled = true; };
@@ -109,9 +110,9 @@ export default function StaffSettingsPage() {
         title="People"
         back="/settings"
         info={<>
-          <p><b>Staff</b> can record transactions, send screenshots, review drafts, and see balances and history.</p>
-          <p><b>Owners</b> can also void, fix balances, change fees and wallets, edit earnings, and add or remove people.</p>
-          <p>The first owner cannot be removed or changed.</p>
+          <p><b>Staff</b> record transactions, send screenshots, review drafts, and see balances and history.</p>
+          <p><b>Admins</b> can also void, fix balances, change fees and wallets, edit earnings, and add or remove staff.</p>
+          <p><b>The owner</b> can do all of that, and is the only one who can add, remove or change admins. The owner cannot be removed.</p>
         </>}
       />
 
@@ -149,20 +150,20 @@ export default function StaffSettingsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-medium truncate">{m.email}</p>
                   <p className="text-[13px] text-muted-foreground">
-                    {m.role === "owner" ? "Owner" : "Staff"}{m.email === yourEmail ? " · you" : ""}
+                    {m.role === "admin" ? "Admin" : "Staff"}{m.email === yourEmail ? " · you" : ""}
                   </p>
                 </div>
-                {confirmRemoveId !== m.id && m.email !== yourEmail && (
+                {confirmRemoveId !== m.id && m.email !== yourEmail && isOwner && (
                   <button
                     type="button"
                     onClick={() => handleRole(m)}
                     disabled={changingId === m.id}
                     className="btn btn-outline btn-sm"
                   >
-                    {changingId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : m.role === "owner" ? "Make staff" : "Make owner"}
+                    {changingId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : m.role === "admin" ? "Make staff" : "Make admin"}
                   </button>
                 )}
-                {confirmRemoveId !== m.id && m.email !== yourEmail && (
+                {confirmRemoveId !== m.id && m.email !== yourEmail && (isOwner || m.role === "staff") && (
                   <button
                     type="button"
                     onClick={() => setConfirmRemoveId(m.id)}
@@ -216,8 +217,8 @@ export default function StaffSettingsPage() {
             placeholder="name@example.com"
             className="field bg-background"
           />
-          <div role="radiogroup" aria-label="Role" className="grid grid-cols-2 gap-1 rounded-full bg-background p-1">
-            {(["staff", "owner"] as const).map((value) => (
+          <div role="radiogroup" aria-label="Role" className={`grid grid-cols-2 gap-1 rounded-full bg-background p-1 ${isOwner ? "" : "hidden"}`}>
+            {(["staff", "admin"] as const).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -226,7 +227,7 @@ export default function StaffSettingsPage() {
                 onClick={() => setNewRole(value)}
                 className={`h-11 rounded-full text-[15px] font-medium ${newRole === value ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
               >
-                {value === "staff" ? "Staff" : "Owner"}
+                {value === "staff" ? "Staff" : "Admin"}
               </button>
             ))}
           </div>
@@ -236,7 +237,7 @@ export default function StaffSettingsPage() {
             className="btn btn-primary w-full"
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-            {newRole === "owner" ? "Add as owner" : "Add as staff"}
+            {newRole === "admin" ? "Add as admin" : "Add as staff"}
           </button>
         </form>
 

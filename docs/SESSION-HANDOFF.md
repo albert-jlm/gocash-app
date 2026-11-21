@@ -86,12 +86,15 @@ UX work, from `~/gocash-ux-research.md` (research of 2026-11-21):
   2,000 and Maya 1,000), owner can edit the Earnings figure
   (`adjust-earnings` function), any wallet can be archived and brought
   back, public `/help` page, Cash Out says "Give X · collect Y fee".
-- **Multiple owners (2026-11-21):** migration `20260928000001_co_owners.sql`
-  (applied live). `operator_members.role` may be `owner`; `is_operator_owner`
-  counts them; the founding owner (`operators.user_id`) cannot be removed or
-  changed. Settings → People adds someone as staff or owner and switches
-  roles (`manage-staff` action `role`). Any migration that replaces a
-  function must re-GRANT execute afterwards: an event trigger revokes it.
+- **Three roles (2026-11-21):** owner (the founding login,
+  `operators.user_id`), admin (`operator_members.role = 'admin'`) and staff.
+  Migrations `20260928000001` and `...02` (both applied live). Admins can do
+  everything the owner can except add, remove or change admins; the owner
+  cannot be removed. `is_operator_owner()` and `refuseUnlessOwner()` mean
+  "owner or admin"; `refuseUnlessFounder()` means the owner only. Deleting
+  the whole account does not exist yet; when built it must be founder-only.
+  Any migration that replaces a function must re-GRANT execute afterwards:
+  an event trigger revokes it.
 - **Cash Out wording (operator's decision):** the app shows only
   "You earn ₱X" and a "Fee is included in the amount" checkbox. It does not
   say how much to give or collect.

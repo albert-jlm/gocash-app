@@ -399,7 +399,7 @@ export default function Dashboard() {
               {index === 0 && earningsHeld !== null && (
             <button
               type="button"
-              disabled={role !== "owner"}
+              disabled={role === "staff"}
               onClick={() => {
                 setEarningsInput(formatAmountInput(String(earningsHeld)));
                 setEarningsOpen(true);
@@ -448,7 +448,7 @@ export default function Dashboard() {
                 {" · "}{typeName(justSaved.transaction_type)} ₱{justSaved.amount.toLocaleString("en-PH")}
               </span>
             </p>
-            {role === "owner" ? (
+            {role !== "staff" ? (
               <button
                 type="button"
                 onClick={handleUndo}

@@ -9,7 +9,7 @@
 
 import { jsonResponse } from "./cors.ts";
 
-export type Role = "owner" | "staff";
+export type Role = "owner" | "admin" | "staff";
 
 export interface Membership {
   operatorId: string;
@@ -22,7 +22,10 @@ export async function resolveMembership(userClient: any): Promise<Membership | n
   const { data, error } = await userClient.rpc("my_membership");
   const row = Array.isArray(data) ? data[0] : data;
   if (error || !row || !row.operator_id) return null;
-  return { operatorId: row.operator_id, role: row.role === "owner" ? "owner" : "staff" };
+  return {
+    operatorId: row.operator_id,
+    role: row.role === "owner" ? "owner" : row.role === "admin" ? "admin" : "staff",
+  };
 }
 
 /**
@@ -31,9 +34,17 @@ export async function resolveMembership(userClient: any): Promise<Membership | n
  * and who has access.
  */
 export function refuseUnlessOwner(req: Request, membership: Membership): Response | null {
+  if (membership.role === "owner" || membership.role === "admin") return null;
+  return jsonResponse(req, {
+    error: "Only the owner or an admin can do this. Ask them to do it from their account.",
+    code: "owner_only",
+  }, 403);
+}
+
+export function refuseUnlessFounder(req: Request, membership: Membership): Response | null {
   if (membership.role === "owner") return null;
   return jsonResponse(req, {
-    error: "Only the owner can do this. Ask them to do it from their account.",
-    code: "owner_only",
+    error: "Only the owner can do this.",
+    code: "founder_only",
   }, 403);
 }

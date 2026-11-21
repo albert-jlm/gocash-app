@@ -676,21 +676,21 @@ async function callFunction(name: string, body: Record<string, unknown>) {
 export interface StaffMember {
   id: string;
   email: string;
-  role: "staff" | "owner";
+  role: "staff" | "admin";
   created_at?: string;
 }
 
-export async function listStaff(): Promise<{ ownerEmail: string | null; yourEmail: string | null; staff: StaffMember[] }> {
+export async function listStaff(): Promise<{ ownerEmail: string | null; yourEmail: string | null; yourRole: "owner" | "admin" | "staff"; staff: StaffMember[] }> {
   const data = await callFunction("manage-staff", { action: "list" });
-  return { ownerEmail: data.owner_email ?? null, yourEmail: data.your_email ?? null, staff: data.staff ?? [] };
+  return { ownerEmail: data.owner_email ?? null, yourEmail: data.your_email ?? null, yourRole: data.your_role ?? "admin", staff: data.staff ?? [] };
 }
 
-export async function addStaff(email: string, role: "staff" | "owner" = "staff"): Promise<StaffMember> {
+export async function addStaff(email: string, role: "staff" | "admin" = "staff"): Promise<StaffMember> {
   const data = await callFunction("manage-staff", { action: "add", email, role });
   return data.member as StaffMember;
 }
 
-export async function setStaffRole(memberId: string, role: "staff" | "owner"): Promise<void> {
+export async function setStaffRole(memberId: string, role: "staff" | "admin"): Promise<void> {
   await callFunction("manage-staff", { action: "role", member_id: memberId, role });
 }
 

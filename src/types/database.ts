@@ -298,7 +298,7 @@ export interface Database {
       /** The caller's own operator and role. Zero rows means "not set up". */
       my_membership: {
         Args: Record<string, never>;
-        Returns: { operator_id: string; role: "owner" | "staff" }[];
+        Returns: { operator_id: string; role: "owner" | "admin" | "staff" }[];
       };
     };
   };
