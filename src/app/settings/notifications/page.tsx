@@ -103,9 +103,11 @@ export default function NotificationsSettingsPage() {
 
   if (authLoading || dataLoading) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
-      </div>
+      <AppShell active="settings">
+        <div className="flex-1 grid place-items-center">
+          <Loader2 className="late w-6 h-6 text-muted-foreground animate-spin" />
+        </div>
+      </AppShell>
     );
   }
 

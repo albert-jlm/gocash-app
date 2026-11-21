@@ -170,6 +170,10 @@
     opacity: 0.7;
     transform: scale(0.98);
   }
+  .late {
+    opacity: 0;
+    animation: late-in 1ms linear 350ms forwards, spin 1s linear infinite;
+  }
   .sheet-fade {
     animation: sheet-fade 160ms ease-out;
   }
@@ -298,5 +302,11 @@
   from {
     transform: translateY(24px);
     opacity: 0;
+  }
+}
+
+@keyframes late-in {
+  to {
+    opacity: 1;
   }
 }

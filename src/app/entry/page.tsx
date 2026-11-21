@@ -203,9 +203,11 @@ export default function EntryPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen items-center justify-center bg-background text-foreground">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-      </div>
+      <AppShell active="new">
+        <div className="flex-1 grid place-items-center">
+          <Loader2 className="late w-6 h-6 text-muted-foreground animate-spin" />
+        </div>
+      </AppShell>
     );
   }
 

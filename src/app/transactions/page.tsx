@@ -101,24 +101,28 @@ function groupByDate(rows: TxRow[]): Array<{ label: string; key: string; items: 
 // Component
 // ---------------------------------------------------------------------------
 
+let lastHistory: TxRow[] | null = null;
+
 function TransactionsList() {
   const { operatorId, loading: authLoading } = useAuthGuard();
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
-  const [transactions, setTransactions] = useState<TxRow[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [transactions, setTransactions] = useState<TxRow[]>(lastHistory ?? []);
+  const [dataLoading, setDataLoading] = useState(lastHistory === null);
 
   useEffect(() => {
     if (!operatorId) return;
     const opId = operatorId;
     async function fetchData() {
-      setDataLoading(true);
       const { data } = await supabase
         .from("transactions")
         .select("id, transaction_type, platform, transfer_to, account_number, amount, net_profit, created_at, status")
         .eq("operator_id", opId)
         .order("created_at", { ascending: false })
         .limit(100);
-      if (data) setTransactions(data);
+      if (data) {
+        lastHistory = data;
+        setTransactions(data);
+      }
       setDataLoading(false);
     }
     fetchData();
@@ -126,9 +130,11 @@ function TransactionsList() {
 
   if (authLoading || dataLoading) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
-      </div>
+      <AppShell active="history" tabBar wide>
+        <div className="flex-1 grid place-items-center">
+          <Loader2 className="late w-6 h-6 text-muted-foreground animate-spin" />
+        </div>
+      </AppShell>
     );
   }
 
@@ -273,9 +279,11 @@ function TransactionsPageInner() {
 export default function TransactionsPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen bg-background items-center justify-center">
-        <Loader2 className="w-6 h-6 text-primary animate-spin" />
-      </div>
+      <AppShell active="history" tabBar wide>
+        <div className="flex-1 grid place-items-center">
+          <Loader2 className="late w-6 h-6 text-muted-foreground animate-spin" />
+        </div>
+      </AppShell>
     }>
       <TransactionsPageInner />
     </Suspense>

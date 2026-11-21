@@ -374,12 +374,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-background items-center justify-center max-w-[430px] mx-auto">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-[15px] text-muted-foreground">Loading transaction…</p>
+      <AppShell>
+        <div className="flex-1 grid place-items-center">
+          <Loader2 className="late w-6 h-6 text-muted-foreground animate-spin" />
         </div>
-      </div>
+      </AppShell>
     );
   }
 
