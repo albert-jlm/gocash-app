@@ -86,7 +86,7 @@ export function AppShell({
       <main className="app-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain lg:pl-60">
         <div
           className={[
-            "app-enter relative flex flex-col min-h-full w-full mx-auto",
+            "relative flex flex-col min-h-full w-full mx-auto",
             "max-w-[480px] sm:max-w-2xl",
             wide ? "lg:max-w-5xl" : "lg:max-w-2xl",
             className,
