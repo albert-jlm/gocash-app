@@ -24,6 +24,10 @@ import {
 } from "@/lib/ledger";
 import { parsePesosInput } from "@core/money.ts";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
+import { Sheet } from "@/components/sheet";
+import { loadFloors, saveFloor, type Floors } from "@/lib/low-balance";
+import { formatAmountInput } from "@/lib/display";
 
 // ---------------------------------------------------------------------------
 // Card colours
@@ -96,6 +100,35 @@ export default function WalletsSettingsPage() {
   const [reloadTick, setReloadTick] = useState(0);
   // One key per count, so a double tap or a retry posts one correction.
   const reconcileKey = useRef<string>(newIdempotencyKey("reconcile"));
+  const [floors, setFloors] = useState<Floors>({});
+  const [floorFor, setFloorFor] = useState<AccountRow | null>(null);
+  const [floorInput, setFloorInput] = useState("");
+  const [floorSaving, setFloorSaving] = useState(false);
+  const [floorError, setFloorError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!operatorId) return;
+    loadFloors(operatorId).then(setFloors).catch(() => {});
+  }, [operatorId]);
+
+  async function submitFloor(clear: boolean) {
+    if (!operatorId || !floorFor) return;
+    const minor = clear ? 0 : parsePesosInput(floorInput);
+    if (minor === null || minor < 0) {
+      setFloorError("Enter an amount like 2,000");
+      return;
+    }
+    setFloorSaving(true);
+    setFloorError(null);
+    try {
+      setFloors(await saveFloor(operatorId, floorFor.name, minor > 0 ? minor / 100 : null));
+      setFloorFor(null);
+    } catch (err) {
+      setFloorError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setFloorSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!operatorId) return;
@@ -206,18 +239,15 @@ export default function WalletsSettingsPage() {
   return (
     <AppShell active="settings">
       {/* Header */}
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold">Wallets</h1>
-          <p className="text-xs text-muted-foreground">Check your balances against what you counted</p>
-        </div>
-      </header>
+      <PageHeader
+        title="Wallets"
+        back="/settings"
+        info={<>
+          <p>Type what you actually counted for a wallet or the drawer. The balance changes to match, and the correction is kept on record.</p>
+          <p>Use this to enter your opening balances too.</p>
+          <p><b>Alert below</b> sets the amount at which Home tells you a wallet needs topping up.</p>
+        </>}
+      />
 
       {/* Account list */}
       <section className="px-5 flex-1 space-y-3 pb-10">
@@ -259,7 +289,7 @@ export default function WalletsSettingsPage() {
                   <div className="p-4 space-y-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                        Counted balance
+                        What it really holds
                       </Label>
                       <div className="relative">
                         <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-muted-foreground`}>
@@ -301,10 +331,10 @@ export default function WalletsSettingsPage() {
                       </div>
                       <p className="text-xs text-muted-foreground/60 leading-relaxed pt-0.5">
                         {diff === null || diff === 0
-                          ? "Your count matches the ledger — there is nothing to post."
+                          ? "This matches. Nothing to change."
                           : diff > 0
-                            ? "You counted more than the ledger says. The difference is posted as a correction against the owner's equity."
-                            : "You counted less than the ledger says. The difference is posted as a correction against the owner's equity."}
+                            ? "The balance will go up by this much. The correction is kept on record."
+                            : "The balance will go down by this much. The correction is kept on record."}
                       </p>
                     </div>
 
@@ -322,7 +352,7 @@ export default function WalletsSettingsPage() {
                         className="flex-1 flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold py-2.5 rounded-xl text-sm transition-colors"
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        Post correction
+                        Save
                       </button>
                       <button
                         onClick={cancelReconcile}
@@ -338,7 +368,22 @@ export default function WalletsSettingsPage() {
                     className="w-full px-4 py-3 flex items-center gap-2 text-left text-sm text-muted-foreground hover:bg-muted transition-colors"
                   >
                     <Scale className="w-3.5 h-3.5 flex-shrink-0" />
-                    Reconcile against a count →
+                    Set the real balance
+                  </button>
+                )}
+                {!isReconciling && (
+                  <button
+                    onClick={() => {
+                      setFloorFor(a);
+                      setFloorInput(floors[a.name] ? formatAmountInput(String(floors[a.name])) : "");
+                      setFloorError(null);
+                    }}
+                    className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left text-sm text-muted-foreground border-t border-border"
+                  >
+                    <span>Alert below</span>
+                    <span className="amount font-semibold text-foreground">
+                      {floors[a.name] ? formatPesos(floors[a.name]) : "Off"}
+                    </span>
                   </button>
                 )}
               </div>
@@ -346,12 +391,45 @@ export default function WalletsSettingsPage() {
           );
         })}
 
-        <p className="text-xs text-muted-foreground/50 text-center pt-4 leading-relaxed">
-          Balances are worked out from your transactions, so they cannot be typed over.
-          When a count disagrees with the ledger, post the difference here — it stays on
-          the record, so you can always see why a balance is what it is.
-        </p>
       </section>
+      <Sheet open={floorFor !== null} onClose={() => setFloorFor(null)} title={`Alert when ${floorFor?.name === "Cash" ? "the cash drawer" : floorFor?.name ?? "it"} is low`}>
+        <p className="text-sm text-muted-foreground mt-1 mb-4">Home tells you to top up when the balance drops below this.</p>
+        <label htmlFor="floor-amount" className="sr-only">Amount</label>
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
+          <input
+            id="floor-amount"
+            inputMode="decimal"
+            autoComplete="off"
+            autoFocus
+            placeholder="2,000"
+            value={floorInput}
+            onChange={(e) => setFloorInput(formatAmountInput(e.target.value))}
+            className="amount w-full h-[54px] rounded-2xl bg-muted pl-9 pr-4 text-xl font-semibold"
+          />
+        </div>
+        {floorError && <p className="text-sm text-destructive mt-2">{floorError}</p>}
+        <div className="space-y-2.5 mt-4">
+          <button
+            type="button"
+            onClick={() => submitFloor(false)}
+            disabled={floorSaving}
+            className="font-heading w-full h-[54px] rounded-full bg-primary text-primary-foreground font-semibold text-[17px] disabled:opacity-60"
+          >
+            {floorSaving ? "Saving…" : "Save"}
+          </button>
+          {floorFor && floors[floorFor.name] ? (
+            <button
+              type="button"
+              onClick={() => submitFloor(true)}
+              disabled={floorSaving}
+              className="font-heading w-full h-[54px] rounded-full bg-muted font-semibold text-[17px]"
+            >
+              Turn off
+            </button>
+          ) : null}
+        </div>
+      </Sheet>
     </AppShell>
   );
 }

@@ -107,7 +107,9 @@ export function AppShell({
                   aria-current={on ? "page" : undefined}
                   className="flex flex-col items-center justify-center gap-0.5"
                 >
-                  <Icon className={`w-5 h-5 ${on ? "text-foreground" : "text-muted-foreground"}`} />
+                  <span className={`w-14 h-8 rounded-full grid place-items-center transition-colors ${on ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                    <Icon className="w-5 h-5" strokeWidth={on ? 2.2 : 1.9} />
+                  </span>
                   <span className={`text-xs ${on ? "text-foreground font-semibold" : "text-muted-foreground"}`}>
                     {label}
                   </span>

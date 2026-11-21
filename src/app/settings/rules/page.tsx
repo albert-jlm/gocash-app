@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 
 // ---------------------------------------------------------------------------
 // Config — plain-language descriptions for each transaction type
@@ -192,18 +193,14 @@ export default function RulesSettingsPage() {
   return (
     <AppShell active="settings">
       {/* Header */}
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold">Profit Settings</h1>
-          <p className="text-xs text-muted-foreground">How your earnings are calculated</p>
-        </div>
-      </header>
+      <PageHeader
+        title="Profit settings"
+        back="/settings"
+        info={<>
+          <p>Your fee on a transaction is the amount times the rate, and never less than the minimum.</p>
+          <p>A rule that is switched off earns nothing.</p>
+        </>}
+      />
 
       {/* Rules List */}
       <section className="px-5 flex-1 space-y-3 pb-10">
@@ -357,10 +354,6 @@ export default function RulesSettingsPage() {
           );
         })}
 
-        <p className="text-xs text-muted-foreground/50 text-center pt-4 leading-relaxed">
-          These rules control how profit is calculated when you save a transaction.
-          Disabled rules won&apos;t apply any profit.
-        </p>
       </section>
     </AppShell>
   );

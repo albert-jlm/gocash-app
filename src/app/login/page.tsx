@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -155,6 +156,9 @@ export default function LoginPage() {
             <p className="text-[13px] text-muted-foreground text-center">No password needed.</p>
           </form>
         )}
+        <Link href="/help" className="block text-center text-sm text-muted-foreground underline underline-offset-4 py-4">
+          How GoCash works
+        </Link>
       </div>
     </div>
   );

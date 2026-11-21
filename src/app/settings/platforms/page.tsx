@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase/client";
 import { addPlatform as addPlatformAccount, retirePlatform } from "@/lib/ledger";
 import { Sheet } from "@/components/sheet";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -180,18 +181,15 @@ export default function PlatformsSettingsPage() {
   return (
     <AppShell active="settings">
       {/* Header */}
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold">Platforms</h1>
-          <p className="text-xs text-muted-foreground">Apps you use for transactions</p>
-        </div>
-      </header>
+      <PageHeader
+        title="Platforms"
+        back="/settings"
+        info={<>
+          <p>Each wallet you use gets its own balance and fee rules.</p>
+          <p>A new wallet starts at ₱0. Set its real balance under <b>Settings → Wallets</b>.</p>
+          <p>Archiving hides a wallet and keeps its history. GCash and MariBank cannot be archived.</p>
+        </>}
+      />
 
       <section className="px-5 flex-1 space-y-3 pb-10">
         {/* Success banner */}
@@ -320,11 +318,6 @@ export default function PlatformsSettingsPage() {
           </button>
         )}
 
-        <p className="text-xs text-muted-foreground/50 text-center pt-4 leading-relaxed">
-          Each platform gets its own account and profit rules.
-          Platforms are deactivated rather than deleted, so past transactions keep
-          their history. Built-in platforms (GCash, MariBank) stay put.
-        </p>
       </section>
       <Sheet open={archiving !== null} onClose={() => setArchiving(null)} title={`Archive ${archiving?.name ?? "wallet"}?`}>
         <ul className="text-sm text-muted-foreground space-y-1.5 mt-2 mb-5 list-disc pl-5">

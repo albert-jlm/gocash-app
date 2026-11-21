@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, AlertCircle, Check, Plus, Trash2, Smartphone, Landmark } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   addOwnIdentifier, listOwnIdentifiers, removeOwnIdentifier,
@@ -99,18 +100,15 @@ export default function MyAccountsPage() {
 
   return (
     <AppShell active="settings">
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold">My numbers &amp; accounts</h1>
-          <p className="text-xs text-muted-foreground">So moving your own money isn&apos;t counted as a customer</p>
-        </div>
-      </header>
+      <PageHeader
+        title="My numbers & accounts"
+        back="/settings"
+        info={<>
+          <p>Add the mobile number of each of your wallets, and the account number of any bank wallet.</p>
+          <p>When a screenshot shows money going to or coming from one of these, it is recorded as <b>moving your own money</b>, with no fee earned. Your own numbers are never saved as a customer&apos;s.</p>
+          <p>A bank account you don&apos;t track here isn&apos;t a wallet. Add it under <b>Settings → Platforms</b> first.</p>
+        </>}
+      />
 
       <section className="px-5 flex-1 space-y-4 pb-10">
         {error && (
@@ -126,14 +124,6 @@ export default function MyAccountsPage() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-border p-4">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Add the mobile number of each of your wallets, and the account number
-            of any bank wallet. When a screenshot shows money going to or coming
-            from one of these, it is recorded as <span className="text-foreground">moving your own money</span>,
-            with no fee earned. Your own numbers are also never saved as a customer&apos;s.
-          </p>
-        </div>
 
         {wallets.map((w) => {
           const rows = identifiers.filter((r) => r.account_id === w.id);
@@ -222,10 +212,6 @@ export default function MyAccountsPage() {
           </button>
         </form>
 
-        <p className="text-xs text-muted-foreground/60 text-center leading-relaxed">
-          A bank account you don&apos;t track here isn&apos;t a wallet. Add it under
-          Settings → Platforms first if you want transfers to it recorded.
-        </p>
       </section>
     </AppShell>
   );

@@ -13,6 +13,7 @@ import { newIdempotencyKey, setEarnings, voidTransaction } from "@/lib/ledger";
 import { parsePesosInput } from "@core/money.ts";
 import { formatAmountInput } from "@/lib/display";
 import { Sheet } from "@/components/sheet";
+import { readFloors, type Floors } from "@/lib/low-balance";
 import { typeName } from "@/lib/display";
 import { AppShell } from "@/components/app-shell";
 
@@ -94,6 +95,7 @@ let lastHome: {
   todayStats: { count: number; total: number; earnings: number };
   recentTx: TxRow[];
   earnings: number | null;
+  floors: Floors;
 } | null = null;
 
 export default function Dashboard() {
@@ -113,6 +115,7 @@ export default function Dashboard() {
   const [todayStats, setTodayStats] = useState(lastHome?.todayStats ?? { count: 0, total: 0, earnings: 0 });
   const [recentTx, setRecentTx] = useState<TxRow[]>(lastHome?.recentTx ?? []);
   const [earningsHeld, setEarningsHeld] = useState<number | null>(lastHome?.earnings ?? null);
+  const [floors, setFloors] = useState<Floors>(lastHome?.floors ?? {});
   const [dataLoading, setDataLoading] = useState(lastHome === null);
 
   // Wallet scroll snap — progress dot tracking
@@ -175,7 +178,7 @@ export default function Dashboard() {
 
       setLoadError(false);
 
-      const [walletsRes, pendingRes, todayTxRes, recentRes, revenueRes, takenRes] = await Promise.all([
+      const [walletsRes, pendingRes, todayTxRes, recentRes, revenueRes, takenRes, settingsRes] = await Promise.all([
         supabase
           .from("account_balances")
           .select("account_id, name, kind, natural_balance")
@@ -222,6 +225,7 @@ export default function Dashboard() {
           .eq("operator_id", opId)
           .eq("status", "confirmed")
           .eq("transaction_type", "Profit Remittance"),
+        supabase.from("operators").select("settings").eq("id", opId).maybeSingle(),
       ]);
 
       // A failed query used to be ignored, so being offline looked like an
@@ -246,6 +250,8 @@ export default function Dashboard() {
           ) / 100
         : null;
       if (held !== null) setEarningsHeld(held);
+      const nextFloors = settingsRes.data ? readFloors(settingsRes.data.settings) : null;
+      if (nextFloors) setFloors(nextFloors);
 
       if (walletsRes.data) setWallets(walletsRes.data);
       setPendingCount(count);
@@ -261,6 +267,7 @@ export default function Dashboard() {
           todayStats: today,
           recentTx: recentRes.data,
           earnings: held,
+          floors: nextFloors ?? lastHome?.floors ?? {},
         };
       }
       setDataLoading(false);
@@ -336,6 +343,7 @@ export default function Dashboard() {
   }
 
   const ordered = [...wallets].sort((x, y) => Number(y.kind === "cash") - Number(x.kind === "cash"));
+  const low = ordered.filter((w) => floors[w.name] !== undefined && w.natural_balance < floors[w.name]);
   const [totalWhole, totalCents] = splitAmount(wallets.reduce((sum, w) => sum + w.natural_balance, 0));
 
   return (
@@ -366,8 +374,13 @@ export default function Dashboard() {
                 }`}
                 style={{ scrollSnapAlign: "start" }}
               >
-                <p className={`text-[13px] ${cash ? "opacity-75" : "text-muted-foreground"}`}>
+                <p className={`text-[13px] flex items-center justify-between ${cash ? "opacity-75" : "text-muted-foreground"}`}>
                   {cash ? "Cash drawer" : w.name}
+                  {low.includes(w) && (
+                    <span className="flex items-center gap-1 text-destructive font-semibold opacity-100">
+                      <span className="w-1.5 h-1.5 rounded-full bg-destructive" />Low
+                    </span>
+                  )}
                 </p>
                 <p className="amount text-xl font-semibold">{pesos(w.natural_balance)}</p>
               </div>
@@ -452,6 +465,27 @@ export default function Dashboard() {
               Couldn&apos;t load everything. Tap to try again.
             </p>
           </button>
+        </section>
+      )}
+
+      {low.length > 0 && (
+        <section className="px-6 mt-5 space-y-2" role="status">
+          {low.map((w) => (
+            <Link
+              key={w.account_id}
+              href="/entry?type=Wallet%20Transfer"
+              className="flex items-center gap-3 rounded-2xl border border-destructive/50 bg-destructive/[0.07] pl-4 pr-3.5 py-3"
+            >
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-semibold">Top up {w.kind === "cash" ? "the cash drawer" : w.name}</span>
+                <span className="block text-[13px] text-muted-foreground">
+                  {pesos(w.natural_balance)} left · keep above {pesos(floors[w.name])}
+                </span>
+              </span>
+              <ChevronRight className="w-[18px] h-[18px] opacity-60 flex-shrink-0" />
+            </Link>
+          ))}
         </section>
       )}
 

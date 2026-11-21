@@ -49,7 +49,7 @@ async function mock(page) {
     if (p.endsWith('/functions/v1/own-accounts')) return json({ wallets: [{ id: 'a2', name: 'GCash' }, { id: 'a3', name: 'MariBank' }, { id: 'a4', name: 'Maya' }], identifiers: [{ id: 'i1', account_id: 'a2', kind: 'mobile', value: '09170000001', label: null }, { id: 'i2', account_id: 'a3', kind: 'account', value: '13240000917', label: null }] });
     if (p.endsWith('/functions/v1/manage-staff')) return json({ owner_email: 'owner@example.test', staff: [{ id: 'm1', email: 'tess@example.test', role: 'staff' }] });
     if (p.endsWith('/functions/v1/upload-keys')) return json({ keys: [{ id: 'k1', label: 'Shop iPhone', key_prefix: 'gck_Ab3xYz', created_at: iso(3000), last_used_at: iso(30) }] });
-    if (p.endsWith('/operators')) return json(single ? { id: 'op1', telegram_chat_id: null, settings: {} } : [{ id: 'op1' }]);
+    if (p.endsWith('/operators')) return json(single ? { id: 'op1', telegram_chat_id: null, settings: { low_balance: { Maya: 8000, GCash: 2000 } } } : [{ id: 'op1', settings: { low_balance: { Maya: 8000, GCash: 2000 } } }]);
     if (p.endsWith('/account_balances')) {
       let rows = balances; const kind = u.searchParams.get('kind');
       if (kind && kind.startsWith('eq.')) rows = rows.filter(r => r.kind === kind.slice(3));

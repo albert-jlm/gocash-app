@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, AlertCircle, Check, UserPlus, Trash2, Crown, User } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { addStaff, listStaff, removeStaff, type StaffMember } from "@/lib/ledger";
 
@@ -83,18 +84,14 @@ export default function StaffSettingsPage() {
 
   return (
     <AppShell active="settings">
-      <header className="px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] lg:pt-10 pb-4 flex items-center gap-3">
-        <Link
-          href="/settings"
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold">Staff</h1>
-          <p className="text-xs text-muted-foreground">Who else can record transactions</p>
-        </div>
-      </header>
+      <PageHeader
+        title="Staff"
+        back="/settings"
+        info={<>
+          <p>Staff can record and view transactions.</p>
+          <p>Only you can void, reconcile, change fees, wallets, staff and your own numbers.</p>
+        </>}
+      />
 
       <section className="px-5 flex-1 space-y-4 pb-10">
         {error && (
