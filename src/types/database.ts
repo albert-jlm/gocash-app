@@ -17,6 +17,7 @@ export type TransactionType =
   | "Bills Payment"
   | "Bank Transfer"
   | "Profit Remittance"
+  | "Wallet Transfer"
   | "Unknown";
 
 // Matches transactions_status_check after 20260924000006: "edited" is gone
@@ -92,6 +93,10 @@ export interface Database {
           processing_errors: string[] | null;
           starting_cash: number | null;
           wallet_balance: number | null;
+          /** Wallet Transfer only: the destination, a wallet name or "Cash". */
+          transfer_to: string | null;
+          /** Wallet Transfer only: what the platform charged for the move. */
+          platform_fee: number;
           created_at: string;
           updated_at: string;
           confirmed_at: string | null;

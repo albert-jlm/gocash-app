@@ -26,11 +26,12 @@ const balances = [
   { account_id: 'a4', name: 'Maya', kind: 'platform', balance_minor: 760000, natural_balance: 7600 },
 ];
 const txs = [
-  { id: 't1', transaction_type: 'Unknown', platform: 'Unknown', account_number: null, reference_number: null, amount: 0, net_profit: 0, created_at: iso(4), transaction_date: null, status: 'awaiting_confirm', confirmed_at: null, was_edited: false },
-  { id: 't2', transaction_type: 'Cash Out', platform: 'GCash', account_number: '09171234567', reference_number: '1029384756123', amount: 1020, net_profit: 0, created_at: iso(12), transaction_date: iso(13), status: 'awaiting_confirm', confirmed_at: null, was_edited: false },
+  { id: 't1', transaction_type: 'Unknown', platform: 'Unknown', account_number: null, reference_number: null, amount: 0, net_profit: 0, created_at: iso(4), transaction_date: null, status: 'awaiting_confirm', confirmed_at: null, was_edited: false, transfer_to: null, platform_fee: 0 },
+  { id: 't2', transaction_type: 'Cash Out', platform: 'GCash', account_number: '09171234567', reference_number: '1029384756123', amount: 1020, net_profit: 0, created_at: iso(12), transaction_date: iso(13), status: 'awaiting_confirm', confirmed_at: null, was_edited: false, transfer_to: null, platform_fee: 0 },
   { id: 't3', transaction_type: 'Cash In', platform: 'GCash', account_number: '09181234567', reference_number: '2029384756123', amount: 500, net_profit: 10, created_at: iso(40), transaction_date: iso(41), status: 'confirmed', confirmed_at: iso(39), was_edited: false },
   { id: 't4', transaction_type: 'Bills Payment', platform: 'Maya', account_number: null, reference_number: '9900112233446', amount: 1850, net_profit: 37, created_at: iso(95), transaction_date: iso(96), status: 'confirmed', confirmed_at: iso(94), was_edited: true },
   { id: 't5', transaction_type: 'Cash Out', platform: 'Maya', account_number: '09221234567', reference_number: '5512348899010', amount: 5000, net_profit: 100, created_at: iso(180), transaction_date: iso(181), status: 'voided', confirmed_at: iso(179), was_edited: false },
+  { id: 't7', transaction_type: 'Wallet Transfer', platform: 'Maya', transfer_to: 'GCash', platform_fee: 15, account_number: null, reference_number: '9503F408F2DB', amount: 2000, net_profit: 0, created_at: iso(60), transaction_date: iso(61), status: 'confirmed', confirmed_at: iso(59), was_edited: false },
   { id: 't6', transaction_type: 'Telco Load', platform: 'GCash', account_number: '09351234567', reference_number: null, amount: 100, net_profit: 5, created_at: iso(1500), transaction_date: iso(1501), status: 'confirmed', confirmed_at: iso(1499), was_edited: false },
 ];
 const rules = ['Cash In','Cash Out','Telco Load','Bills Payment','Bank Transfer','Profit Remittance'].map((t,i) => ({ id:'r'+i, transaction_type: t, platform: 'all', rate_bps: 200, minimum_minor: 500, rounding: 'ceil_unit', effective_from: iso(99999), effective_to: null }));

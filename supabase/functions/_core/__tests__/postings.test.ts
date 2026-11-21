@@ -9,7 +9,7 @@ import {
   buildPostings, openingBalances, reconcile, reverse, balanced, LedgerError,
 } from "../postings.ts";
 import { toMinor } from "../money.ts";
-import { TRANSACTION_TYPES, type Posting } from "../types.ts";
+import { CUSTOMER_TRANSACTION_TYPES, type Posting } from "../types.ts";
 
 /** Net effect on one account. Sums, so it works across concatenated entries. */
 function leg(postings: Posting[], match: string): number {
@@ -41,7 +41,7 @@ describe("every entry balances to exactly zero", () => {
     const amounts = [1, 50, 100, 333, 999, 1850, 12345, 999999];
     const fees = [0, 1, 5, 7, 666, 2000];
     let checked = 0;
-    for (const txType of TRANSACTION_TYPES) {
+    for (const txType of CUSTOMER_TRANSACTION_TYPES) {
       for (const a of amounts) {
         for (const f of fees) {
           // Cash Out deducts the fee from the payout, so fee > amount is not a
@@ -262,5 +262,70 @@ describe("balanced() refuses to build a broken entry", () => {
   it("rejects an amount beyond the maximum", () => {
     expect(() => cashIn({ amountMinor: php(1_000_001), feeMinor: 0, platform: "GCash" }))
       .toThrow(/exceeds the maximum/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wallet Transfer: the shop moving its own float
+// ---------------------------------------------------------------------------
+import { walletTransfer as transfer } from "../postings.ts";
+import { quoteEntry as quote } from "../entry.ts";
+
+describe("wallet transfer", () => {
+  const sum = (ps: { amount: number }[]) => ps.reduce((s, p) => s + p.amount, 0);
+  const leg = (ps: { account: { kind: string; platform?: string }; amount: number }[], key: string) =>
+    ps.find((p) => (p.account.kind === "platform" ? p.account.platform : p.account.kind) === key)?.amount;
+
+  it("wallet to wallet with no platform fee: two legs, no earnings, no cost", () => {
+    const ps = transfer({ amountMinor: 500000, feeMinor: 0, platform: "Maya", transferTo: "GCash" });
+    expect(ps).toHaveLength(2);
+    expect(leg(ps, "Maya")).toBe(-500000);
+    expect(leg(ps, "GCash")).toBe(500000);
+    expect(leg(ps, "revenue")).toBeUndefined();
+    expect(sum(ps)).toBe(0);
+  });
+
+  it("a platform fee leaves the source as well and is a cost, never revenue", () => {
+    // GCash to a bank by InstaPay: 1,000 arrives, GCash keeps 10.
+    const ps = transfer({
+      amountMinor: 100000, feeMinor: 0, platform: "GCash", transferTo: "MariBank", platformFeeMinor: 1000,
+    });
+    expect(leg(ps, "GCash")).toBe(-101000);
+    expect(leg(ps, "MariBank")).toBe(100000);
+    expect(leg(ps, "expense")).toBe(1000);
+    expect(leg(ps, "revenue")).toBeUndefined();
+    expect(sum(ps)).toBe(0);
+  });
+
+  it("drawer to wallet and wallet to drawer use the cash account", () => {
+    const deposit = transfer({ amountMinor: 1000000, feeMinor: 0, platform: "Cash", transferTo: "GCash" });
+    expect(leg(deposit, "cash")).toBe(-1000000);
+    expect(leg(deposit, "GCash")).toBe(1000000);
+
+    const withdraw = transfer({ amountMinor: 300000, feeMinor: 0, platform: "Maya", transferTo: "cash" });
+    expect(leg(withdraw, "Maya")).toBe(-300000);
+    expect(leg(withdraw, "cash")).toBe(300000);
+  });
+
+  it("refuses a transfer that is not one", () => {
+    const base = { amountMinor: 1000, feeMinor: 0 };
+    expect(() => transfer({ ...base, platform: "GCash", transferTo: "gcash" })).toThrow(/same account/);
+    expect(() => transfer({ ...base, platform: "GCash" })).toThrow(/where it goes/);
+    expect(() => transfer({ ...base, platform: "", transferTo: "GCash" })).toThrow(/comes from/);
+    expect(() => transfer({ amountMinor: 0, feeMinor: 0, platform: "GCash", transferTo: "Maya" })).toThrow(/more than zero/);
+    expect(() => transfer({ ...base, platform: "GCash", transferTo: "Maya", platformFeeMinor: -1 })).toThrow();
+  });
+
+  it("is quoted with zero earnings whatever the fee rules say", () => {
+    const rules = [{ transaction_type: "Wallet Transfer", platform: "all", rate_bps: 200, minimum_minor: 500, is_active: true }];
+    const q = quote(
+      { transactionType: "Wallet Transfer", platform: "Maya", transferTo: "GCash", amountMinor: 500000, platformFeeMinor: 1500 },
+      rules,
+    );
+    expect(q.feeMinor).toBe(0);
+    expect(q.rule).toBeNull();
+    expect(leg(q.postings, "Maya")).toBe(-501500);
+    expect(leg(q.postings, "expense")).toBe(1500);
+    expect(sum(q.postings)).toBe(0);
   });
 });

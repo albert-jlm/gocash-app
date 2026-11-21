@@ -11,7 +11,8 @@ export type TransactionType =
   | "Telco Load"
   | "Bills Payment"
   | "Bank Transfer"
-  | "Profit Remittance";
+  | "Profit Remittance"
+  | "Wallet Transfer";
 
 export const TRANSACTION_TYPES: readonly TransactionType[] = [
   "Cash In",
@@ -20,7 +21,24 @@ export const TRANSACTION_TYPES: readonly TransactionType[] = [
   "Bills Payment",
   "Bank Transfer",
   "Profit Remittance",
+  // Moving the shop's own float: wallet to wallet, wallet to drawer, drawer to
+  // wallet. No customer and no earnings. Kept last so the six customer-facing
+  // types stay together.
+  "Wallet Transfer",
 ] as const;
+
+/**
+ * The six types that are a service to a customer: one wallet (or none), and a
+ * fee rule. A Wallet Transfer is not one of them: it names two accounts and
+ * earns nothing, so anything that loops over "every type with a wallet and a
+ * fee" wants this list.
+ */
+export type CustomerTransactionType = Exclude<TransactionType, "Wallet Transfer">;
+export const CUSTOMER_TRANSACTION_TYPES: readonly CustomerTransactionType[] =
+  TRANSACTION_TYPES.filter((t): t is CustomerTransactionType => t !== "Wallet Transfer");
+
+/** The name that stands for the cash drawer wherever a wallet can be named. */
+export const CASH_ACCOUNT_NAME = "Cash";
 
 export function isTransactionType(v: string): v is TransactionType {
   return (TRANSACTION_TYPES as readonly string[]).includes(v);
@@ -37,13 +55,16 @@ export function isTransactionType(v: string): v is TransactionType {
  */
 
 /** Account classes. `platform` is per-wallet; the other three are singletons. */
-export type AccountKind = "platform" | "cash" | "revenue" | "equity";
+export type AccountKind = "platform" | "cash" | "revenue" | "equity" | "expense";
 
 export type AccountRef =
   | { kind: "platform"; platform: string }
   | { kind: "cash" }
   | { kind: "revenue" }
-  | { kind: "equity" };
+  | { kind: "equity" }
+  // What a platform charges the shop to move its own money (an InstaPay fee,
+  // for one). Kept apart from revenue so earnings mean what was earned.
+  | { kind: "expense" };
 
 export interface Posting {
   account: AccountRef;

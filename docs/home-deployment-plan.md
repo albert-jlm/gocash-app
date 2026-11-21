@@ -77,10 +77,12 @@ Decided 2026-11-21. A screenshot shows which way money moved, not why. Moving
 float between the shop's own wallets is common and must not be recorded as a
 customer transaction with a fee.
 
-- [ ] Transaction type "Wallet Transfer": source down, destination up, no
+- [x] Transaction type "Wallet Transfer": source down, destination up, no
       earnings. Covers wallet to wallet, wallet to drawer, drawer to wallet.
-- [ ] A platform's fee for the move is its own cost account. It does NOT
-      reduce earnings.
+      Entered from the "Move" tile, or by changing a draft's type on the
+      review screen. (2026-11-21)
+- [x] A platform's fee for the move is its own cost account ("Transfer
+      Costs"). It does NOT reduce earnings. (2026-11-21)
 - [ ] A list of the shop's own numbers and accounts, so a receipt whose other
       side is one of them is read as a transfer. Replaces the hardcoded numbers.
 - [ ] Recognise the second screenshot of the same transfer as its other half.

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Loader2, AlertCircle, Undo2,
   ArrowDownRight, ArrowUpLeft, Phone, Building2, Zap, TrendingDown,
+  ArrowLeftRight,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -19,12 +20,15 @@ const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = 
   "Bills Payment":     { color: "#F59E0B", Icon: Zap },
   "Bank Transfer":     { color: "#3B82F6", Icon: Building2 },
   "Profit Remittance": { color: "#6B7280", Icon: TrendingDown },
+  "Wallet Transfer":   { color: "#06B6D4", Icon: ArrowLeftRight },
 };
 
 interface TxDetail {
   id: string;
   transaction_type: string;
   platform: string;
+  transfer_to: string | null;
+  platform_fee: number;
   account_number: string | null;
   reference_number: string | null;
   amount: number;
@@ -93,7 +97,7 @@ export default function TransactionDetail({
 
     supabase
       .from("transactions")
-      .select("id, transaction_type, platform, account_number, reference_number, amount, net_profit, transaction_date, created_at, status, confirmed_at, was_edited")
+      .select("id, transaction_type, platform, transfer_to, platform_fee, account_number, reference_number, amount, net_profit, transaction_date, created_at, status, confirmed_at, was_edited")
       .eq("id", transactionId)
       .eq("operator_id", opId)
       .single()
@@ -134,6 +138,7 @@ export default function TransactionDetail({
   const cfg = TYPE_CONFIG[tx.transaction_type] ?? { color: "#6B7280", Icon: ArrowDownRight };
   const Icon = cfg.Icon;
   const isVoided = tx.status === "voided";
+  const isTransfer = tx.transaction_type === "Wallet Transfer";
   const statusLabel =
     isVoided ? "Voided — not counted in your balances"
     : tx.status === "confirmed" ? (tx.was_edited ? "Saved (edited)" : "Saved")
@@ -178,7 +183,9 @@ export default function TransactionDetail({
           </div>
           <div className="flex-1">
             <p className="text-base font-semibold">{tx.transaction_type}</p>
-            <p className="text-xs text-muted-foreground">{tx.platform}</p>
+            <p className="text-xs text-muted-foreground">
+              {isTransfer ? `${tx.platform} → ${tx.transfer_to ?? "?"}` : tx.platform}
+            </p>
           </div>
           <div className="text-right">
             <p className={`text-xl font-bold tabular-nums ${isVoided ? "line-through text-muted-foreground" : ""}`}>
@@ -186,6 +193,8 @@ export default function TransactionDetail({
             </p>
             {isVoided ? (
               <p className="text-xs font-semibold text-amber-400">Voided</p>
+            ) : isTransfer ? (
+              <p className="text-xs text-muted-foreground">own money, nothing earned</p>
             ) : (
               <p className="text-sm text-emerald-400 font-semibold tabular-nums">+₱{tx.net_profit.toFixed(2)}</p>
             )}
@@ -195,6 +204,18 @@ export default function TransactionDetail({
 
       <section className="px-5 flex-1">
         <div className="bg-white/[0.05] rounded-2xl p-4 space-y-4">
+          {isTransfer && (
+            <>
+              <Field label="From" value={tx.platform === "Cash" ? "Cash drawer" : tx.platform} />
+              <Field label="To" value={tx.transfer_to === "Cash" ? "Cash drawer" : (tx.transfer_to ?? "—")} />
+              {tx.platform_fee > 0 && (
+                <Field
+                  label="Fee the app charged"
+                  value={`₱${tx.platform_fee.toFixed(2)} · recorded as a cost, not taken from earnings`}
+                />
+              )}
+            </>
+          )}
           {tx.account_number && (
             <Field label="Customer number" value={tx.account_number} />
           )}

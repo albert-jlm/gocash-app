@@ -6,6 +6,7 @@ import {
   Loader2, Settings, ArrowDownRight, ArrowUpLeft, Phone,
   Building2, Home, Plus, History, ChevronRight, Zap, TrendingDown,
   CreditCard, Camera, Keyboard, AlertCircle,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useShareIntent } from "@/hooks/useShareIntent";
@@ -32,6 +33,7 @@ const TYPE_CONFIG: Record<string, { color: string; Icon: React.ElementType }> = 
   "Bills Payment":     { color: "#F59E0B", Icon: Zap },
   "Bank Transfer":     { color: "#3B82F6", Icon: Building2 },
   "Profit Remittance": { color: "#6B7280", Icon: TrendingDown },
+  "Wallet Transfer":   { color: "#06B6D4", Icon: ArrowLeftRight },
 };
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,8 @@ interface PendingRow {
 interface TxRow {
   id: string;
   transaction_type: string;
+  platform: string;
+  transfer_to: string | null;
   account_number: string | null;
   amount: number;
   net_profit: number;
@@ -192,10 +196,13 @@ export default function Dashboard() {
           .select("amount, net_profit")
           .eq("operator_id", opId)
           .eq("status", "confirmed")
+          // Moving the shop's own float is not a sale: it would inflate the
+          // day's count and total while earning nothing.
+          .neq("transaction_type", "Wallet Transfer")
           .gte("created_at", todayStart.toISOString()),
         supabase
           .from("transactions")
-          .select("id, transaction_type, account_number, amount, net_profit, created_at, status")
+          .select("id, transaction_type, platform, transfer_to, account_number, amount, net_profit, created_at, status")
           .eq("operator_id", opId)
           // Drafts have their own list above; this one is what has been saved.
           .in("status", ["confirmed", "voided"])
@@ -462,7 +469,9 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{tx.transaction_type}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
+                      {tx.transaction_type === "Wallet Transfer"
+                        ? `${tx.platform} → ${tx.transfer_to ?? "?"}`
+                        : maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -471,6 +480,8 @@ export default function Dashboard() {
                     </p>
                     {tx.status === "voided" ? (
                       <p className="text-[11px] text-amber-400 font-medium">Voided</p>
+                    ) : tx.transaction_type === "Wallet Transfer" ? (
+                      <p className="text-[11px] text-muted-foreground">own money</p>
                     ) : (
                       <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
                         +₱{tx.net_profit.toFixed(0)}

@@ -17,6 +17,7 @@ import {
   Zap,
   TrendingDown,
   ChevronRight,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { supabase } from "@/lib/supabase/client";
@@ -26,8 +27,8 @@ import { AppShell } from "@/components/app-shell";
 // Config
 // ---------------------------------------------------------------------------
 
-type FilterType = "All" | "Cash In" | "Cash Out" | "Telco Load" | "Bills Payment" | "Bank Transfer";
-const FILTERS: FilterType[] = ["All", "Cash In", "Cash Out", "Telco Load", "Bills Payment", "Bank Transfer"];
+type FilterType = "All" | "Cash In" | "Cash Out" | "Telco Load" | "Bills Payment" | "Bank Transfer" | "Wallet Transfer";
+const FILTERS: FilterType[] = ["All", "Cash In", "Cash Out", "Telco Load", "Bills Payment", "Bank Transfer", "Wallet Transfer"];
 
 const TYPE_CONFIG: Record<string, { color: string; bg: string; Icon: React.ElementType }> = {
   "Cash In":           { color: "#10B981", bg: "rgba(16,185,129,0.12)",  Icon: ArrowDownRight },
@@ -36,6 +37,7 @@ const TYPE_CONFIG: Record<string, { color: string; bg: string; Icon: React.Eleme
   "Bills Payment":     { color: "#F59E0B", bg: "rgba(245,158,11,0.12)",  Icon: Zap },
   "Bank Transfer":     { color: "#3B82F6", bg: "rgba(59,130,246,0.12)",  Icon: Building2 },
   "Profit Remittance": { color: "#6B7280", bg: "rgba(107,114,128,0.12)", Icon: TrendingDown },
+  "Wallet Transfer":   { color: "#06B6D4", bg: "rgba(6,182,212,0.12)",   Icon: ArrowLeftRight },
 };
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,8 @@ const TYPE_CONFIG: Record<string, { color: string; bg: string; Icon: React.Eleme
 // ---------------------------------------------------------------------------
 
 interface TxRow {
+  platform: string;
+  transfer_to: string | null;
   id: string;
   transaction_type: string;
   account_number: string | null;
@@ -108,7 +112,7 @@ function TransactionsList() {
       setDataLoading(true);
       const { data } = await supabase
         .from("transactions")
-        .select("id, transaction_type, account_number, amount, net_profit, created_at, status")
+        .select("id, transaction_type, platform, transfer_to, account_number, amount, net_profit, created_at, status")
         .eq("operator_id", opId)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -213,7 +217,9 @@ function TransactionsList() {
                           {tx.transaction_type === "Unknown" ? "Type not read" : tx.transaction_type}
                         </p>
                         <p className="text-[11px] text-muted-foreground truncate">
-                          {maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
+                          {tx.transaction_type === "Wallet Transfer"
+                            ? `${tx.platform} → ${tx.transfer_to ?? "?"}`
+                            : maskNumber(tx.account_number)} · {formatTime(tx.created_at)}
                         </p>
                       </div>
 
@@ -225,7 +231,7 @@ function TransactionsList() {
                         <div className="flex items-center gap-1.5">
                           {/* A draft has earned nothing yet; its fee is worked
                               out when it is confirmed. */}
-                          {!isVoided && !isPending && (
+                          {!isVoided && !isPending && tx.transaction_type !== "Wallet Transfer" && (
                             <p className="text-[11px] text-emerald-400 font-medium tabular-nums">
                               +₱{tx.net_profit.toFixed(0)}
                             </p>

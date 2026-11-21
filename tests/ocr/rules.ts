@@ -19,9 +19,9 @@
  */
 
 import type { FeeRule } from "../../supabase/functions/_core/types.ts";
-import { TRANSACTION_TYPES } from "../../supabase/functions/_core/types.ts";
+import { CUSTOMER_TRANSACTION_TYPES } from "../../supabase/functions/_core/types.ts";
 
-export const DEFAULT_FEE_RULES: readonly FeeRule[] = TRANSACTION_TYPES.map((t) => ({
+export const DEFAULT_FEE_RULES: readonly FeeRule[] = CUSTOMER_TRANSACTION_TYPES.map((t) => ({
   transaction_type: t,
   platform: "all",
   rate_bps: 200,

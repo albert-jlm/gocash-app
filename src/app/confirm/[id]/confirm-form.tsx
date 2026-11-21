@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
 import { parsePesosInput, toMinor } from "@core/money.ts";
-import { isTransactionType } from "@core/types.ts";
+import { CASH_ACCOUNT_NAME, isTransactionType } from "@core/types.ts";
 import {
   formatPesos,
   loadEntryContext,
@@ -40,6 +40,7 @@ const ACCOUNT_LABEL: Record<string, string> = {
   cash: "Drawer cash",
   revenue: "Your earnings",
   equity: "Owner's equity",
+  expense: "Transfer costs",
 };
 
 // ---------------------------------------------------------------------------
@@ -56,6 +57,9 @@ interface TransactionDraft {
   reference_number: string | null;
   transaction_date: string | null;
   status: string;
+  /** Wallet Transfer only. */
+  transfer_to: string | null;
+  platform_fee: number;
 }
 
 const MOCK_PREVIEW: TransactionDraft = {
@@ -68,6 +72,8 @@ const MOCK_PREVIEW: TransactionDraft = {
   reference_number: "891148103",
   transaction_date: "2025-03-08T14:30:00",
   status: "awaiting_confirm",
+  transfer_to: null,
+  platform_fee: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -123,6 +129,9 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const [txType, setTxType] = useState("");
   const [amount, setAmount] = useState("");
   const [context, setContext] = useState<EntryContext | null>(null);
+  // Wallet Transfer only.
+  const [transferTo, setTransferTo] = useState("");
+  const [platformFee, setPlatformFee] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [txDate, setTxDate] = useState("");
@@ -142,7 +151,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       const { data, error } = await supabase
         .from("transactions")
         .select(
-          "id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status"
+          "id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status, transfer_to, platform_fee"
         )
         .eq("id", transactionId)
         .single();
@@ -178,6 +187,14 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     return () => { cancelled = true; };
   }, [isPreview]);
 
+  // The drawer can only be an end of a transfer. If the type changes away
+  // from one, a "Cash" source would be posted against as if it were a wallet.
+  useEffect(() => {
+    if (txType !== "Wallet Transfer") {
+      setPlatform((p) => (p === CASH_ACCOUNT_NAME ? "" : p));
+    }
+  }, [txType]);
+
   // Only Cash Out can have the fee inside the printed amount; a stale answer
   // must not survive a change of type.
   useEffect(() => {
@@ -189,6 +206,16 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   const amountMinor = useMemo(() => parsePesosInput(amount), [amount]);
   const amountValid = amountMinor !== null && amountMinor > 0;
 
+  // A transfer is the shop moving its own money: two ends, either of which
+  // may be the drawer, and possibly a fee charged by the app that moved it.
+  const isTransfer = txType === "Wallet Transfer";
+  const platformFeeMinor = useMemo(
+    () => (platformFee.trim() === "" ? 0 : parsePesosInput(platformFee)),
+    [platformFee],
+  );
+  const transferReady = !isTransfer
+    || (transferTo !== "" && transferTo !== platform && platformFeeMinor !== null);
+
   const preview = useMemo(() => {
     if (!context || !amountValid || platform === "" || !isTransactionType(txType)) return null;
     try {
@@ -198,6 +225,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
           platform,
           amountPesos: (amountMinor as number) / 100,
           amountIncludesFee,
+          transferTo: isTransfer ? transferTo : null,
+          platformFeePesos: isTransfer && platformFeeMinor !== null ? platformFeeMinor / 100 : 0,
         },
         context.rules
       );
@@ -206,7 +235,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       // amount, for one). No preview; Save reports why.
       return null;
     }
-  }, [context, amountValid, amountMinor, platform, txType, amountIncludesFee]);
+  }, [context, amountValid, amountMinor, platform, txType, amountIncludesFee,
+      isTransfer, transferTo, platformFeeMinor]);
 
   // What the receipt reader left blank, in the operator's words.
   const unread = [
@@ -216,9 +246,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
   ].filter((x): x is string => x !== null);
 
   const platformOptions = useMemo(() => {
-    const list = context && context.platforms.length > 0 ? context.platforms : FALLBACK_PLATFORMS;
+    const wallets = context && context.platforms.length > 0 ? context.platforms : FALLBACK_PLATFORMS;
+    // The drawer is a valid end of a transfer, and of nothing else.
+    const list = isTransfer ? [...wallets, CASH_ACCOUNT_NAME] : wallets;
     return platform !== "" && !list.includes(platform) ? [...list, platform] : list;
-  }, [context, platform]);
+  }, [context, platform, isTransfer]);
 
   function populate(data: TransactionDraft) {
     // NOT `?? "GCash"`. An unidentified platform must stay unidentified: a
@@ -232,6 +264,8 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
     // operator has to supply them, and Save stays disabled until they do.
     setTxType(isTransactionType(data.transaction_type) ? data.transaction_type : "");
     setAmount(data.amount > 0 ? data.amount.toString() : "");
+    setTransferTo(data.transfer_to ?? "");
+    setPlatformFee(data.platform_fee > 0 ? data.platform_fee.toString() : "");
     setAccountNumber(data.account_number ?? "");
     setReferenceNumber(data.reference_number ?? "");
     setTxDate(data.transaction_date ? data.transaction_date.slice(0, 16) : "");
@@ -260,6 +294,11 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       // transaction from the fee rules, and an earnings figure typed here was
       // silently dropped.
       if (amountMinor !== toMinor(tx.amount)) edits.amount = amountMinor / 100;
+      if (isTransfer) {
+        if (transferTo !== (tx.transfer_to ?? "")) edits.transfer_to = transferTo;
+        const feePesos = (platformFeeMinor ?? 0) / 100;
+        if (feePesos !== Number(tx.platform_fee ?? 0)) edits.platform_fee = feePesos;
+      }
       if (accountNumber !== (tx.account_number ?? "")) edits.account_number = accountNumber || null;
       if (referenceNumber !== (tx.reference_number ?? "")) edits.reference_number = referenceNumber || null;
       if (txDate && txDate !== (tx.transaction_date ?? "").slice(0, 16))
@@ -408,7 +447,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
 
         <div className="rounded-2xl p-4 space-y-4 mb-4 bg-white/[0.06] border border-white/[0.08]">
           {/* Platform */}
-          <FieldRow label="App used">
+          <FieldRow label={isTransfer ? "From" : "App used"}>
             <Select value={platform} onValueChange={(v) => setPlatform(v ?? "")}>
 
               <SelectTrigger className="bg-white/[0.07] border-white/[0.1] h-11 w-full rounded-xl text-sm">
@@ -416,7 +455,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
               </SelectTrigger>
               <SelectContent>
                 {platformOptions.map((p) => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                  <SelectItem key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -435,12 +474,32 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
                 <SelectItem value="Telco Load">Telco Load</SelectItem>
                 <SelectItem value="Bills Payment">Bills Payment</SelectItem>
                 <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                <SelectItem value="Wallet Transfer">Moving my own money</SelectItem>
               </SelectContent>
             </Select>
           </FieldRow>
 
+          {/* Destination: transfers only */}
+          {isTransfer && (
+            <FieldRow label="To">
+              <Select value={transferTo} onValueChange={(v) => setTransferTo(v ?? "")}>
+                <SelectTrigger className="bg-white/[0.07] border-white/[0.1] h-11 w-full rounded-xl text-sm">
+                  <SelectValue placeholder="Choose where it went" />
+                </SelectTrigger>
+                <SelectContent>
+                  {platformOptions.filter((p) => p !== platform).map((p) => (
+                    <SelectItem key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Your own money moving between your wallets or the drawer. No fee is earned.
+              </p>
+            </FieldRow>
+          )}
+
           {/* Amount */}
-          <FieldRow label="Amount">
+          <FieldRow label={isTransfer ? "Amount that arrived" : "Amount"}>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
               <Input
@@ -480,17 +539,41 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
             )}
           </FieldRow>
 
+          {isTransfer && (
+            <FieldRow label="Fee the app charged you (if any)">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">₱</span>
+                <Input
+                  value={platformFee}
+                  onChange={(e) => setPlatformFee(e.target.value)}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0.00"
+                  aria-invalid={platformFeeMinor === null}
+                  className="bg-white/[0.07] border-white/[0.1] h-11 rounded-xl pl-7 tabular-nums text-sm"
+                />
+              </div>
+              {platformFeeMinor === null && (
+                <p className="text-[11px] text-red-400">This isn&apos;t a readable amount. Use digits like 15 or 15.00.</p>
+              )}
+            </FieldRow>
+          )}
+
           {/* Fee and effect: computed, never typed. The same code prices it
               on the server when Save is tapped. */}
           {preview && (
             <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-3 space-y-2">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-muted-foreground">Your earnings</span>
-                <span className="text-base font-semibold text-emerald-400 tabular-nums">
-                  {formatPesos(preview.feePesos)}
-                </span>
-              </div>
-              {!preview.rule && (
+              {isTransfer ? (
+                <p className="text-xs text-muted-foreground">Your own money, moved. Nothing is earned on this.</p>
+              ) : (
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-muted-foreground">Your earnings</span>
+                  <span className="text-base font-semibold text-emerald-400 tabular-nums">
+                    {formatPesos(preview.feePesos)}
+                  </span>
+                </div>
+              )}
+              {!preview.rule && !isTransfer && (
                 <p className="text-[11px] text-amber-300 leading-relaxed">
                   No fee rule covers {txType} on {platform} yet, so this earns nothing.
                   Set one in <Link href="/settings/rules" className="underline">Settings → Fees</Link>.
@@ -553,7 +636,7 @@ export default function ConfirmForm({ transactionId }: { transactionId: string }
       <div className="sticky bottom-0 px-5 pb-10 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         <button
           onClick={handleSave}
-          disabled={saving || discarding || isPreview || platform === "" || txType === "" || !amountValid}
+          disabled={saving || discarding || isPreview || platform === "" || txType === "" || !amountValid || !transferReady}
           className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl text-[15px] transition-colors"
         >
           {saving ? (

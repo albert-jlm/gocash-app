@@ -1054,3 +1054,81 @@ SELECT harness.expect_error('layer2', '2.36 staff cannot add staff',
                               'olga@example.test', NULL)$s$
   ],
   'permission denied');
+
+-- ---------------------------------------------------------------------------
+-- 2.37–2.40 — Wallet Transfer (20260927000001).
+-- ---------------------------------------------------------------------------
+SELECT harness.probe('layer2', '2.37 a transfer with a platform fee moves float and books the fee as a cost',
+  'Moving the shop''s own money must change two wallets and nothing else. The '
+  'platform''s charge is a cost; it must not touch revenue, and the expense '
+  'account must exist even for an operator who never had one.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_platform('11111111-1111-1111-1111-111111111111', 'Maya')$s$,
+    $s$DELETE FROM gocash.accounts
+       WHERE operator_id = '11111111-1111-1111-1111-111111111111' AND kind = 'expense'$s$,
+    $s$CREATE TEMP TABLE harness_237 ON COMMIT DROP AS
+       SELECT name, balance_minor FROM gocash.account_balances
+       WHERE operator_id = '11111111-1111-1111-1111-111111111111'$s$,
+    $s$INSERT INTO gocash.transactions
+         (id, operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('d0000000-0000-0000-0000-000000000037',
+               '11111111-1111-1111-1111-111111111111',
+               'Wallet Transfer', 'GCash', 1000, 'awaiting_confirm', 'manual')$s$,
+    $s$SELECT gocash.confirm_transaction(
+         '11111111-1111-1111-1111-111111111111',
+         'd0000000-0000-0000-0000-000000000037',
+         '[{"kind":"platform","platform":"GCash","amount_minor":-101000},
+           {"kind":"platform","platform":"Maya","amount_minor":100000},
+           {"kind":"expense","amount_minor":1000}]'::jsonb,
+         '{"platform":"GCash","transaction_type":"Wallet Transfer","amount":1000,
+           "net_profit":0,"transfer_to":"Maya","platform_fee":10}'::jsonb,
+         'confirm-237', 'harness')$s$
+  ],
+  $q$
+  SELECT (SELECT b.balance_minor - h.balance_minor FROM gocash.account_balances b
+            JOIN harness_237 h USING (name)
+           WHERE b.operator_id = '11111111-1111-1111-1111-111111111111' AND b.name = 'GCash') = -101000
+     AND (SELECT balance_minor FROM gocash.account_balances
+           WHERE operator_id = '11111111-1111-1111-1111-111111111111' AND name = 'Maya') = 100000
+     AND (SELECT balance_minor FROM gocash.account_balances
+           WHERE operator_id = '11111111-1111-1111-1111-111111111111' AND kind = 'expense') = 1000
+     AND (SELECT b.balance_minor - h.balance_minor FROM gocash.account_balances b
+            JOIN harness_237 h USING (name)
+           WHERE b.operator_id = '11111111-1111-1111-1111-111111111111' AND b.kind = 'revenue') = 0
+     AND (SELECT (transfer_to, platform_fee, net_profit) = ('Maya', 10.00, 0.00)
+            FROM gocash.transactions WHERE id = 'd0000000-0000-0000-0000-000000000037')
+  $q$);
+
+SELECT harness.expect_error('layer2', '2.38 a transfer cannot be confirmed without a destination',
+  'A confirmed transfer with nowhere to go has posted money out of a wallet '
+  'and into nothing the screen can name.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, amount, status, entry_source)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Wallet Transfer', 'GCash', 1000, 'confirmed', 'manual')$s$
+  ],
+  'transactions_transfer_shape');
+
+SELECT harness.expect_error('layer2', '2.39 a transfer cannot go from a wallet to itself',
+  'Source and destination the same is not a transfer; it is a typing mistake '
+  'that would otherwise post a fee-only loss.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, transfer_to, amount, status, entry_source)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Wallet Transfer', 'GCash', 'gcash', 1000, 'awaiting_confirm', 'manual')$s$
+  ],
+  'transactions_transfer_shape');
+
+SELECT harness.expect_error('layer2', '2.40 only a transfer carries a destination or a platform fee',
+  'A customer transaction with a platform fee on it would have a cost the '
+  'ledger entry for that type has no leg for.',
+  ARRAY[
+    $s$INSERT INTO gocash.transactions
+         (operator_id, transaction_type, platform, platform_fee, amount, status, entry_source)
+       VALUES ('11111111-1111-1111-1111-111111111111',
+               'Cash In', 'GCash', 15, 1000, 'awaiting_confirm', 'manual')$s$
+  ],
+  'transactions_transfer_shape');

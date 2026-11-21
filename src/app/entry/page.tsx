@@ -27,7 +27,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Check, ChevronDown, Loader2, AlertCircle, Camera,
 } from "lucide-react";
-import { TRANSACTION_TYPES, type TransactionType } from "@core/types.ts";
+import { CASH_ACCOUNT_NAME, TRANSACTION_TYPES, type TransactionType } from "@core/types.ts";
 import { parsePesosInput } from "@core/money.ts";
 import {
   createAndConfirmTransaction,
@@ -46,6 +46,7 @@ const TYPE_LABEL: Record<TransactionType, string> = {
   "Bills Payment": "Bills",
   "Bank Transfer": "Transfer",
   "Profit Remittance": "Remit",
+  "Wallet Transfer": "Move",
 };
 
 /**
@@ -62,12 +63,14 @@ const TYPE_HINT: Record<TransactionType, string> = {
   "Bills Payment": "Customer hands you cash. You pay their bill.",
   "Bank Transfer": "Customer hands you cash. You transfer it to their bank.",
   "Profit Remittance": "You take earnings out of the drawer. No customer.",
+  "Wallet Transfer": "You move your own money between wallets or the drawer. No customer, nothing earned.",
 };
 
 const ACCOUNT_LABEL: Record<string, string> = {
   cash: "Drawer cash",
   revenue: "Your earnings",
   equity: "Owner's equity",
+  expense: "Transfer costs",
 };
 
 export default function EntryPage() {
@@ -94,11 +97,17 @@ export default function EntryPage() {
   const [reference, setReference] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [showDetails, setShowDetails] = useState(false);
+  // Wallet Transfer only.
+  const [transferTo, setTransferTo] = useState("");
+  const [platformFee, setPlatformFee] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const needsPlatform = txType !== "Profit Remittance";
+  const isTransfer = txType === "Wallet Transfer";
+  // A transfer may start or end at the drawer as well as at a wallet.
+  const sources = isTransfer ? [...(context?.platforms ?? []), CASH_ACCOUNT_NAME] : context?.platforms ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +137,20 @@ export default function EntryPage() {
   // change — a stale `true` would under-charge every subsequent entry.
   useEffect(() => {
     if (txType !== "Cash Out") setAmountIncludesFee(false);
+    // The drawer is only a valid "wallet" on a transfer, and a destination or
+    // platform fee means nothing on anything else.
+    if (txType !== "Wallet Transfer") {
+      setTransferTo("");
+      setPlatformFee("");
+      setPlatform((p) => (p === CASH_ACCOUNT_NAME ? "" : p));
+    }
   }, [txType]);
+
+  // Blank means no fee. Anything else has to read exactly.
+  const platformFeeMinor = useMemo(
+    () => (platformFee.trim() === "" ? 0 : parsePesosInput(platformFee)),
+    [platformFee],
+  );
 
   const amountPesos = useMemo(() => {
     // Exact, and null for anything that is not unambiguously an amount:
@@ -142,7 +164,11 @@ export default function EntryPage() {
     if (needsPlatform && !platform) return null;
     try {
       return previewEntry(
-        { transactionType: txType, platform, amountPesos, amountIncludesFee },
+        {
+          transactionType: txType, platform, amountPesos, amountIncludesFee,
+          transferTo: isTransfer ? transferTo : null,
+          platformFeePesos: isTransfer && platformFeeMinor !== null ? platformFeeMinor / 100 : 0,
+        },
         context.rules
       );
     } catch {
@@ -151,10 +177,12 @@ export default function EntryPage() {
       // answer; Save will report why.
       return null;
     }
-  }, [context, amountPesos, needsPlatform, platform, txType, amountIncludesFee]);
+  }, [context, amountPesos, needsPlatform, platform, txType, amountIncludesFee,
+      isTransfer, transferTo, platformFeeMinor]);
 
   const canSave =
-    !saving && amountPesos > 0 && (!needsPlatform || platform !== "") && preview !== null;
+    !saving && amountPesos > 0 && (!needsPlatform || platform !== "") && preview !== null
+    && (!isTransfer || (transferTo !== "" && transferTo !== platform && platformFeeMinor !== null));
 
   async function handleSave() {
     if (!canSave) return;
@@ -168,6 +196,8 @@ export default function EntryPage() {
         referenceNumber: reference.trim() || null,
         accountNumber: accountNumber.trim() || null,
         amountIncludesFee,
+        transferTo: isTransfer ? transferTo : null,
+        platformFeePesos: isTransfer && platformFeeMinor !== null ? platformFeeMinor / 100 : 0,
         idempotencyKey: idempotencyKey.current,
       });
       router.push("/transactions");
@@ -256,7 +286,7 @@ export default function EntryPage() {
         {needsPlatform && (
           <div className="space-y-2">
             <label htmlFor="platform" className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Which wallet
+              {isTransfer ? "From" : "Which wallet"}
             </label>
             {/* A native select, not a styled listbox: on a phone this opens the
                 OS picker, which is faster one-handed and needs no scroll
@@ -268,8 +298,28 @@ export default function EntryPage() {
               className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm appearance-none"
             >
               <option value="">Choose a wallet…</option>
-              {context?.platforms.map((p) => (
-                <option key={p} value={p}>{p}</option>
+              {sources.map((p) => (
+                <option key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* ----- destination (transfer only) ----- */}
+        {isTransfer && (
+          <div className="space-y-2">
+            <label htmlFor="transfer-to" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              To
+            </label>
+            <select
+              id="transfer-to"
+              value={transferTo}
+              onChange={(e) => setTransferTo(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.07] px-4 py-3 text-sm appearance-none"
+            >
+              <option value="">Choose where it went…</option>
+              {sources.filter((p) => p !== platform).map((p) => (
+                <option key={p} value={p}>{p === CASH_ACCOUNT_NAME ? "Cash drawer" : p}</option>
               ))}
             </select>
           </div>
@@ -297,6 +347,12 @@ export default function EntryPage() {
             />
           </div>
 
+          {isTransfer && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              The amount that arrived at the other end.
+            </p>
+          )}
+
           {txType === "Cash Out" && (
             <button
               type="button"
@@ -320,17 +376,52 @@ export default function EntryPage() {
           )}
         </div>
 
+        {/* ----- platform fee (transfer only) ----- */}
+        {isTransfer && (
+          <div className="space-y-2">
+            <label htmlFor="platform-fee" className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Fee the app charged you <span className="normal-case tracking-normal">(if any)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
+              <input
+                id="platform-fee"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0.00"
+                value={platformFee}
+                onChange={(e) => setPlatformFee(e.target.value)}
+                className="w-full rounded-xl bg-white/[0.07] pl-9 pr-4 py-3 text-sm tabular-nums"
+              />
+            </div>
+            {platformFeeMinor === null ? (
+              <p className="text-[11px] text-red-400">This isn&apos;t a readable amount. Use digits like 15 or 15.00.</p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                For example the ₱10 or ₱15 InstaPay fee. It is recorded as a cost
+                and does not come out of your earnings.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* ----- live preview ----- */}
         {preview && (
           <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-muted-foreground">Your fee</span>
-              <span className="text-lg font-semibold text-emerald-400 tabular-nums">
-                {formatPesos(preview.feePesos)}
-              </span>
-            </div>
+            {isTransfer ? (
+              <p className="text-xs text-muted-foreground">
+                Your own money, moved. Nothing is earned on this.
+              </p>
+            ) : (
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-muted-foreground">Your fee</span>
+                <span className="text-lg font-semibold text-emerald-400 tabular-nums">
+                  {formatPesos(preview.feePesos)}
+                </span>
+              </div>
+            )}
 
-            {!preview.rule && (
+            {!preview.rule && !isTransfer && (
               <p className="text-[11px] text-amber-300 leading-relaxed">
                 No fee rule covers {txType}
                 {needsPlatform && ` on ${platform}`} yet, so this earns nothing.
@@ -441,6 +532,8 @@ export default function EntryPage() {
               <Loader2 className="w-4 h-4 animate-spin" />
               Saving…
             </>
+          ) : preview && isTransfer ? (
+            "Record transfer"
           ) : preview ? (
             `Record — you earn ${formatPesos(preview.feePesos)}`
           ) : (

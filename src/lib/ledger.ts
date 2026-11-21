@@ -368,6 +368,13 @@ export interface EntryInput {
   /** Cash Out only. Never inferred — the operator answers it. */
   amountIncludesFee?: boolean;
   /**
+   * Wallet Transfer only. `platform` is where the money comes from and
+   * `transferTo` where it goes; either may be "Cash". `platformFeePesos` is
+   * what the platform charged for the move.
+   */
+  transferTo?: string | null;
+  platformFeePesos?: number;
+  /**
    * Stable across every retry of ONE Save tap. Hold it in a ref; generating it
    * inside the submit handler defeats the entire purpose, which is that a
    * double tap or a lost response cannot produce a second draft or a second
@@ -397,7 +404,8 @@ export type EntryPreview = EntryQuote;
  * page loading and Save. The gate reprices at confirm time and the gate wins.
  */
 export function previewEntry(
-  input: Pick<EntryInput, "transactionType" | "platform" | "amountPesos" | "amountIncludesFee">,
+  input: Pick<EntryInput,
+    "transactionType" | "platform" | "amountPesos" | "amountIncludesFee" | "transferTo" | "platformFeePesos">,
   rules: readonly FeeRule[],
 ): EntryPreview {
   return quoteEntry(
@@ -406,6 +414,8 @@ export function previewEntry(
       platform: input.platform,
       amountMinor: toMinor(input.amountPesos),
       amountIncludesFee: input.amountIncludesFee,
+      transferTo: input.transferTo ?? undefined,
+      platformFeeMinor: toMinor(input.platformFeePesos ?? 0),
     },
     rules,
   );
@@ -460,6 +470,8 @@ export async function createAndConfirmTransaction(input: EntryInput): Promise<En
       account_number: input.accountNumber ?? null,
       transaction_date: input.transactionDate ?? null,
       amount_includes_fee: input.amountIncludesFee === true,
+      transfer_to: input.transactionType === "Wallet Transfer" ? input.transferTo ?? null : undefined,
+      platform_fee: input.transactionType === "Wallet Transfer" ? input.platformFeePesos ?? 0 : undefined,
       idempotency_key: input.idempotencyKey,
       memo: input.memo ?? null,
     }),

@@ -54,6 +54,13 @@ export interface EntryQuoteInput {
    * inferring this was wrong on roughly one amount in fifty-one.
    */
   amountIncludesFee?: boolean;
+  /**
+   * Wallet Transfer only. `platform` is the source and `transferTo` the
+   * destination; either may be "Cash". `platformFeeMinor` is what the platform
+   * charged for the move, as the operator read it off the receipt.
+   */
+  transferTo?: string;
+  platformFeeMinor?: Minor;
 }
 
 /**
@@ -69,6 +76,24 @@ export function quoteEntry(
   input: EntryQuoteInput,
   rules: readonly FeeRule[],
 ): EntryQuote {
+  // A Wallet Transfer is the shop moving its own float. It earns nothing, so
+  // no fee rule applies to it and none is looked up: the only fee on it is the
+  // platform's own charge, which is a cost, not earnings.
+  if (input.transactionType === "Wallet Transfer") {
+    return {
+      feeMinor: 0,
+      feePesos: 0,
+      postings: buildPostings("Wallet Transfer", {
+        amountMinor: input.amountMinor,
+        feeMinor: 0,
+        platform: input.platform,
+        transferTo: input.transferTo,
+        platformFeeMinor: input.platformFeeMinor ?? 0,
+      }),
+      rule: null,
+    };
+  }
+
   // Profit Remittance moves cash to the owner and never touches a wallet, so a
   // platform on it would be recorded and never read.
   const platform = input.transactionType === "Profit Remittance" ? "Unknown" : input.platform;

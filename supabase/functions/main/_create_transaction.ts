@@ -26,6 +26,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import { resolveMembership } from "./_shared/operator.ts";
 import { resolveRuleAt } from "./_shared/fee_rules.ts";
+import { MAX_PLATFORM_FEE_PESOS, readPlatformFee, resolveTransferAccounts } from "./_shared/transfer.ts";
 import { quoteEntry } from "../_core/entry.ts";
 import { LedgerError } from "../_core/postings.ts";
 import { toMinor, toPesos } from "../_core/money.ts";
@@ -44,6 +45,10 @@ interface RequestBody {
   transaction_date?: string | null;
   /** Cash Out only; see FeeOptions in _core/fees.ts. */
   amount_includes_fee?: boolean;
+  /** Wallet Transfer only: the destination, a wallet name or "Cash". */
+  transfer_to?: string | null;
+  /** Wallet Transfer only: what the platform charged for the move, in pesos. */
+  platform_fee?: number | null;
   /**
    * Required. Stable across retries of ONE Save tap.
    *
@@ -134,7 +139,11 @@ export async function handleCreateTransaction(req: Request): Promise<Response> {
     // Profit Remittance moves cash to the owner and touches no platform wallet,
     // so a platform on it would be recorded and never used — a value in the
     // database that means nothing is worse than a missing one.
-    const needsPlatform = txType !== "Profit Remittance";
+    // A Wallet Transfer names two accounts, either of which may be the drawer,
+    // so its source is checked together with its destination further down
+    // rather than as "a platform this operator holds".
+    const isTransfer = txType === "Wallet Transfer";
+    const needsPlatform = txType !== "Profit Remittance" && !isTransfer;
     let platform = "Unknown";
 
     if (needsPlatform) {
@@ -193,8 +202,31 @@ export async function handleCreateTransaction(req: Request): Promise<Response> {
     }
 
     // ----- price it, as a preview -----
-    const rule = await resolveRuleAt(admin, operator.id, txType, platform, transactionDate);
-    if (!rule) {
+    let transferTo: string | null = null;
+    let platformFeePesos = 0;
+    if (isTransfer) {
+      const accounts = await resolveTransferAccounts(admin, operator.id, body.platform, body.transfer_to);
+      if (!accounts.ok) {
+        return jsonResponse(req, { error: accounts.error, code: accounts.code }, 422);
+      }
+      platform = accounts.from;
+      transferTo = accounts.to;
+
+      const fee = readPlatformFee(body.platform_fee);
+      if (fee === null) {
+        return jsonResponse(req, {
+          error: `The platform's fee must be between 0 and ${MAX_PLATFORM_FEE_PESOS} pesos`,
+          code: "invalid_platform_fee",
+        }, 400);
+      }
+      platformFeePesos = fee;
+    }
+
+    // A transfer earns nothing, so it has no fee rule and needs none.
+    const rule = isTransfer
+      ? null
+      : await resolveRuleAt(admin, operator.id, txType, platform, transactionDate);
+    if (!rule && !isTransfer) {
       return jsonResponse(req, {
         error: `No fee rule for "${txType}" on "${platform}" as at ${transactionDate}`,
         code: "no_fee_rule",
@@ -219,8 +251,10 @@ export async function handleCreateTransaction(req: Request): Promise<Response> {
           platform,
           amountMinor,
           amountIncludesFee: body.amount_includes_fee === true,
+          transferTo: transferTo ?? undefined,
+          platformFeeMinor: toMinor(platformFeePesos),
         },
-        [rule],
+        rule ? [rule] : [],
       );
       feeMinor = quote.feeMinor;
       postings = quote.postings;
@@ -249,6 +283,8 @@ export async function handleCreateTransaction(req: Request): Promise<Response> {
         entry_source: "manual",
         idempotency_key: idempotencyKey,
         image_url: null,
+        transfer_to: transferTo,
+        platform_fee: platformFeePesos,
       })
       .select("id, transaction_type, platform, amount, reference_number, transaction_date, status")
       .single();

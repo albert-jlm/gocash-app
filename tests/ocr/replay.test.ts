@@ -30,7 +30,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { loadCases } from "./loader.ts";
 import { legsOf, normaliseLegs } from "./pipeline.ts";
 import { effectiveExpectation, evaluate, formatSummary, summarise } from "./report.ts";
-import { TRANSACTION_TYPES } from "../../supabase/functions/_core/types.ts";
+import { CUSTOMER_TRANSACTION_TYPES } from "../../supabase/functions/_core/types.ts";
 import type { ReplayOutcome } from "./types.ts";
 
 const CASES = loadCases();
@@ -84,7 +84,7 @@ describe("the fixture set covers the space", () => {
 
   it("all six transaction types appear as a receipt's truth", () => {
     const covered = new Set(CASES.map((c) => c.spec.expected.transaction_type));
-    for (const t of TRANSACTION_TYPES) {
+    for (const t of CUSTOMER_TRANSACTION_TYPES) {
       expect(covered.has(t), `no fixture whose truth is "${t}"`).toBe(true);
     }
   });

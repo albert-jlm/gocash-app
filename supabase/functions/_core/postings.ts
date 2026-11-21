@@ -17,6 +17,7 @@
  */
 
 import { type Minor, MAX_AMOUNT_MINOR } from "./money.ts";
+import { CASH_ACCOUNT_NAME } from "./types.ts";
 import type { AccountRef, Posting } from "./types.ts";
 
 export interface EntryInput {
@@ -26,6 +27,13 @@ export interface EntryInput {
   feeMinor: Minor;
   /** Platform code, e.g. "GCash". */
   platform: string;
+  /**
+   * Wallet Transfer only: where the money goes. A wallet name, or "Cash" for
+   * the drawer. `platform` is where it comes from, and may also be "Cash".
+   */
+  transferTo?: string;
+  /** Wallet Transfer only: what the platform charged to move it. */
+  platformFeeMinor?: Minor;
 }
 
 export class LedgerError extends Error {}
@@ -241,6 +249,48 @@ export function profitRemittance({ amountMinor }: Pick<EntryInput, "amountMinor"
   ]);
 }
 
+/**
+ * WALLET TRANSFER — the shop moves its own float.
+ *
+ * GCash runs low, so 5,000 is sent over from Maya. Or the drawer is full and
+ * 10,000 is deposited into a wallet. Nobody was served and nothing was earned.
+ *
+ * `amountMinor` is what ARRIVES. If the platform charged for the move, the
+ * source goes down by the amount plus that fee, and the fee is recorded as a
+ * cost of its own. It is NOT taken out of revenue: earnings stay what
+ * customers paid (decided by the operator, 2026-11-21).
+ *
+ *   source       -(amount + platform fee)
+ *   destination  +amount
+ *   expense      +platform fee
+ */
+export function walletTransfer(
+  { amountMinor, platform, transferTo, platformFeeMinor = 0 }: EntryInput,
+): Posting[] {
+  assertSaneInput("walletTransfer", amountMinor, platformFeeMinor, { feeDeducted: false });
+  if (amountMinor === 0) {
+    throw new LedgerError("walletTransfer: the amount moved must be more than zero");
+  }
+  const from = (platform ?? "").trim();
+  const to = (transferTo ?? "").trim();
+  if (!from || !to) {
+    throw new LedgerError("walletTransfer: needs both where the money comes from and where it goes");
+  }
+  if (from.toLowerCase() === to.toLowerCase()) {
+    throw new LedgerError("walletTransfer: the source and the destination are the same account");
+  }
+  const ref = (name: string): AccountRef =>
+    name.toLowerCase() === CASH_ACCOUNT_NAME.toLowerCase()
+      ? { kind: "cash" }
+      : { kind: "platform", platform: name };
+
+  return balanced([
+    { account: ref(from), amount: -(amountMinor + platformFeeMinor) },
+    { account: ref(to), amount: amountMinor },
+    { account: { kind: "expense" }, amount: platformFeeMinor },
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -252,6 +302,7 @@ const BUILDERS: Record<string, (i: EntryInput) => Posting[]> = {
   "Bills Payment": billsPayment,
   "Bank Transfer": bankTransfer,
   "Profit Remittance": (i) => profitRemittance(i),
+  "Wallet Transfer": walletTransfer,
 };
 
 /** Build the entry for a transaction type. Throws on an unknown type. */

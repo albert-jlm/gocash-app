@@ -13,11 +13,11 @@
 import { describe, it, expect } from "vitest";
 import { quoteEntry } from "../entry.ts";
 import { toMinor } from "../money.ts";
-import { TRANSACTION_TYPES } from "../types.ts";
+import { CUSTOMER_TRANSACTION_TYPES } from "../types.ts";
 import type { FeeRule, TransactionType } from "../types.ts";
 
 /** The confirmed pricing: ceil(max(amount x 2%, PHP 5)). */
-const RULES: FeeRule[] = TRANSACTION_TYPES.map((t) => ({
+const RULES: FeeRule[] = CUSTOMER_TRANSACTION_TYPES.map((t) => ({
   transaction_type: t,
   platform: "all",
   rate_bps: 200,
@@ -68,7 +68,7 @@ describe("quoteEntry", () => {
     type === "Cash Out" && pesos <= 5;
 
   it("produces legs that sum to zero, for every type and amount", () => {
-    for (const type of TRANSACTION_TYPES) {
+    for (const type of CUSTOMER_TRANSACTION_TYPES) {
       for (const pesos of AMOUNTS) {
         if (isRefused(type, pesos)) continue;
         const { postings } = quote(type, pesos);
@@ -79,7 +79,7 @@ describe("quoteEntry", () => {
   });
 
   it("never emits a zero leg, which gocash.postings rejects", () => {
-    for (const type of TRANSACTION_TYPES) {
+    for (const type of CUSTOMER_TRANSACTION_TYPES) {
       for (const pesos of AMOUNTS) {
         if (isRefused(type, pesos)) continue;
         for (const p of quote(type, pesos).postings) {
@@ -199,7 +199,7 @@ describe("quoteEntry", () => {
   it("agrees with itself on the fee it reports and the fee it posts", () => {
     // The revenue leg IS the fee, negated. If these could differ the operator's
     // earnings would not match the figure the form promised them.
-    for (const type of TRANSACTION_TYPES) {
+    for (const type of CUSTOMER_TRANSACTION_TYPES) {
       for (const pesos of AMOUNTS) {
         if (isRefused(type, pesos)) continue;
         const q = quote(type, pesos);

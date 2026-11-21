@@ -27,6 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import { resolveMembership } from "./_shared/operator.ts";
 import { resolveRuleAt } from "./_shared/fee_rules.ts";
+import { MAX_PLATFORM_FEE_PESOS, readPlatformFee, resolveTransferAccounts } from "./_shared/transfer.ts";
 import { quoteEntry } from "../_core/entry.ts";
 import { toMinor, toPesos } from "../_core/money.ts";
 import { TRANSACTION_TYPES, isTransactionType } from "../_core/types.ts";
@@ -46,6 +47,9 @@ interface RequestBody {
     platform?: string;
     transaction_type?: string;
     amount?: number;
+    /** Wallet Transfer only. */
+    transfer_to?: string | null;
+    platform_fee?: number | null;
     account_number?: string | null;
     reference_number?: string | null;
     transaction_date?: string | null;
@@ -112,7 +116,7 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
       // One literal, not a concatenation: supabase-js parses this string at the
       // TYPE level, and a `+` defeats that, collapsing the row type to an error
       // union where every field access fails to compile.
-      .select("id, operator_id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status, edit_history")
+      .select("id, operator_id, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date, status, edit_history, transfer_to, platform_fee")
       .eq("id", body.transaction_id)
       .eq("operator_id", operator.id)   // belt and braces alongside RLS
       .single();
@@ -163,8 +167,9 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     const edits = body.edits ?? {};
     const wasEdited = Object.keys(edits).length > 0;
 
-    const platform = edits.platform ?? tx.platform;
+    let platform = edits.platform ?? tx.platform;
     const txType = edits.transaction_type ?? tx.transaction_type;
+    const isTransfer = txType === "Wallet Transfer";
     // `"amount" in edits`, not `??`. A client that sent NaN (which JSON turns
     // into null) used to fall back silently to the AI's figure; an amount the
     // operator supplied is either usable or refused.
@@ -194,7 +199,31 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     // The old code fell back to "GCash" whenever the platform was Unknown,
     // silently attributing a transaction to a wallet the operator might not
     // even have. Unknown now means the gate asks.
-    if (txType !== "Profit Remittance") {
+    //
+    // A Wallet Transfer is checked differently: it has two ends, and either
+    // may be the cash drawer.
+    let transferTo: string | null = null;
+    let platformFeePesos = 0;
+    if (isTransfer) {
+      const accounts = await resolveTransferAccounts(
+        admin, operator.id, platform,
+        "transfer_to" in edits ? edits.transfer_to : tx.transfer_to,
+      );
+      if (!accounts.ok) {
+        return jsonResponse(req, { error: accounts.error, code: accounts.code }, 422);
+      }
+      platform = accounts.from;
+      transferTo = accounts.to;
+
+      const fee = readPlatformFee("platform_fee" in edits ? edits.platform_fee : Number(tx.platform_fee ?? 0));
+      if (fee === null) {
+        return jsonResponse(req, {
+          error: `The platform's fee must be between 0 and ${MAX_PLATFORM_FEE_PESOS} pesos`,
+          code: "invalid_platform_fee",
+        }, 400);
+      }
+      platformFeePesos = fee;
+    } else if (txType !== "Profit Remittance") {
       const { data: account } = await admin
         .from("accounts").select("id")
         .eq("operator_id", operator.id).eq("kind", "platform")
@@ -214,9 +243,12 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     // are effective-dated precisely so amending an old transaction later does
     // not silently reprice it at the current rate.
     const pricedAt = transactionDate ?? new Date().toISOString();
-    const rule = await resolveRuleAt(admin, operator.id, txType, platform, pricedAt);
+    // A transfer earns nothing, so it has no fee rule and needs none.
+    const rule = isTransfer
+      ? null
+      : await resolveRuleAt(admin, operator.id, txType, platform, pricedAt);
 
-    if (!rule) {
+    if (!rule && !isTransfer) {
       return jsonResponse(req, {
         error: `No fee rule for "${txType}" on "${platform}" as at ${pricedAt}`,
         code: "no_fee_rule",
@@ -237,8 +269,10 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
           platform,
           amountMinor,
           amountIncludesFee: body.amount_includes_fee === true,
+          transferTo: transferTo ?? undefined,
+          platformFeeMinor: toMinor(platformFeePesos),
         },
-        [rule],
+        rule ? [rule] : [],
       );
       feeMinor = quote.feeMinor;
       postings = quote.postings;
@@ -279,6 +313,10 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
         reference_number: referenceNumber ?? null,
         transaction_date: transactionDate ?? null,
         was_edited: wasEdited,
+        // Null and zero for everything that is not a transfer, so changing a
+        // draft's type away from Wallet Transfer clears them.
+        transfer_to: transferTo,
+        platform_fee: platformFeePesos,
         ...(wasEdited
           ? {
               edit_record: {
