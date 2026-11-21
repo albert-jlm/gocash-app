@@ -49,7 +49,7 @@ const BUILT_IN = new Set(["GCash", "MariBank", "Maya", "Cash"]);
 // ---------------------------------------------------------------------------
 
 export default function PlatformsSettingsPage() {
-  const { operatorId, loading: authLoading } = useAuthGuard();
+  const { operatorId, loading: authLoading } = useAuthGuard({ ownerOnly: true });
 
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
   const [dataLoading, setDataLoading] = useState(true);

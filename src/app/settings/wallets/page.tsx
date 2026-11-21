@@ -79,7 +79,7 @@ interface AccountRow extends LedgerAccount {
 // ---------------------------------------------------------------------------
 
 export default function WalletsSettingsPage() {
-  const { operatorId, loading: authLoading } = useAuthGuard();
+  const { operatorId, loading: authLoading } = useAuthGuard({ ownerOnly: true });
 
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [dataLoading, setDataLoading] = useState(true);

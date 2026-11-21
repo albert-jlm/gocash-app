@@ -43,6 +43,9 @@ async function mock(page) {
     const p = u.pathname;
     if (p.startsWith('/auth/v1/user')) return json(user);
     if (p.startsWith('/auth/v1/')) return json(session);
+    if (p.endsWith('/rpc/my_membership')) return json([{ operator_id: 'op1', role: process.env.PREVIEW_ROLE || 'owner' }]);
+    if (p.endsWith('/functions/v1/manage-staff')) return json({ owner_email: 'owner@example.test', staff: [{ id: 'm1', email: 'tess@example.test', role: 'staff' }] });
+    if (p.endsWith('/functions/v1/upload-keys')) return json({ keys: [{ id: 'k1', label: 'Shop iPhone', key_prefix: 'gck_Ab3xYz', created_at: iso(3000), last_used_at: iso(30) }] });
     if (p.endsWith('/operators')) return json(single ? { id: 'op1', telegram_chat_id: null, settings: {} } : [{ id: 'op1' }]);
     if (p.endsWith('/account_balances')) {
       let rows = balances; const kind = u.searchParams.get('kind');

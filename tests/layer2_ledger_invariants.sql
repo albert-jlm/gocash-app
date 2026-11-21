@@ -939,3 +939,118 @@ SELECT harness.expect_error('layer2', '2.30 a wallet holding money cannot be ret
                                     'aaaa0000-0000-0000-0000-000000000001')$s$
   ],
   'still holds a balance');
+
+-- ---------------------------------------------------------------------------
+-- 2.31–2.36 — staff logins (20260926000001).
+--
+-- These impersonate real users: the role is the browser role and the `sub`
+-- claim is the login. Maria (…0a) owns operator 1111. Tess (…0c) is added as
+-- her staff. Olga (…0d) has a login and belongs to nothing.
+-- ---------------------------------------------------------------------------
+INSERT INTO auth.users (id, email) VALUES
+  ('f0000000-0000-0000-0000-00000000000c', 'tess@example.test'),
+  ('f0000000-0000-0000-0000-00000000000d', 'olga@example.test');
+
+INSERT INTO gocash.operator_members (operator_id, user_id, email) VALUES
+  ('11111111-1111-1111-1111-111111111111',
+   'f0000000-0000-0000-0000-00000000000c', 'tess@example.test');
+
+SELECT harness.expect_ok('layer2', '2.31 staff see the shop''s books and are reported as staff',
+  'A staff login that cannot read the operator, its balances or its '
+  'transactions is sent to onboarding and given separate books.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims',
+         '{"role":"authenticated","sub":"f0000000-0000-0000-0000-00000000000c"}', true)$s$,
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$DO $do$
+       BEGIN
+         IF (SELECT count(*) FROM gocash.operators) <> 1 THEN
+           RAISE EXCEPTION 'staff should see exactly their shop, saw % operators',
+             (SELECT count(*) FROM gocash.operators);
+         END IF;
+         IF (SELECT count(*) FROM gocash.account_balances) < 4 THEN
+           RAISE EXCEPTION 'staff cannot see the shop''s balances';
+         END IF;
+         IF (SELECT role FROM gocash.my_membership()) IS DISTINCT FROM 'staff' THEN
+           RAISE EXCEPTION 'my_membership did not report staff';
+         END IF;
+         IF gocash.is_operator_owner('11111111-1111-1111-1111-111111111111') THEN
+           RAISE EXCEPTION 'staff were reported as the owner';
+         END IF;
+       END
+       $do$$s$
+  ]);
+
+SELECT harness.expect_ok('layer2', '2.32 the owner is reported as owner',
+  'The owner is operators.user_id, not a member row. Everything owner-only '
+  'depends on this answer.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims',
+         '{"role":"authenticated","sub":"f0000000-0000-0000-0000-00000000000a"}', true)$s$,
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$DO $do$
+       BEGIN
+         IF (SELECT role FROM gocash.my_membership()) IS DISTINCT FROM 'owner'
+            OR NOT gocash.is_operator_owner('11111111-1111-1111-1111-111111111111') THEN
+           RAISE EXCEPTION 'the owner was not recognised';
+         END IF;
+         IF (SELECT count(*) FROM gocash.operators) <> 1 THEN
+           RAISE EXCEPTION 'the owner saw % operators', (SELECT count(*) FROM gocash.operators);
+         END IF;
+       END
+       $do$$s$
+  ]);
+
+SELECT harness.expect_ok('layer2', '2.33 a login that belongs to nothing sees nothing',
+  'Adding members must not widen what an unrelated login can read.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims',
+         '{"role":"authenticated","sub":"f0000000-0000-0000-0000-00000000000d"}', true)$s$,
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$DO $do$
+       BEGIN
+         IF (SELECT count(*) FROM gocash.operators) <> 0
+            OR (SELECT count(*) FROM gocash.account_balances) <> 0
+            OR (SELECT count(*) FROM gocash.transactions) <> 0
+            OR (SELECT count(*) FROM gocash.operator_members) <> 0
+            OR (SELECT count(*) FROM gocash.my_membership()) <> 0 THEN
+           RAISE EXCEPTION 'an outsider could read another shop''s data';
+         END IF;
+       END
+       $do$$s$
+  ]);
+
+SELECT harness.expect_error('layer2', '2.34 staff cannot change fees',
+  'set_fee_rule is callable from the browser and its own check passes for any '
+  'member. The trigger is the only thing keeping pricing with the owner.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims',
+         '{"role":"authenticated","sub":"f0000000-0000-0000-0000-00000000000c"}', true)$s$,
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$SELECT gocash.set_fee_rule('11111111-1111-1111-1111-111111111111',
+                                 'Cash In', 'GCash', 0, 0, 'ceil_unit')$s$
+  ],
+  'only the owner can change fees');
+
+SELECT harness.expect_error('layer2', '2.35 a login with its own books cannot be added as staff',
+  'One login, one set of books. Otherwise a screenshot from that person has '
+  'two places it could belong.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)$s$,
+    $s$SELECT gocash.add_staff('11111111-1111-1111-1111-111111111111',
+                              'f0000000-0000-0000-0000-00000000000b',
+                              'nena@example.test', NULL)$s$
+  ],
+  'already has its own books');
+
+SELECT harness.expect_error('layer2', '2.36 staff cannot add staff',
+  'add_staff is for the server, after it has checked the caller is the owner.',
+  ARRAY[
+    $s$SELECT set_config('request.jwt.claims',
+         '{"role":"authenticated","sub":"f0000000-0000-0000-0000-00000000000c"}', true)$s$,
+    $s$SET LOCAL ROLE authenticated$s$,
+    $s$SELECT gocash.add_staff('11111111-1111-1111-1111-111111111111',
+                              'f0000000-0000-0000-0000-00000000000d',
+                              'olga@example.test', NULL)$s$
+  ],
+  'permission denied');

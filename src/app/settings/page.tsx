@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/app-shell";
 
 export default function SettingsPage() {
-  const { session, loading } = useAuthGuard();
+  const { session, role, loading } = useAuthGuard();
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
@@ -44,11 +44,16 @@ export default function SettingsPage() {
           {[
             // Balances are derived from the ledger now, so this screen reconciles
             // against a count instead of letting one be typed over.
-            { label: "Wallets",          href: "/settings/wallets",       desc: "Check balances against a count" },
-            { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated" },
-            { label: "Platforms",        href: "/settings/platforms",     desc: "Manage GCash, MariBank, and more" },
-            { label: "Notifications",    href: "/settings/notifications", desc: "Telegram alerts (coming soon)" },
-          ].map(({ label, href, desc }) => (
+            { label: "Wallets",          href: "/settings/wallets",       desc: "Check balances against a count", ownerOnly: true },
+            { label: "Profit Settings",  href: "/settings/rules",         desc: "Edit how earnings are calculated", ownerOnly: true },
+            { label: "Platforms",        href: "/settings/platforms",     desc: "Add or remove wallets", ownerOnly: true },
+            { label: "Staff",            href: "/settings/staff",         desc: "Who else can record transactions", ownerOnly: true },
+            { label: "Share from phone", href: "/settings/share",         desc: "Send screenshots from the share sheet", ownerOnly: false },
+            { label: "Notifications",    href: "/settings/notifications", desc: "Telegram alerts (coming soon)", ownerOnly: true },
+          // Staff see only what they can use. The server refuses the rest
+          // regardless of what is shown here.
+          ].filter((item) => role === "owner" || !item.ownerOnly)
+           .map(({ label, href, desc }) => (
             <Link key={href} href={href} className="flex items-center justify-between px-4 py-4">
               <div>
                 <p className="text-sm font-medium">{label}</p>
@@ -61,7 +66,9 @@ export default function SettingsPage() {
 
         <div className="mt-4 bg-white/[0.05] rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Signed in as</p>
+            <p className="text-xs text-muted-foreground">
+              Signed in as {role === "staff" ? "staff" : "owner"}
+            </p>
             <p className="text-sm font-medium truncate">{session?.user.email ?? "—"}</p>
           </div>
           <button

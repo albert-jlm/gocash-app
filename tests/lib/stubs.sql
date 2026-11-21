@@ -35,6 +35,13 @@ CREATE TABLE auth.users (
   email text
 );
 
+-- Reads the `sub` claim, as the real auth.uid() does. NULL when no claims are
+-- set, which is every assertion that does not impersonate someone. Returning
+-- a constant NULL here made it impossible to test RLS as an actual user.
 CREATE FUNCTION auth.uid() RETURNS uuid
   LANGUAGE sql STABLE
-  AS $f$ SELECT NULL::uuid $f$;
+  AS $f$
+    SELECT (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid
+  $f$;
+GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated, service_role;

@@ -52,7 +52,13 @@ export default function LoginPage() {
     setLoading(false);
 
     if (otpError) {
-      setError(otpError.message);
+      // Signups are closed: only emails the owner has added can sign in. The
+      // service's own wording for that is "Signups not allowed for otp".
+      setError(
+        /signups? not allowed/i.test(otpError.message)
+          ? "This email doesn't have access yet. Ask the shop owner to add it under Settings → Staff."
+          : otpError.message
+      );
     } else {
       setSent(true);
     }

@@ -29,6 +29,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
+import { resolveMembership, refuseUnlessOwner } from "./_shared/operator.ts";
 import { LedgerError, reconcile } from "../_core/postings.ts";
 import { toMinor, toPesos, type Minor } from "../_core/money.ts";
 import type { AccountKind, AccountRef, Posting } from "../_core/types.ts";
@@ -147,15 +148,13 @@ export async function handleReconcileAccount(req: Request): Promise<Response> {
 
     if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
 
-    const { data: operator, error: opError } = await userClient
-      .from("operators")
-      .select("id")
-      .eq("user_id", user.id)
-      .single();
-
-    if (opError || !operator) {
+    const membership = await resolveMembership(userClient);
+    if (!membership) {
       return jsonResponse(req, { error: "Operator record not found" }, 404);
     }
+    const operator = { id: membership.operatorId };
+    const refusal = refuseUnlessOwner(req, membership);
+    if (refusal) return refusal;
 
     let body: RequestBody;
     try {

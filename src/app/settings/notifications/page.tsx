@@ -35,7 +35,7 @@ const DEFAULTS: NotifSettings = {
 // ---------------------------------------------------------------------------
 
 export default function NotificationsSettingsPage() {
-  const { operatorId, loading: authLoading } = useAuthGuard();
+  const { operatorId, loading: authLoading } = useAuthGuard({ ownerOnly: true });
 
   const [settings, setSettings] = useState<NotifSettings>(DEFAULTS);
   const [dataLoading, setDataLoading] = useState(true);

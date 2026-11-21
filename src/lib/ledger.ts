@@ -616,3 +616,76 @@ export async function addPlatform(name: string): Promise<PlatformAccountRow> {
 export async function retirePlatform(accountId: string): Promise<void> {
   await callManagePlatform({ action: "retire", account_id: accountId });
 }
+
+// ---------------------------------------------------------------------------
+// Staff, and upload keys for sharing from a phone
+// ---------------------------------------------------------------------------
+
+async function callFunction(name: string, body: Record<string, unknown>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not signed in");
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${name}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error ?? "Something went wrong");
+  return data;
+}
+
+export interface StaffMember {
+  id: string;
+  email: string;
+  role: "staff";
+  created_at?: string;
+}
+
+export async function listStaff(): Promise<{ ownerEmail: string | null; staff: StaffMember[] }> {
+  const data = await callFunction("manage-staff", { action: "list" });
+  return { ownerEmail: data.owner_email ?? null, staff: data.staff ?? [] };
+}
+
+/** Creates the person's login if needed and gives it staff access to this shop. */
+export async function addStaff(email: string): Promise<StaffMember> {
+  const data = await callFunction("manage-staff", { action: "add", email });
+  return data.member as StaffMember;
+}
+
+/** Removes their access, their upload keys and their login. */
+export async function removeStaff(memberId: string): Promise<void> {
+  await callFunction("manage-staff", { action: "remove", member_id: memberId });
+}
+
+export interface UploadKey {
+  id: string;
+  label: string;
+  key_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export async function listUploadKeys(): Promise<UploadKey[]> {
+  const data = await callFunction("upload-keys", { action: "list" });
+  return data.keys ?? [];
+}
+
+/** `key` is returned this once and cannot be shown again. */
+export async function createUploadKey(label: string): Promise<{ key: string; record: UploadKey }> {
+  const data = await callFunction("upload-keys", { action: "create", label });
+  return { key: data.key as string, record: data.record as UploadKey };
+}
+
+export async function revokeUploadKey(keyId: string): Promise<void> {
+  await callFunction("upload-keys", { action: "revoke", key_id: keyId });
+}
+
+/** Where a phone's share sheet sends screenshots. */
+export const SHARE_UPLOAD_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/share-upload`;

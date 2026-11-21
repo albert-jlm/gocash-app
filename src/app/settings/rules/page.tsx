@@ -85,7 +85,7 @@ interface Rule {
 // ---------------------------------------------------------------------------
 
 export default function RulesSettingsPage() {
-  const { operatorId, loading: authLoading } = useAuthGuard();
+  const { operatorId, loading: authLoading } = useAuthGuard({ ownerOnly: true });
 
   const [rules, setRules] = useState<Rule[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);

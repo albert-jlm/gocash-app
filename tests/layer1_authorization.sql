@@ -68,6 +68,15 @@ INSERT INTO harness.execute_allowlist (routine, client_role, justification) VALU
    'tables calls it, and policies run as the querying role, so authenticated '
    'MUST have EXECUTE or every SELECT on accounts/entries/postings fails.'),
 
+  ('gocash.is_operator_owner(uuid)', 'authenticated',
+   'SECURITY DEFINER. Answers "do I own this id?" for auth.uid() only. Called '
+   'by the operator_members policy and the fee_rules owner trigger.'),
+
+  ('gocash.my_membership()', 'authenticated',
+   'SECURITY DEFINER, no arguments. Returns the caller''s own operator id and '
+   'role (owner or staff) for auth.uid(), and nothing about anyone else. The '
+   'app and the Edge Functions use it to find whose books a login records in.'),
+
   ('gocash.set_fee_rule(uuid,text,text,integer,bigint,text)', 'authenticated',
    'SECURITY DEFINER, but unlike the six functions in Audit #5a it checks the '
    'caller: gocash.is_my_operator(p_operator_id) OR the role claim in the '

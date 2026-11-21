@@ -35,11 +35,22 @@ test. Nothing is merged to `main` until `deploy.yml` is retargeted.
 - [ ] **Android:** register the installed web app as a share target (manifest
       entry plus code to receive the shared image), landing on the confirm
       screen.
-- [ ] **iPhone:** a per-device upload key that can only create drafts, and an
-      Apple Shortcut ("Send to GoCash") that appears in the share sheet,
-      uploads the image and shows a notification. The draft is confirmed from
-      the pending list in the app.
-- [ ] Written setup steps for each phone.
+- [x] **iPhone:** upload keys (Settings → Share from phone) and the
+      `share-upload` endpoint. The Shortcut steps are on that screen; the
+      operator builds it on the phone. Not yet run from a real iPhone.
+- [ ] Written setup steps for Android (after the share target exists).
+
+### Staff logins (added 2026-11-21)
+
+- [x] Owner and staff roles. The owner adds staff by email under Settings →
+      Staff; staff record and view, and cannot void, reconcile, change fees or
+      wallets, or manage staff. Enforced on the server.
+
+### Blocker found 2026-11-21: the OpenAI account has no credits
+
+Reading a screenshot fails with `credit_balance_exhausted`. Until credits are
+added or local OCR replaces it, screenshots (from the app or the share sheet)
+return "can't be read right now" and transactions have to be typed.
 
 ## Step 4 — Deploy at home
 

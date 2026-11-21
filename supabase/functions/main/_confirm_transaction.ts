@@ -25,6 +25,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
+import { resolveMembership } from "./_shared/operator.ts";
 import { resolveRuleAt } from "./_shared/fee_rules.ts";
 import { quoteEntry } from "../_core/entry.ts";
 import { toMinor, toPesos } from "../_core/money.ts";
@@ -85,12 +86,11 @@ export async function handleConfirmTransaction(req: Request): Promise<Response> 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
 
-    const { data: operator, error: opError } = await userClient
-      .from("operators").select("id").eq("user_id", user.id).single();
-
-    if (opError || !operator) {
+    const membership = await resolveMembership(userClient);
+    if (!membership) {
       return jsonResponse(req, { error: "Operator record not found" }, 404);
     }
+    const operator = { id: membership.operatorId };
 
     const body: RequestBody = await req.json();
     if (!body.transaction_id) {

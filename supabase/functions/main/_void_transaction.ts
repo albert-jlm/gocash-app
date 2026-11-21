@@ -25,6 +25,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
+import { resolveMembership, refuseUnlessOwner } from "./_shared/operator.ts";
 import { TRANSACTION_IMAGE_BUCKET } from "./_shared/storage.ts";
 
 interface RequestBody {
@@ -56,12 +57,11 @@ export async function handleVoidTransaction(req: Request): Promise<Response> {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
 
-    const { data: operator, error: opError } = await userClient
-      .from("operators").select("id").eq("user_id", user.id).single();
-
-    if (opError || !operator) {
+    const membership = await resolveMembership(userClient);
+    if (!membership) {
       return jsonResponse(req, { error: "Operator record not found" }, 404);
     }
+    const operator = { id: membership.operatorId };
 
     const body: RequestBody = await req.json();
     if (!body.transaction_id) {
@@ -85,6 +85,14 @@ export async function handleVoidTransaction(req: Request): Promise<Response> {
       .single();
 
     if (txError || !tx) return jsonResponse(req, { error: "Transaction not found" }, 404);
+
+    // Staff can discard a draft (nothing was posted for it). Reversing a
+    // saved transaction is the owner's: the person who recorded it should not
+    // also be able to make it disappear from the totals.
+    if (tx.status !== "awaiting_confirm") {
+      const refusal = refuseUnlessOwner(req, membership);
+      if (refusal) return refusal;
+    }
 
     // One database transaction (gocash.void_transaction): the row is locked,
     // the reversal is posted from the original postings, and the status

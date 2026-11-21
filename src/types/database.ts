@@ -290,6 +290,11 @@ export interface Database {
         };
         Returns: string;
       };
+      /** The caller's own operator and role. Zero rows means "not set up". */
+      my_membership: {
+        Args: Record<string, never>;
+        Returns: { operator_id: string; role: "owner" | "staff" }[];
+      };
     };
   };
 }

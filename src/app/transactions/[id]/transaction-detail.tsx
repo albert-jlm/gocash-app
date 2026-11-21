@@ -53,7 +53,7 @@ export default function TransactionDetail({
   /** Arrived here because a screenshot of this same receipt was captured again. */
   duplicate?: boolean;
 }) {
-  const { operatorId, loading: authLoading } = useAuthGuard();
+  const { operatorId, role, loading: authLoading } = useAuthGuard();
   const router = useRouter();
 
   const [tx, setTx] = useState<TxDetail | null>(null);
@@ -231,7 +231,7 @@ export default function TransactionDetail({
             means reversing it and entering it again, so that is what is
             offered. The Edit button that used to be here opened the confirm
             form, which could only ever answer "already confirmed". */}
-        {tx.status === "confirmed" && !askVoid && (
+        {tx.status === "confirmed" && role === "owner" && !askVoid && (
           <button
             type="button"
             onClick={() => { setAskVoid(true); setVoidError(null); }}
@@ -242,7 +242,7 @@ export default function TransactionDetail({
           </button>
         )}
 
-        {tx.status === "confirmed" && askVoid && (
+        {tx.status === "confirmed" && role === "owner" && askVoid && (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 space-y-3">
             <p className="text-sm font-semibold">Void this transaction?</p>
             <p className="text-xs text-muted-foreground leading-relaxed">
@@ -278,6 +278,12 @@ export default function TransactionDetail({
               </button>
             </div>
           </div>
+        )}
+
+        {tx.status === "confirmed" && role === "staff" && (
+          <p className="text-xs text-muted-foreground text-center leading-relaxed px-2">
+            Recorded wrong? Ask the owner to void it, then enter it again.
+          </p>
         )}
 
         {isVoided && (

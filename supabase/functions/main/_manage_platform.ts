@@ -9,6 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
+import { resolveMembership, refuseUnlessOwner } from "./_shared/operator.ts";
 
 interface RequestBody {
   action: "add" | "retire";
@@ -40,12 +41,13 @@ export async function handleManagePlatform(req: Request): Promise<Response> {
     if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
 
     // The operator comes from the verified JWT, never from the body.
-    const { data: operator, error: opError } = await userClient
-      .from("operators").select("id").eq("user_id", user.id).single();
-
-    if (opError || !operator) {
+    const membership = await resolveMembership(userClient);
+    if (!membership) {
       return jsonResponse(req, { error: "Operator record not found" }, 404);
     }
+    const operator = { id: membership.operatorId };
+    const refusal = refuseUnlessOwner(req, membership);
+    if (refusal) return refusal;
 
     const body: RequestBody = await req.json();
 

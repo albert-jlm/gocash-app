@@ -3,6 +3,7 @@ import OpenAI from "https://esm.sh/openai@4";
 import { handleCors, jsonResponse } from "./_shared/cors.ts";
 import { extractFields, type ModelAnswer } from "./_shared/extraction.ts";
 import { resolveRuleAt } from "./_shared/fee_rules.ts";
+import { resolveMembership } from "./_shared/operator.ts";
 import { calculateFee, detectGrossAmount } from "../_core/fees.ts";
 import { toMinor, toPesos } from "../_core/money.ts";
 import { isTransactionType } from "../_core/types.ts";
@@ -18,7 +19,7 @@ import {
   sendTelegramMessage,
 } from "./_shared/telegram.ts";
 
-interface RequestBody {
+export interface RequestBody {
 image_base64: string;
 mime_type?: string;
 }
@@ -103,15 +104,70 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
     return jsonResponse(req, { error: "Method not allowed" }, 405);
   }
 
-  let uploadedImagePath: string | null = null;
-  // Annotated with the schema generic. `ReturnType<typeof createClient>` leaves
-  // SchemaName defaulted to 'public', so assigning a client built with
-  // `db: { schema: "gocash" }` fails to typecheck — the long-standing TS2322
-  // here, which the runtime never saw because the edge runtime strips types
-  // without checking them.
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return jsonResponse(req, { error: "Missing authorization" }, 401);
+
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } }, db: { schema: "gocash" } }
+    );
+
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
+
+    const membership = await resolveMembership(userClient);
+    if (!membership) {
+      return jsonResponse(req, { error: "Operator record not found" }, 404);
+    }
+
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { db: { schema: "gocash" } }
+    );
+
+    const body: RequestBody = await req.json();
+    return await processReceipt(req, adminClient, membership.operatorId, body);
+  } catch (err) {
+    console.error("Unhandled error in process-transaction:", err);
+    return jsonResponse(req, { error: "Internal server error" }, 500);
+  }
+}
+
+/**
+ * The receipt pipeline: store the image, read it, save a DRAFT.
+ *
+ * Shared by the two ways an image arrives: process-transaction (the app, with
+ * a login) and share-upload (a phone's share sheet, with an upload key). Both
+ * have already established WHICH operator; nothing here trusts the request for
+ * that. It moves no money: the draft waits for confirm-transaction.
+ */
+export async function processReceipt(
+  req: Request,
+  // The schema generic matters: without it the client type defaults to the
+  // 'public' schema and every query against gocash fails to typecheck.
   // deno-lint-ignore no-explicit-any
-  let adminClient: SupabaseClient<any, "gocash"> | null = null;
-  let operatorNotifications: OperatorNotificationRow | null = null;
+  adminClient: SupabaseClient<any, "gocash">,
+  operatorId: string,
+  body: RequestBody,
+): Promise<Response> {
+  const { data: operator, error: operatorError } = await adminClient
+    .from("operators")
+    .select("id, settings, telegram_chat_id")
+    .eq("id", operatorId)
+    .single();
+
+  if (operatorError || !operator) {
+    return jsonResponse(req, { error: "Operator record not found" }, 404);
+  }
+
+  let uploadedImagePath: string | null = null;
+  const operatorNotifications: OperatorNotificationRow = {
+    settings: operator.settings,
+    telegram_chat_id: operator.telegram_chat_id,
+  };
 
   async function cleanupUploadedImage() {
     if (!adminClient || !uploadedImagePath) return;
@@ -183,50 +239,8 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return jsonResponse(req, { error: "Missing authorization" }, 401);
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      {
-        global: { headers: { Authorization: authHeader } },
-        db: { schema: "gocash" },
-      }
-    );
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) return jsonResponse(req, { error: "Unauthorized" }, 401);
-
-    const { data: operator, error: opError } = await supabase
-      .from("operators")
-      .select("id, settings, telegram_chat_id")
-      .eq("user_id", user.id)
-      .single();
-
-    if (opError || !operator) {
-      return jsonResponse(req, { error: "Operator record not found" }, 404);
-    }
-
-    operatorNotifications = {
-      settings: operator.settings,
-      telegram_chat_id: operator.telegram_chat_id,
-    };
-
-    adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      {
-        db: { schema: "gocash" },
-      }
-    );
-
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: recentCount } = await supabase
+    const { count: recentCount } = await adminClient
       .from("transactions")
       .select("id", { count: "exact", head: true })
       .eq("operator_id", operator.id)
@@ -236,7 +250,6 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       return jsonResponse(req, { error: "Rate limit exceeded — max 50 transactions per hour" }, 429);
     }
 
-    const body: RequestBody = await req.json();
     if (!body.image_base64) {
       return jsonResponse(req, { error: "image_base64 is required" }, 400);
     }
@@ -333,7 +346,7 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
     }
 
     if (fields.referenceNumber) {
-      const { data: existing } = await supabase
+      const { data: existing } = await adminClient
         .from("transactions")
         .select(
           "id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date"
@@ -397,7 +410,7 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
 
     if (txError) {
       if (txError.code === "23505" && fields.referenceNumber) {
-        const { data: existing } = await supabase
+        const { data: existing } = await adminClient
           .from("transactions")
           .select("id, status, platform, transaction_type, amount, net_profit, account_number, reference_number, transaction_date")
           .eq("operator_id", operator.id)
@@ -477,8 +490,28 @@ export async function handleProcessTransaction(req: Request): Promise<Response> 
       },
     });
   } catch (err) {
-    console.error("Unhandled error in process-transaction:", err);
     await cleanupUploadedImage();
+
+    // The reading service refusing the request is not a bug in this code and
+    // should not read like one. Out of credit, a revoked key and rate limits
+    // all mean the same thing to the person holding the phone: screenshots
+    // cannot be read right now, so type this one in.
+    const e = err as { status?: number; code?: string; type?: string };
+    const readerDown = e?.code === "credit_balance_exhausted"
+      || e?.code === "insufficient_quota" || e?.type === "insufficient_quota"
+      || e?.code === "invalid_api_key"
+      || e?.status === 401 || e?.status === 429;
+
+    if (readerDown) {
+      console.error("Receipt reader unavailable:", e.status, e.code ?? e.type);
+      await notifyProcessingError("Receipt reading is unavailable");
+      return jsonResponse(req, {
+        error: "Screenshots can't be read right now. Type this one in instead",
+        code: "reader_unavailable",
+      }, 503);
+    }
+
+    console.error("Unhandled error in process-transaction:", err);
     await notifyProcessingError("Internal server error");
     return jsonResponse(req, { error: "Internal server error" }, 500);
   }

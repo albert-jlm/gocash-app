@@ -16,6 +16,9 @@ import { handleVoidTransaction } from "./_void_transaction.ts";
 import { handleReconcileAccount } from "./_reconcile_account.ts";
 import { handleProvisionOperator } from "./_provision_operator.ts";
 import { handleManagePlatform } from "./_manage_platform.ts";
+import { handleManageStaff } from "./_manage_staff.ts";
+import { handleUploadKeys } from "./_upload_keys.ts";
+import { handleShareUpload } from "./_share_upload.ts";
 
 // NOTE: the `mago-admin` route was removed. It belongs to MagoHQ, a separate
 // product that shares the OLD edge runtime; it lives in its own repo at
@@ -47,6 +50,13 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   // Add a wallet after signup, or retire one. The browser cannot write
   // gocash.accounts, so this is the only way the chart of accounts changes.
   "manage-platform": handleManagePlatform,
+  // The owner gives other logins access to the shop's books, as staff.
+  "manage-staff": handleManageStaff,
+  // Keys for a phone's share sheet. Create, list, revoke.
+  "upload-keys": handleUploadKeys,
+  // A screenshot from the share sheet, authenticated by an upload key rather
+  // than a login. Creates a draft and nothing else.
+  "share-upload": handleShareUpload,
 };
 
 // `update-transaction` is deliberately gone. It aliased confirm-transaction

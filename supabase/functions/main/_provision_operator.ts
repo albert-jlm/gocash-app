@@ -362,6 +362,22 @@ export async function handleProvisionOperator(req: Request): Promise<Response> {
     // caller's own row would otherwise send us into the RPC to collide with
     // `operators_user_id_idx` and surface as a 500.
     // -----------------------------------------------------------------------
+    // A staff login belongs to someone else's shop. Letting it through here
+    // would give it a second, separate set of books.
+    const { data: staffOf } = await adminClient
+      .from("operator_members")
+      .select("operator_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (staffOf) {
+      return jsonResponse(req, {
+        error: "This login already has staff access to a shop.",
+        code: "ALREADY_PROVISIONED",
+        operator_id: staffOf.operator_id,
+      }, 409);
+    }
+
     const { data: existing, error: existingError } = await adminClient
       .from("operators")
       .select("id")
