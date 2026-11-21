@@ -46,11 +46,46 @@ test. Nothing is merged to `main` until `deploy.yml` is retargeted.
       Staff; staff record and view, and cannot void, reconcile, change fees or
       wallets, or manage staff. Enforced on the server.
 
-### Blocker found 2026-11-21: the OpenAI account has no credits
+### Receipt reading is local (2026-11-21)
 
-Reading a screenshot fails with `credit_balance_exhausted`. Until credits are
-added or local OCR replaces it, screenshots (from the app or the share sheet)
-return "can't be read right now" and transactions have to be typed.
+Screenshots are read on the homelab: an OCR service (`~/homelab/gocash/ocr/`,
+RapidOCR with the English model, capped at 2 cores) returns the text, and
+`supabase/functions/main/_shared/receipt_rules.ts` turns it into fields.
+`RECEIPT_READER=local` is the default; `openai` still exists but that account
+has no credit. An unrecognised screen is held for the operator; an image with
+no receipt on it is refused.
+
+Evidence, on the operator's own screenshots (kept outside this repo in
+`~/gocash-receipt-samples/`, with answer keys transcribed by eye):
+
+- Engines compared on 47 screenshots, as-is, colour-inverted and
+  shrunk-and-JPEG: RapidOCR read every amount, reference and date in all
+  three; Tesseract dropped 2–5 dates and references; EasyOCR was slower and
+  missed amounts; Baidu's PP-OCRv6 (tiny and small) tied RapidOCR.
+- Rules: a second batch of 23 was read before anyone looked at it. Nothing was
+  filled in wrong; 5 fields were left empty, from two layouts since added.
+  All 53 supported receipts in both sets now read correctly, with either
+  RapidOCR model. `pnpm run test:ocr` reruns this where the samples exist.
+
+Known limits: no real dark-mode sample (it was simulated); no GCash load,
+GCash bills or GCash cash-in-from-bank sample; bank apps (BPI, RCBC) are not
+recognised and come back for the operator to fill in.
+
+### Next: transfers between the shop's own wallets
+
+Decided 2026-11-21. A screenshot shows which way money moved, not why. Moving
+float between the shop's own wallets is common and must not be recorded as a
+customer transaction with a fee.
+
+- [ ] Transaction type "Wallet Transfer": source down, destination up, no
+      earnings. Covers wallet to wallet, wallet to drawer, drawer to wallet.
+- [ ] A platform's fee for the move is its own cost account. It does NOT
+      reduce earnings.
+- [ ] A list of the shop's own numbers and accounts, so a receipt whose other
+      side is one of them is read as a transfer. Replaces the hardcoded numbers.
+- [ ] Recognise the second screenshot of the same transfer as its other half.
+- The shop's own bills, paid from a shop wallet, are ordinary Bills Payments
+  at the normal fee. No special handling.
 
 ## Step 4 — Deploy at home
 

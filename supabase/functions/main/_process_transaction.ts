@@ -357,6 +357,17 @@ export async function processReceipt(
       const read = readReceipt(ocr);
       // Which rule matched, and nothing from the receipt itself.
       console.log(`receipt read locally: layout=${read.layout} lines=${ocr.lines.length}`);
+
+      // No known layout, no amount and no reference: this is not a receipt
+      // (a photo, a chat, a shopping page). A draft with every field empty
+      // would only be clutter the operator has to open and discard.
+      if (read.layout === "none" && read.amount === null && read.reference_number === null) {
+        await cleanupUploadedImage();
+        return jsonResponse(req, {
+          error: "That doesn't look like a receipt. Nothing was saved",
+          code: "not_a_receipt",
+        }, 422);
+      }
       ai = read;
     }
 

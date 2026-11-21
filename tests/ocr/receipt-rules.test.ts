@@ -59,6 +59,23 @@ describe("GCash", () => {
     });
   });
 
+  it("icons read as stray letters do not hide the layout", () => {
+    // What a different OCR model returns for the same screen: the back arrow
+    // becomes "K", the status bar grows a "G" and a "1".
+    const a = readReceipt(screen([
+      ["8:42", "1", "G", "82"],
+      ["K", "Transaction Details"],
+      [`Transfer from ${CUSTOMER} to`],
+      [OWN],
+      ["Amount", "+500.00"],
+      ["Date & Time", "Feb 27,2026 8:42AM"],
+      ["Reference Number", "4265040134042"],
+    ]));
+    expect(a).toMatchObject({
+      layout: "gcash.details.transfer", transaction_type: "Cash Out", amount: 500, account_number: CUSTOMER,
+    });
+  });
+
   it("the sign decides the direction, not the order of the two numbers", () => {
     const rows = (sign: string) => screen([
       ["Transaction Details"], [`Transfer from ${CUSTOMER} to`], [OWN],

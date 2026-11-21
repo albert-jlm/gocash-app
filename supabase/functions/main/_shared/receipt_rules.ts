@@ -72,7 +72,15 @@ function toRows(ocr: OcrResult): Row[] {
   return [...byRow.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([, cells]) => {
-      const sorted = cells.sort((a, b) => a.x0 - b.x0).map((c) => c.text.trim());
+      // Single characters are dropped. They are almost always an icon read as
+      // a letter (a back arrow as "K", a close button as "X", a signal bar as
+      // "1"), and which icons get "read" changes from one OCR model to the
+      // next. Left in, a stray "K" in front of "Transaction Details" made the
+      // heading unrecognisable. No field on a receipt is one character long.
+      const sorted = cells
+        .sort((a, b) => a.x0 - b.x0)
+        .map((c) => c.text.trim())
+        .filter((text) => text.length > 1);
       const text = sorted.join(" ");
       return { cells: sorted, text, squashed: squash(text) };
     });
@@ -241,7 +249,7 @@ export function readReceipt(ocr: OcrResult): RuleAnswer {
     answer.platform = "GCash";
     answer.amount = parseAmount(amountCell);
 
-    const start = rows.findIndex((r) => r.squashed.startsWith("transactiondetails"));
+    const start = rows.findIndex((r) => r.squashed.includes("transactiondetails"));
     const end = rows.findIndex((r, i) => i > start && squash(r.cells[0] ?? "") === "amount");
     const description = rows.slice(start + 1, end).map((r) => r.text).join("\n");
     const d = squash(description);

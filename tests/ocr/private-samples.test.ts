@@ -23,7 +23,10 @@ import { describe, expect, it } from "vitest";
 import { parseDate, readReceipt, type OcrResult } from "../../supabase/functions/main/_shared/receipt_rules.ts";
 
 const DIR = process.env.GOCASH_PRIVATE_SAMPLES ?? join(homedir(), "gocash-receipt-samples");
-const available = existsSync(join(DIR, "truth-A.json")) && existsSync(join(DIR, "ocr-out"));
+// Which OCR run to score. Each engine tried writes its own folder
+// (ocr-out, ocr-out-en, …), so the rules can be scored against any of them.
+const OCR_DIR = process.env.GOCASH_OCR_DIR ?? "ocr-out";
+const available = existsSync(join(DIR, "truth-A.json")) && existsSync(join(DIR, OCR_DIR));
 
 interface Truth {
   /** Which folder the image's OCR output is in. Set when the key is loaded. */
@@ -72,7 +75,7 @@ describe.skipIf(!available)("rules against the private sample set", () => {
   const others = truth.filter((t) => !receipts.includes(t));
 
   const read = (t: Truth) =>
-    readReceipt(JSON.parse(readFileSync(join(t.set, "ocr-out", t.file + ".json"), "utf8")) as OcrResult);
+    readReceipt(JSON.parse(readFileSync(join(t.set, OCR_DIR, t.file + ".json"), "utf8")) as OcrResult);
 
   it("reads supported receipts, and never fills a field in wrong", () => {
     const score = { platform: 0, type: 0, amount: 0, reference: 0, date: 0, customer: 0 };

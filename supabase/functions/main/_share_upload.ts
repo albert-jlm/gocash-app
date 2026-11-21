@@ -132,6 +132,10 @@ export async function handleShareUpload(req: Request): Promise<Response> {
     const data = await result.json().catch(() => ({}));
 
     if (!result.ok) {
+      // Already a full sentence for the person holding the phone.
+      if (data.code === "not_a_receipt" || data.code === "reader_unavailable") {
+        return reply(result.status, `GoCash: ${data.error}.`);
+      }
       return reply(result.status, `GoCash couldn't save it: ${data.error ?? "something went wrong"}.`);
     }
 
